@@ -1,0 +1,11 @@
+{
+  "name": "blog-suite",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["windows"],
+  "scripts": {
+    "start:windows": "npm --prefix windows start",
+    "test:windows": "npm --prefix windows test",
+    "check": "npm --prefix windows run check"
+  }
+}

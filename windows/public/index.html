@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>이웃메이트 · 네이버 블로그 이웃 찾기</title>
+  <meta name="description" content="관심 키워드로 네이버 블로그를 찾고 검토한 뒤 이웃 추가 화면을 여는 로컬 도구">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/login.css">
+  <link rel="stylesheet" href="/refresh.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="brand"><span class="brand-mark">N</span> 이웃메이트 <span class="pill">LOCAL</span></div>
+      <h1>관심 블로그를 빠르게 찾고, <em>안전하게 이웃으로.</em></h1>
+      <p>검색부터 대상 검토까지 한 화면에서. 계정 정보는 저장하지 않습니다.</p>
+    </header>
+
+    <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
+      <button class="workspace-tab active" id="neighborTab" type="button" role="tab" aria-selected="true" aria-controls="neighborWorkspace" data-tab="neighbor">
+        <span class="tab-icon" aria-hidden="true">＋</span>
+        <span><strong>서로이웃 추가</strong><small>타겟 탐색 및 자동 신청</small></span>
+      </button>
+      <button class="workspace-tab" id="engagementTab" type="button" role="tab" aria-selected="false" aria-controls="engagementWorkspace" data-tab="engagement" tabindex="-1">
+        <span class="tab-icon" aria-hidden="true">❤️</span>
+        <span><strong>공감 & AI 맞춤 댓글</strong><small>VRAM AI 자동 소통</small></span>
+      </button>
+      <button class="workspace-tab" id="publishTab" type="button" role="tab" aria-selected="false" aria-controls="publishWorkspace" data-tab="publish" tabindex="-1">
+        <span class="tab-icon" aria-hidden="true">✍️</span>
+        <span><strong>AI 자동 포스팅 (자동 게시)</strong><small>핫딜 &amp; 뉴스/기사 재해석</small></span>
+      </button>
+    </nav>
+
+    <section class="workspace-panel" id="neighborWorkspace" role="tabpanel" aria-labelledby="neighborTab" data-tab-panel="neighbor">
+      <!-- Top Account & Daily Status Summary -->
+      <section class="panel" id="accountPanel">
+        <div class="panel-heading">
+          <div><span class="eyebrow">STEP 01</span><h2>네이버 계정 연결 및 일일 현황</h2></div>
+          <div class="header-badges">
+            <span class="daily-badge" id="dailyLimitBadge">📊 오늘 신청: <strong>0</strong> / 100건</span>
+            <span class="status" id="accountStatus"><i></i> 연결 안 됨</span>
+            <button class="button ghost small" id="historyModalBtn" type="button">📋 신청 이력 보기</button>
+          </div>
+        </div>
+        <div id="loginFormContainer">
+          <form id="accountForm" style="margin-bottom:16px;">
+            <div class="field-grid">
+              <label>네이버 아이디<input id="userId" name="id" required autocomplete="username" placeholder="네이버 아이디"></label>
+              <label>네이버 비밀번호<input id="userPassword" name="password" type="password" required autocomplete="current-password" placeholder="네이버 비밀번호"></label>
+            </div>
+            <div class="action-row" style="margin-top:10px;">
+              <p class="security-note">🔒 입력된 정보는 서버 외부로 전송되지 않으며, 내 PC 로컬 브라우저 세션 생성에만 사용됩니다.</p>
+              <button class="button primary" type="submit" style="padding:10px 24px; font-weight:600;">네이버 로그인하고 연결</button>
+            </div>
+          </form>
+        </div>
+        <div class="connected-card hidden" id="connectedCard">
+          <div>
+            <strong id="accountLabel">연결됨</strong>
+            <span>로컬 브라우저 세션이 안전하게 활성화되어 있습니다.</span>
+          </div>
+          <button class="button ghost" id="logoutButton" type="button">연결 끊기</button>
+        </div>
+      </section>
+
+      <!-- Main Automation Engine Section (Nomalab Style) -->
+      <section class="panel locked" id="autoPanel">
+        <div class="panel-heading">
+          <div><span class="eyebrow">STEP 02 · AUTOMATION</span><h2>서로이웃 자동 신청 설정</h2></div>
+          <span class="pill pill-green">노마랩 스타일 자동화</span>
+        </div>
+
+        <form id="autoConfigForm" class="auto-config-form">
+          <div class="form-row-grid">
+            <div class="form-group flex-2">
+              <label for="autoKeyword"><strong>관심 타겟 키워드</strong> <small>(해당 주제로 글을 쓴 블로거 자동 검색)</small></label>
+              <div class="input-with-chips">
+                <input id="autoKeyword" required placeholder="예: 맛집, 여행, IT리뷰, 육아일기, 캠핑, 재테크" value="맛집">
+                <div class="chips auto-chips" aria-label="추천 키워드">
+                  <button type="button">맛집</button>
+                  <button type="button">여행</button>
+                  <button type="button">일상</button>
+                  <button type="button">IT리뷰</button>
+                  <button type="button">육아</button>
+                  <button type="button">캠핑</button>
+                  <button type="button">패션</button>
+                  <button type="button">재테크</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="activeFilter"><strong>활동 블로그 필터</strong> <small>(휴면 블로그 제외)</small></label>
+              <select id="activeFilter" class="custom-select">
+                <option value="7">최근 7일 이내 포스팅 (적극 추천)</option>
+                <option value="14">최근 14일 이내 포스팅</option>
+                <option value="30" selected>최근 30일 이내 포스팅</option>
+                <option value="0">전체 (날짜 무관)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-grid" style="margin-top:14px;">
+            <div class="form-group">
+              <label for="targetCount"><strong>목표 신청 인원</strong> <small>(네이버 1일 최대 100명)</small></label>
+              <div class="number-input-wrap">
+                <input type="number" id="targetCount" min="1" max="100" value="30" required>
+                <div class="quick-counts">
+                  <button type="button" data-val="10">10명</button>
+                  <button type="button" data-val="30">30명</button>
+                  <button type="button" data-val="50">50명</button>
+                  <button type="button" data-val="100">100명</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label><strong>신청 간격 (랜덤 딜레이)</strong> <small>(계정보호 무작위 간격)</small></label>
+              <div class="delay-inputs">
+                <input type="number" id="minDelay" min="5" max="60" value="15" style="width:70px;"> 초 ~ 
+                <input type="number" id="maxDelay" min="10" max="120" value="30" style="width:70px;"> 초 사이 무작위 지연
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label for="autoMessage"><strong>신청 메시지</strong> <small>(자연스러운 소통 멘트 권장)</small></label>
+              <div class="template-presets">
+                <span>추천 문구: </span>
+                <button type="button" class="preset-btn" data-tpl="안녕하세요! 블로그 글 유익하게 보고 갑니다. 서로이웃 맺고 소통해요 :)">기본 소통형</button>
+                <button type="button" class="preset-btn" data-tpl="안녕하세요~ 관심사가 비슷해서 서로이웃 신청드려요. 자주 소통해요!">관심사형</button>
+                <button type="button" class="preset-btn" data-tpl="안녕하세요. 포스팅 잘 읽고 갑니다. 서로이웃 맺고 좋은 정보 나눠요!">정중형</button>
+              </div>
+            </div>
+            <textarea id="autoMessage" rows="2" maxlength="300">안녕하세요! 블로그 글 유익하게 보고 갑니다. 서로이웃 맺고 소통해요 :)</textarea>
+            <p class="field-hint">💡 억지스러운 이름 대신 자연스럽고 정중한 일상 멘트를 보낼 때 서로이웃 수락률이 가장 높습니다.</p>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="automation-action-bar">
+            <button type="button" class="button primary large" id="startAutoBtn">
+              <span class="btn-icon">🚀</span> <strong>자동 서로이웃 시작</strong>
+            </button>
+            <button type="button" class="button warning large hidden" id="pauseAutoBtn">
+              <span class="btn-icon">⏸️</span> 일시정지
+            </button>
+            <button type="button" class="button primary large hidden" id="resumeAutoBtn">
+              <span class="btn-icon">▶️</span> 작업 재개
+            </button>
+            <button type="button" class="button danger large hidden" id="stopAutoBtn">
+              <span class="btn-icon">⏹️</span> 작업 중단
+            </button>
+          </div>
+        </form>
+
+        <!-- Live Progress & Dashboard Section -->
+        <div class="live-dashboard hidden" id="liveDashboard">
+          <div class="dashboard-header">
+            <div class="dashboard-title">
+              <span class="live-pulse"></span>
+              <strong id="dashboardStatusText">자동화 작업 실행 중...</strong>
+            </div>
+            <span class="delay-timer-badge hidden" id="delayBadge">⏳ 다음 신청까지 <strong id="delaySeconds">0</strong>초 대기 중</span>
+          </div>
+
+          <div class="progress-bar-container">
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+            </div>
+            <div class="progress-labels">
+              <span id="progressPercent">0%</span>
+              <span id="progressCounts">0 / 30명 완료</span>
+            </div>
+          </div>
+
+          <div class="stats-cards-grid">
+            <div class="stat-card">
+              <span class="stat-icon">🎯</span>
+              <div class="stat-info">
+                <span class="stat-label">목표 인원</span>
+                <strong class="stat-value" id="statTarget">0</strong>
+              </div>
+            </div>
+            <div class="stat-card success">
+              <span class="stat-icon">✅</span>
+              <div class="stat-info">
+                <span class="stat-label">신청 성공</span>
+                <strong class="stat-value" id="statSuccess">0</strong>
+              </div>
+            </div>
+            <div class="stat-card info">
+              <span class="stat-icon">⏩</span>
+              <div class="stat-info">
+                <span class="stat-label">스킵 / 기존이웃</span>
+                <strong class="stat-value" id="statSkipped">0</strong>
+              </div>
+            </div>
+            <div class="stat-card danger">
+              <span class="stat-icon">⚠️</span>
+              <div class="stat-info">
+                <span class="stat-label">오류 / 실패</span>
+                <strong class="stat-value" id="statFailed">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-time Live Log Terminal -->
+          <div class="live-terminal">
+            <div class="terminal-header">
+              <span>🖥️ 실시간 실행 로그 (Live Log)</span>
+              <div style="display:flex; gap:6px;">
+                <button type="button" class="terminal-clear-btn" id="copyLogsBtn">📋 로그 전체 복사</button>
+                <button type="button" class="terminal-clear-btn" id="clearLogsBtn">로그 지우기</button>
+              </div>
+            </div>
+            <div class="terminal-body" id="terminalLogs">
+              <div class="terminal-line info">[대기 중] 설정을 완료하고 '자동 서로이웃 시작' 버튼을 눌러주세요.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- History & CSV Export Modal -->
+      <div class="modal-overlay hidden" id="historyModal">
+        <div class="modal-card">
+          <div class="modal-header">
+            <div>
+              <h3>📋 서로이웃 신청 내역 관리</h3>
+              <p class="modal-sub">중복 신청 방지를 위해 로컬에 영구 저장된 이력입니다.</p>
+            </div>
+            <button type="button" class="modal-close" id="closeHistoryModal">✕</button>
+          </div>
+          <div class="modal-toolbar">
+            <div class="history-search">
+              <input type="text" id="historySearchInput" placeholder="블로그 ID, 작성자명, 키워드 검색...">
+              <button class="button small" id="historySearchBtn" type="button">검색</button>
+            </div>
+            <div class="history-actions">
+              <button class="button primary small" id="exportCsvBtn" type="button">📥 엑셀(CSV) 다운로드</button>
+              <button class="button danger small" id="clearHistoryBtn" type="button">🗑️ 이력 초기화</button>
+            </div>
+          </div>
+          <div class="history-table-wrap">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>일시</th>
+                  <th>블로그 ID</th>
+                  <th>블로거명</th>
+                  <th>키워드</th>
+                  <th>상태</th>
+                  <th>전송 메시지</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <tr><td colspan="6" style="text-align:center; padding:30px;">이력을 불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------------------- -->
+    <!-- Engagement (Heart & AI Custom Comment) Workspace -->
+    <!-- ---------------------------------------------------------------------- -->
+    <section class="workspace-panel hidden" id="engagementWorkspace" role="tabpanel" aria-labelledby="engagementTab" data-tab-panel="engagement">
+      
+      <!-- Hardware & VRAM AI Model Hub Card -->
+      <section class="panel" id="aiHardwarePanel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">AI ENGINE & HARDWARE</span>
+            <h2>내 PC 그래픽(VRAM) & AI 모델 관리자</h2>
+          </div>
+          <div class="header-badges">
+            <span class="daily-badge" id="gpuSpecBadge">🎮 그래픽 감지 중...</span>
+            <span class="status online" id="aiEngineStatus"><i></i> AI 엔진 준비됨</span>
+          </div>
+        </div>
+
+        <!-- Connection Warning Banner for Engagement -->
+        <div id="engLoginBanner" class="hidden" style="background:#fff3cd; border:1px solid #ffeeba; border-radius:8px; padding:14px 16px; margin: 10px 0 16px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong style="color:#856404; font-size:14px;">⚠️ 네이버 로그인이 필요합니다</strong>
+            <p style="color:#856404; margin:2px 0 0; font-size:12.5px;">공감(하트) 및 AI 댓글을 등록하려면 네이버 계정 연결이 필요합니다.</p>
+          </div>
+          <button type="button" class="button small primary" id="engGoLoginBtn">계정 연결하러 가기 →</button>
+        </div>
+
+        <div class="model-hub-intro">
+          <p id="hardwareRecommendText">내 컴퓨터의 그래픽카드(VRAM)에 최적화된 로컬 AI 모델을 선택하여 <strong>비용 0원</strong>으로 블로그 사진과 본문을 분석하고 자연스러운 맞춤 댓글을 자동 작성합니다.</p>
+        </div>
+
+        <!-- 3-Tier Model Cards Grid -->
+        <div class="ai-model-cards-grid" id="aiModelCardsGrid">
+          <div class="ai-model-card" data-model="gemma-4-e2b">
+            <div class="model-card-header">
+              <div>
+                <strong>Gemma 4 E2B</strong>
+                <span class="model-badge-sub">2.3B Effective · 1.4 GB</span>
+              </div>
+              <span class="model-tier-pill">초고속 경량</span>
+            </div>
+            <p class="model-card-desc">저사양 노트북이나 내장 그래픽에서도 <strong>1초 컷</strong>으로 빠른 칭찬 댓글을 생성합니다. (RAM 2.5GB 소모)</p>
+            <div class="model-card-footer">
+              <span class="model-vram-hint">💡 권장: VRAM 3GB 이상 / CPU</span>
+              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-e2b">사용하기</button>
+            </div>
+          </div>
+
+          <div class="ai-model-card recommended" data-model="gemma-4-e4b">
+            <div class="model-card-header">
+              <div>
+                <strong>Gemma 4 E4B</strong>
+                <span class="model-badge-sub">4.5B Effective · 2.8 GB</span>
+              </div>
+              <span class="model-tier-pill pill-gold">밸런스 고품질</span>
+            </div>
+            <p class="model-card-desc">이미지 속 디테일(음식, 인테리어, 소품 등)을 정밀하게 파악하여 <strong>가장 자연스러운 감상평</strong>을 작성합니다.</p>
+            <div class="model-card-footer">
+              <span class="model-vram-hint">💡 권장: VRAM 6GB~8GB (RTX 3060/4060)</span>
+              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-e4b">사용하기</button>
+            </div>
+          </div>
+
+          <div class="ai-model-card" data-model="gemma-4-12b">
+            <div class="model-card-header">
+              <div>
+                <strong>Gemma 4 12B Unified</strong>
+                <span class="model-badge-sub">12B Flagship · 7.8 GB</span>
+              </div>
+              <span class="model-tier-pill pill-purple">최고급 고지능</span>
+            </div>
+            <p class="model-card-desc">최고 수준의 멀티모달 이해력과 장문 포스팅까지 완벽하게 소화하는 플래그십 모델입니다.</p>
+            <div class="model-card-footer">
+              <span class="model-vram-hint">💡 권장: VRAM 12GB~16GB+ (RTX 4070/5080)</span>
+              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-12b">사용하기</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Engagement Automation Form Panel -->
+      <section class="panel" id="engagementConfigPanel" style="margin-top:20px;">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">AUTOMATION SETUP</span>
+            <h2>공감(❤️) & AI 맞춤 댓글 소통 설정</h2>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" class="button secondary small" id="engHistoryModalBtn">📋 소통 이력 &amp; 엑셀 다운로드</button>
+            <span class="pill pill-green">답방 유도 극대화</span>
+          </div>
+        </div>
+
+        <form id="engagementForm" class="auto-config-form">
+          <div class="form-row-grid">
+            <div class="form-group flex-2">
+              <label for="engKeyword"><strong>소통 타겟 키워드</strong> <small>(해당 주제의 최신 글을 쓴 블로거 자동 탐색)</small></label>
+              <div class="input-with-chips">
+                <input id="engKeyword" required placeholder="예: 맛집, 카페투어, 일상, 육아소통, 캠핑, 재테크" value="맛집">
+                <div class="chips eng-chips" aria-label="추천 키워드">
+                  <button type="button">맛집</button>
+                  <button type="button">카페투어</button>
+                  <button type="button">일상소통</button>
+                  <button type="button">IT리뷰</button>
+                  <button type="button">육아일기</button>
+                  <button type="button">여행</button>
+                  <button type="button">패션</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="engTone"><strong>AI 댓글 분위기 (말투)</strong></label>
+              <select id="engTone" class="custom-select">
+                <option value="friendly" selected>친근한 이웃체 (~해요! ㅎㅎ, 넘 맛있어보여요)</option>
+                <option value="polite">정중한 소통체 (~합니다, 유익한 정보 감사합니다)</option>
+                <option value="enthusiastic">열정 칭찬형 (와 비주얼 대박이네요! 저장해둘게요 👍)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-grid" style="margin-top:14px;">
+            <div class="form-group">
+              <label><strong>반응 방식 선택</strong></label>
+              <div class="checkbox-group-row">
+                <label class="custom-checkbox-label">
+                  <input type="checkbox" id="engDoLike" checked>
+                  <span>공감(❤️)</span>
+                </label>
+                <label class="custom-checkbox-label">
+                  <input type="checkbox" id="engDoComment" checked>
+                  <span>AI 맞춤 댓글(💬)</span>
+                </label>
+                <label class="custom-checkbox-label">
+                  <input type="checkbox" id="engDoNeighbor" checked>
+                  <span>서로이웃 신청(👥)</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="engTargetCount"><strong>목표 소통 글 수</strong> <small>(1일 권장 20~50건)</small></label>
+              <div class="number-input-wrap">
+                <input type="number" id="engTargetCount" min="1" max="100" value="20" required>
+                <div class="quick-counts eng-quick-counts">
+                  <button type="button" data-val="10">10건</button>
+                  <button type="button" data-val="20">20건</button>
+                  <button type="button" data-val="30">30건</button>
+                  <button type="button" data-val="50">50건</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label><strong>작업 간격 (랜덤 딜레이)</strong> <small>(계정 보호 무작위 쉼)</small></label>
+              <div class="delay-inputs">
+                <input type="number" id="engMinDelay" min="5" max="60" value="15" style="width:65px;"> 초 ~ 
+                <input type="number" id="engMaxDelay" min="10" max="120" value="30" style="width:65px;"> 초 사이
+              </div>
+            </div>
+
+            <div class="form-group flex-2" id="engNeighborMsgGroup" style="grid-column: 1 / -1; margin-top: 4px;">
+              <label for="engNeighborMessage"><strong>서로이웃 신청 메시지</strong> <small>(서로이웃 신청 체크 시 전송할 메시지)</small></label>
+              <input type="text" id="engNeighborMessage" value="안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊" placeholder="서로이웃 신청 메시지 입력">
+            </div>
+          </div>
+
+          <!-- Action Control Bar -->
+          <div class="automation-action-bar" style="margin-top:20px;">
+            <button type="button" class="button primary large" id="startEngBtn">
+              <span class="btn-icon">🚀</span> <strong>공감 & AI 맞춤 댓글 시작</strong>
+            </button>
+            <button type="button" class="button warning large hidden" id="pauseEngBtn">
+              <span class="btn-icon">⏸️</span> 일시정지
+            </button>
+            <button type="button" class="button primary large hidden" id="resumeEngBtn">
+              <span class="btn-icon">▶️</span> 작업 재개
+            </button>
+            <button type="button" class="button danger large hidden" id="stopEngBtn">
+              <span class="btn-icon">⏹️</span> 작업 중단
+            </button>
+          </div>
+        </form>
+
+        <!-- Live Engagement Progress & Terminal Dashboard -->
+        <div class="live-dashboard hidden" id="engDashboard" style="margin-top:20px;">
+          <div class="dashboard-header">
+            <div class="dashboard-title">
+              <span class="live-pulse"></span>
+              <strong id="engDashboardStatusText">AI 공감/댓글 작업 실행 중...</strong>
+            </div>
+            <span class="delay-timer-badge hidden" id="engDelayBadge">⏳ 다음 포스팅까지 <strong id="engDelaySeconds">0</strong>초 대기 중</span>
+          </div>
+
+          <div class="progress-bar-container">
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="engProgressBarFill" style="width: 0%;"></div>
+            </div>
+            <div class="progress-labels">
+              <span id="engProgressPercent">0%</span>
+              <span id="engProgressCounts">0 / 20건 완료</span>
+            </div>
+          </div>
+
+          <div class="stats-cards-grid">
+            <div class="stat-card">
+              <span class="stat-icon">🎯</span>
+              <div class="stat-info">
+                <span class="stat-label">목표 포스팅</span>
+                <strong class="stat-value" id="engStatTarget">0</strong>
+              </div>
+            </div>
+            <div class="stat-card success">
+              <span class="stat-icon">❤️</span>
+              <div class="stat-info">
+                <span class="stat-label">공감(하트) 성공</span>
+                <strong class="stat-value" id="engStatLikes">0</strong>
+              </div>
+            </div>
+            <div class="stat-card info">
+              <span class="stat-icon">💬</span>
+              <div class="stat-info">
+                <span class="stat-label">AI 댓글 성공</span>
+                <strong class="stat-value" id="engStatComments">0</strong>
+              </div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #3182ce;">
+              <span class="stat-icon">👥</span>
+              <div class="stat-info">
+                <span class="stat-label">서로이웃 신청</span>
+                <strong class="stat-value" id="engStatNeighbors">0</strong>
+              </div>
+            </div>
+            <div class="stat-card danger">
+              <span class="stat-icon">⚠️</span>
+              <div class="stat-info">
+                <span class="stat-label">스킵 / 실패</span>
+                <strong class="stat-value" id="engStatFailed">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-time Live Log Terminal -->
+          <div class="live-terminal" style="margin-top:16px;">
+            <div class="terminal-header">
+              <span>🖥️ 실시간 AI 소통 로그 (Live Log)</span>
+              <div style="display:flex; gap:6px;">
+                <button type="button" class="terminal-clear-btn" id="copyEngLogsBtn">📋 로그 전체 복사</button>
+                <button type="button" class="terminal-clear-btn" id="clearEngLogsBtn">로그 지우기</button>
+              </div>
+            </div>
+            <div class="terminal-body" id="engTerminalLogs">
+              <div class="terminal-line info">[대기 중] 설정을 완료하고 '공감 & AI 맞춤 댓글 시작' 버튼을 눌러주세요.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Engagement History & CSV Export Modal -->
+      <div class="modal-overlay hidden" id="engHistoryModal">
+        <div class="modal-card" style="max-width: 980px;">
+          <div class="modal-header">
+            <div>
+              <h3>📋 공감(❤️) & AI 맞춤 댓글 소통 내역</h3>
+              <p class="modal-sub">중복 소통 방지를 위해 로컬에 영구 저장된 이력입니다. 이 목록의 포스팅은 자동으로 제외됩니다.</p>
+            </div>
+            <button type="button" class="modal-close" id="closeEngHistoryModal">✕</button>
+          </div>
+          <div class="modal-toolbar">
+            <div class="history-search">
+              <input type="text" id="engHistorySearchInput" placeholder="블로그 ID, 작성자명, 글제목, 키워드 검색...">
+              <button class="button small" id="engHistorySearchBtn" type="button">검색</button>
+            </div>
+            <div class="history-actions">
+              <button class="button primary small" id="exportEngCsvBtn" type="button">📥 엑셀(CSV) 다운로드</button>
+              <button class="button danger small" id="clearEngHistoryBtn" type="button">🗑️ 이력 초기화</button>
+            </div>
+          </div>
+          <div class="history-table-wrap" style="max-height: 480px; overflow-y: auto;">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th style="width: 120px;">일시</th>
+                  <th style="width: 100px;">블로그 ID</th>
+                  <th style="width: 160px;">글 제목</th>
+                  <th style="width: 90px;">반응</th>
+                  <th>작성된 AI 댓글</th>
+                  <th style="width: 90px;">서로이웃</th>
+                  <th style="width: 80px;">상태</th>
+                </tr>
+              </thead>
+              <tbody id="engHistoryTableBody">
+                <tr><td colspan="7" style="text-align: center; color: #888; padding: 24px;">소통 이력을 불러오는 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace-panel hidden" id="publishWorkspace" role="tabpanel" aria-labelledby="publishTab" data-tab-panel="publish">
+      <section class="panel publish-panel">
+        <div class="panel-heading publish-heading">
+          <div><span class="eyebrow">AI AUTO POSTING</span><h2>네이버 블로그 AI 자동 포스팅 (자동 게시)</h2></div>
+          <div class="publish-statuses" style="display:flex; align-items:center; gap:8px;">
+            <span class="status" id="llmStatus"><i></i> 112 로컬 LLM</span>
+            <span class="status" id="publishAccountStatus"><i></i> 네이버 연결 안 됨</span>
+          </div>
+        </div>
+
+        <div id="publishLoginBanner" style="background:#fff3cd; border:1px solid #ffeeba; border-radius:8px; padding:16px; margin: 12px 0 16px;">
+          <form id="publishLoginForm">
+            <div style="margin-bottom:10px;">
+              <strong style="color:#856404; font-size:15px;">⚠️ 네이버 로그인이 필요합니다</strong>
+              <p style="color:#856404; margin:2px 0 0; font-size:13px;">네이버 아이디와 비밀번호로 1회 로그인하시면 세션이 영구 저장됩니다.</p>
+            </div>
+            <div class="field-grid" style="margin-bottom:10px;">
+              <label style="color:#495057;">네이버 아이디<input id="pubUserId" name="id" required placeholder="네이버 아이디"></label>
+              <label style="color:#495057;">네이버 비밀번호<input id="pubUserPassword" name="password" type="password" required placeholder="네이버 비밀번호"></label>
+            </div>
+            <div style="display:flex; justify-content:flex-end;">
+              <button class="button primary" type="submit" style="padding:8px 20px;">로그인하고 세션 연결</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Mode Switcher Sub Tabs -->
+        <div class="mode-subtabs" style="display:flex; gap:10px; margin: 16px 0 20px; border-bottom: 2px solid #edf2f7; padding-bottom: 12px;">
+          <button type="button" class="button primary small mode-tab-btn" id="modeArticleBtn" style="padding: 10px 18px; font-weight: 700;">
+            📰 뉴스 기사 / 포스팅 참조 재해석 AI 포스팅
+          </button>
+          <button type="button" class="button secondary small mode-tab-btn" id="modeDealsBtn" style="padding: 10px 18px; font-weight: 700;">
+            🔥 알구몬 핫딜 TOP 5 자동 포스팅
+          </button>
+        </div>
+
+        <!-- Mode 1: Article / Post Rewrite Mode Container -->
+        <div id="articleModeContainer">
+          <div class="publish-step">
+            <div class="publish-step-heading">
+              <div><b>1</b><span><strong>참조할 뉴스 기사 URL 또는 본문 텍스트 입력</strong><small>기사 링크(URL)를 넣거나 텍스트 원문을 붙여넣으면 LLM이 핵심을 분석하고 재해석합니다.</small></span></div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px;">
+              <textarea id="articleSourceInput" rows="5" placeholder="뉴스 기사 링크(URL) 또는 기사/블로그 본문 텍스트를 복사해서 붙여넣으세요.&#10;예: https://n.news.naver.com/mnews/article/... 또는 기사 내용 전문" style="width:100%; border:1px solid #cbd5e0; border-radius:8px; padding:12px; font-size:14px; font-family:inherit; line-height:1.6; resize:vertical;"></textarea>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:12px; color:#718096;">💡 URL을 입력하면 본문과 대표 이미지를 자동으로 스크랩해 분석합니다.</span>
+                <button type="button" class="button secondary small" id="extractArticleBtn">🔍 본문/제목 미리 가져오기</button>
+              </div>
+            </div>
+          </div>
+
+          <form id="articleDraftForm" class="publish-step" style="margin-top:16px;">
+            <div class="publish-step-heading">
+              <div><b>2</b><span><strong>AI 재해석 스타일 및 이미지 자동 생성 설정</strong><small>단순 복사가 아닌 새로운 시각과 어조로 매력적인 블로그 글로 재창작합니다.</small></span></div>
+            </div>
+            <div class="publish-options" style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:12px;">
+              <label>글 분위기 (말투)
+                <select id="articleTone" class="custom-select">
+                  <option value="friendly" selected>친근한 대화체 (이웃 소통형 ~해요, 꿀팁 공유)</option>
+                  <option value="informative">전문 정보형 (깔끔하고 신뢰감 있는 설명)</option>
+                  <option value="review">솔직 리뷰/체험형 (장단점 및 실사용 분석)</option>
+                  <option value="column">인사이트 칼럼형 (트렌드 분석 및 시각 제시)</option>
+                </select>
+              </label>
+              <label>글 분량
+                <select id="articleLength" class="custom-select">
+                  <option value="short">짧게 (700~1,000자)</option>
+                  <option value="medium" selected>보통 (1,200~1,800자)</option>
+                  <option value="long">길게 (2,000~3,000자)</option>
+                </select>
+              </label>
+            </div>
+            <label class="publish-notes" style="margin-top:12px;">강조하고 싶은 포인트 / 추가 요청사항 (선택)
+              <textarea id="articleNotes" maxlength="1000" placeholder="예: 초보자도 이해하기 쉽게 설명해줘, 결론에 실생활 적용 팁을 더 강조해줘"></textarea>
+            </label>
+            <div class="draft-action" style="margin-top:16px;">
+              <button class="button primary large" type="submit" id="articleDraftBtn">
+                <span class="btn-icon">✨</span> <strong>AI 글 재해석 &amp; 고화질 이미지 자동 생성</strong>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Mode 2: Algumon Deals Mode Container (Default Hidden) -->
+        <div id="dealsModeContainer" class="hidden">
+          <div class="publish-step">
+            <div class="publish-step-heading">
+              <div><b>1</b><span><strong>알구몬 랭킹 딜 긁어오기</strong><small>https://www.algumon.com/n/deal/rank 에서 실시간 최저가 TOP 5를 가져옵니다.</small></span></div>
+              <button class="button primary" id="fetchDealsButton" type="button">알구몬 최저가 5개 긁어오기</button>
+            </div>
+            <div class="trend-empty" id="dealsEmpty">버튼을 눌러 알구몬 랭킹 핫딜 상위 5개를 실시간으로 불러오세요.</div>
+            <div class="deals-grid hidden" id="dealsResults" aria-label="알구몬 최저가 딜 목록"></div>
+          </div>
+
+          <form id="draftForm" class="publish-step">
+            <div class="publish-step-heading">
+              <div><b>2</b><span><strong>핫딜 블로그 글 자동생성</strong><small>수집된 5개 최저가 핫딜로 112 로컬 LLM이 네이버 블로그 스타일 글을 작성합니다.</small></span></div>
+            </div>
+            <div class="publish-options">
+              <label>글 분위기
+                <select id="postTone"><option value="informative" selected>정보형 (깔끔한 쇼핑가이드)</option><option value="friendly">친근한 말투 (차분한 이웃 추천)</option><option value="review">리뷰형 (장단점 중심)</option></select>
+              </label>
+              <label>글 길이
+                <select id="postLength"><option value="short">짧게 (700~1000자)</option><option value="medium" selected>보통 (1200~1800자)</option><option value="long">길게 (2000~3000자)</option></select>
+              </label>
+            </div>
+            <label class="publish-notes">추가 요청사항<textarea id="postNotes" maxlength="1000" placeholder="예: 첫 번째 상품을 더 강조해줘, 배송비 혜택을 부각해줘"></textarea></label>
+            <div class="draft-action"><button class="button primary" type="submit" id="draftButton" disabled>로컬 LLM으로 핫딜 글 작성</button></div>
+          </form>
+        </div>
+
+        <!-- Step 3: Common Publish Editor (Hidden until draft generated) -->
+        <form id="publishForm" class="publish-step draft-editor hidden" style="margin-top:24px;">
+          <div class="publish-step-heading">
+            <div><b>3</b><span><strong>검토하고 네이버 블로그에 발행</strong><small>작성된 글과 자동 배치된 고화질 이미지를 확인하고 내 블로그에 바로 게시합니다.</small></span></div>
+            <span class="model-badge" id="draftModel"></span>
+          </div>
+          <label>글 제목<input id="postTitle" required minlength="2" maxlength="200"></label>
+          <label>글 본문<textarea id="postContent" required minlength="20" maxlength="50000"></textarea></label>
+          <label>해시태그<input id="postTags" maxlength="300" placeholder="쉼표로 구분: 핫딜, 특가, 최저가, 알구몬"></label>
+          <div class="image-picker">
+            <div class="image-search-row">
+              <label>상품 및 관련 이미지 (소제목별 자동 배치)<input id="imageQuery" maxlength="200" placeholder="추가 검색어"></label>
+              <button class="button ghost" id="imageSearchButton" type="button">이미지 추가 검색</button>
+            </div>
+            <p class="image-note">알구몬에서 수집한 상품 대표 이미지들이 각 핫딜 소제목 뒤에 자동 배치되며, 블로그 발행 시 함께 등록됩니다.</p>
+            <div class="image-empty" id="imageEmpty">글을 작성하면 상품 이미지를 자동으로 준비합니다.</div>
+            <div class="image-grid hidden" id="imageResults" aria-label="선택된 상품 이미지 목록"></div>
+          </div>
+          <div class="source-card hidden" id="postSource"></div>
+          <div class="publish-confirm">
+            <label><input type="checkbox" id="publishConfirm"> 제목·본문·상품 이미지를 검토했으며, 내 네이버 블로그에 바로 게시 발행하는 데 동의합니다.</label>
+            <button class="button primary" id="publishButton" type="submit" disabled>네이버 블로그에 게시 발행</button>
+          </div>
+          <p class="publish-help hidden" id="publishHelp">네이버 계정 연결이 필요합니다. 먼저 ‘서로이웃 추가’ 탭에서 계정을 연결해주세요.</p>
+          <a class="published-link hidden" id="publishedLink" target="_blank" rel="noopener noreferrer">발행된 글 보기 ↗</a>
+        </form>
+      </section>
+    </section>
+
+    <footer>이 도구는 네이버 공식 서비스가 아닙니다. 자동입력 방지·2단계 인증을 우회하지 않습니다.</footer>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js?v=8"></script>
+</body>
+</html>
