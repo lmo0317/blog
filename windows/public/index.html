@@ -11,32 +11,113 @@
 </head>
 <body>
   <main class="shell">
-    <header class="hero">
-      <div class="brand"><span class="brand-mark">N</span> 이웃메이트 <span class="pill">LOCAL</span></div>
-      <h1>관심 블로그를 빠르게 찾고, <em>안전하게 이웃으로.</em></h1>
-      <p>검색부터 대상 검토까지 한 화면에서. 계정 정보는 저장하지 않습니다.</p>
+    <header class="app-header">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div class="brand"><span class="brand-mark">N</span> 이웃메이트 Pro <span class="pill">LOCAL GPU</span></div>
+        <div class="header-engine-indicator" style="display:flex; align-items:center; gap:8px; background:#e6fffa; border:1px solid #b2f5ea; border-radius:10px; padding:6px 14px; cursor:pointer;" id="globalEngineStatusBox" title="클릭하여 AI 모델 설정을 확인하세요">
+          <span style="font-size:12px; color:#234e52; font-weight:600;">🚀 AI 엔진:</span>
+          <strong id="globalEngineStatusText" style="font-size:13px; color:#285e61;">⚡ 내 PC 로컬 GPU (모델 확인 중)</strong>
+          <span class="pill pill-green small" style="font-size:11px;">설정 ⚙️</span>
+        </div>
+      </div>
+      <p style="margin-top:6px;">네이버 블로그 서로이웃 소통 자동화 &amp; 100% 내 PC 로컬 AI 포스팅 스위트</p>
     </header>
 
     <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
+      <button class="workspace-tab" id="settingsTab" type="button" role="tab" aria-selected="false" aria-controls="settingsWorkspace" data-tab="settings" tabindex="-1">
+        <span class="tab-icon" aria-hidden="true">⚙️</span>
+        <span><strong>공통 환경 설정</strong><small>네이버 계정 &amp; Gemma AI 모델</small></span>
+      </button>
       <button class="workspace-tab active" id="neighborTab" type="button" role="tab" aria-selected="true" aria-controls="neighborWorkspace" data-tab="neighbor">
         <span class="tab-icon" aria-hidden="true">＋</span>
         <span><strong>서로이웃 추가</strong><small>타겟 탐색 및 자동 신청</small></span>
       </button>
       <button class="workspace-tab" id="engagementTab" type="button" role="tab" aria-selected="false" aria-controls="engagementWorkspace" data-tab="engagement" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">❤️</span>
-        <span><strong>공감 & AI 맞춤 댓글</strong><small>VRAM AI 자동 소통</small></span>
+        <span><strong>공감 & AI 맞춤 댓글</strong><small>내 PC 로컬 GPU 자동 소통</small></span>
       </button>
       <button class="workspace-tab" id="publishTab" type="button" role="tab" aria-selected="false" aria-controls="publishWorkspace" data-tab="publish" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">✍️</span>
-        <span><strong>AI 자동 포스팅 (자동 게시)</strong><small>핫딜 &amp; 뉴스/기사 재해석</small></span>
+        <span><strong>AI 자동 포스팅</strong><small>핫딜 &amp; 뉴스/기사 재해석</small></span>
       </button>
     </nav>
+
+    <!-- Workspace 0: Common Settings & AI Engine Configuration Panel -->
+    <section class="workspace-panel hidden" id="settingsWorkspace" role="tabpanel" aria-labelledby="settingsTab" data-tab-panel="settings">
+      <!-- Section 1: Naver Account Connection -->
+      <section class="panel" id="settingsAccountPanel">
+        <div class="panel-heading">
+          <div><span class="eyebrow">CONFIG 01 · ACCOUNT</span><h2>네이버 계정 연결 (공통 세션)</h2></div>
+          <div class="header-badges">
+            <span class="status" id="settingsAccountStatus"><i></i> 연결 안 됨</span>
+          </div>
+        </div>
+        <p style="color:#718096; font-size:13.5px; margin-bottom:16px;">
+          🔒 여기서 로그인한 계정은 <strong>서로이웃 자동화, 공감/AI 댓글, 블로그 글발행</strong> 모든 기능에서 공유되어 원클릭으로 작동합니다.
+        </p>
+
+        <div id="settingsLoginFormContainer">
+          <form id="settingsAccountForm" style="margin-bottom:16px;">
+            <div class="field-grid">
+              <label>네이버 아이디<input id="settingsUserId" name="id" required autocomplete="username" placeholder="네이버 아이디"></label>
+              <label>네이버 비밀번호<input id="settingsUserPassword" name="password" type="password" required autocomplete="current-password" placeholder="네이버 비밀번호"></label>
+            </div>
+            <div class="action-row" style="margin-top:12px;">
+              <p class="security-note">🔒 입력된 정보는 외부로 전송되지 않으며, 내 PC 로컬 브라우저 세션 생성에만 사용됩니다.</p>
+              <button class="button primary" type="submit" style="padding:10px 24px; font-weight:600;">네이버 로그인하고 연결</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="connected-card hidden" id="settingsConnectedCard">
+          <div>
+            <strong id="settingsAccountLabel">연결됨</strong>
+            <span>로컬 브라우저 로그인 세션이 안전하게 활성화되어 있습니다.</span>
+          </div>
+          <button class="button ghost" id="settingsLogoutButton" type="button">연결 끊기 (로그아웃)</button>
+        </div>
+      </section>
+
+      <!-- Section 2: Pure Local GPU Gemma AI Model Hub -->
+      <section class="panel" style="margin-top:20px;">
+        <div class="panel-heading">
+          <div><span class="eyebrow">CONFIG 02 · LOCAL GPU AI</span><h2>내 PC 로컬 GPU · 구글 Gemma AI 모델 관리</h2></div>
+          <span class="pill pill-green" id="currentEngineBadge">⚡ 내 PC 로컬 GPU</span>
+        </div>
+
+        <!-- Current Active Model Summary Card -->
+        <div class="active-ai-summary-box" style="background:#f0fff4; border:2px solid #38a169; border-radius:12px; padding:16px 20px; margin-bottom:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="color:#22543d; font-size:15px; display:flex; align-items:center; gap:6px;">
+              <span style="font-size:18px;">🟢</span> 내 PC 로컬 GPU 연산 가동 중
+            </strong>
+            <span class="pill pill-green" id="activeAiStatusPill" style="font-weight:700;">비용 0원 · 오프라인 완전 독립</span>
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; font-size:13px; color:#276749;">
+            <div><strong>연산 방식:</strong> <span id="summaryEngineType">⚡ 내 PC 로컬 GPU (VRAM 가속)</span></div>
+            <div><strong>활성 모델:</strong> <span id="summaryModelName">모델 확인 중</span></div>
+            <div><strong>로컬 주소:</strong> <span id="summaryEndpointUrl">http://127.0.0.1:8089</span></div>
+          </div>
+          <p style="margin:10px 0 0; font-size:12px; color:#2f855a; border-top:1px dashed #9ae6b4; padding-top:8px;" id="localGpuSummaryText">
+            GPU 사양 감지 중...
+          </p>
+        </div>
+
+        <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+          <label style="font-size:14px; font-weight:700; color:#2d3748; margin:0;">
+            사용할 구글 Gemma 모델을 선택하세요
+          </label>
+          <span style="font-size:12px; color:#718096;" id="hardwareRecommendText">100% GPU 가속으로 비용 0원에 1초 만에 생성</span>
+        </div>
+        <div class="ai-models-grid" id="settingsAiModelCardsGrid" aria-label="사용 가능한 AI 모델 목록"></div>
+      </section>
+    </section>
 
     <section class="workspace-panel" id="neighborWorkspace" role="tabpanel" aria-labelledby="neighborTab" data-tab-panel="neighbor">
       <!-- Top Account & Daily Status Summary -->
       <section class="panel" id="accountPanel">
         <div class="panel-heading">
-          <div><span class="eyebrow">STEP 01</span><h2>네이버 계정 연결 및 일일 현황</h2></div>
+          <div><span class="eyebrow">STEP 01 · ACCOUNT</span><h2>네이버 계정 연결 현황</h2></div>
           <div class="header-badges">
             <span class="daily-badge" id="dailyLimitBadge">📊 오늘 신청: <strong>0</strong> / 100건</span>
             <span class="status" id="accountStatus"><i></i> 연결 안 됨</span>
@@ -299,7 +380,7 @@
           <div class="ai-model-card" data-model="gemma-4-e2b">
             <div class="model-card-header">
               <div>
-                <strong>Gemma 4 E2B</strong>
+                <strong>모델 목록 불러오는 중</strong>
                 <span class="model-badge-sub">2.3B Effective · 1.4 GB</span>
               </div>
               <span class="model-tier-pill">초고속 경량</span>
@@ -314,7 +395,7 @@
           <div class="ai-model-card recommended" data-model="gemma-4-e4b">
             <div class="model-card-header">
               <div>
-                <strong>Gemma 4 E4B</strong>
+                <strong>모델 목록 불러오는 중</strong>
                 <span class="model-badge-sub">4.5B Effective · 2.8 GB</span>
               </div>
               <span class="model-tier-pill pill-gold">밸런스 고품질</span>
@@ -329,7 +410,7 @@
           <div class="ai-model-card" data-model="gemma-4-12b">
             <div class="model-card-header">
               <div>
-                <strong>Gemma 4 12B Unified</strong>
+                <strong>모델 목록 불러오는 중</strong>
                 <span class="model-badge-sub">12B Flagship · 7.8 GB</span>
               </div>
               <span class="model-tier-pill pill-purple">최고급 고지능</span>
@@ -359,9 +440,10 @@
         <form id="engagementForm" class="auto-config-form">
           <div class="form-row-grid">
             <div class="form-group flex-2">
-              <label for="engKeyword"><strong>소통 타겟 키워드</strong> <small>(해당 주제의 최신 글을 쓴 블로거 자동 탐색)</small></label>
+              <label for="engKeyword"><strong>소통 타겟 키워드</strong> <small>(쉼표로 여러 개 입력, 목표 수는 키워드당 적용)</small></label>
               <div class="input-with-chips">
-                <input id="engKeyword" required placeholder="예: 맛집, 카페투어, 일상, 육아소통, 캠핑, 재테크" value="맛집">
+                <input id="engKeyword" required placeholder="예: 육아, 쇼핑, 건강" value="맛집">
+                <button type="button" class="button secondary small" id="openEngTargetManagerBtn">🤖 AI 소통 타겟 관리</button>
                 <div class="chips eng-chips" aria-label="추천 키워드">
                   <button type="button">맛집</button>
                   <button type="button">카페투어</button>
@@ -404,14 +486,16 @@
             </div>
 
             <div class="form-group">
-              <label for="engTargetCount"><strong>목표 소통 글 수</strong> <small>(1일 권장 20~50건)</small></label>
+              <label for="engTargetCount"><strong>키워드당 목표 글 수</strong> <small>(키워드 3개 × 100건 = 총 300건)</small></label>
               <div class="number-input-wrap">
-                <input type="number" id="engTargetCount" min="1" max="100" value="20" required>
+                <input type="number" id="engTargetCount" min="1" max="500" value="20" required>
                 <div class="quick-counts eng-quick-counts">
                   <button type="button" data-val="10">10건</button>
                   <button type="button" data-val="20">20건</button>
                   <button type="button" data-val="30">30건</button>
                   <button type="button" data-val="50">50건</button>
+                  <button type="button" data-val="100">100건</button>
+                  <button type="button" data-val="500">500건</button>
                 </div>
               </div>
             </div>
@@ -467,6 +551,7 @@
             </div>
           </div>
 
+          <div class="eng-topic-progress" id="engTopicProgress"></div>
           <div class="stats-cards-grid">
             <div class="stat-card">
               <span class="stat-icon">🎯</span>
@@ -520,6 +605,10 @@
           </div>
         </div>
       </section>
+
+      <div class="modal-overlay hidden" id="engTargetManagerModal">
+        <div class="modal-card" style="max-width:760px;"><div class="modal-header"><div><h3>🤖 AI 소통 타겟 분석·관리</h3><p class="modal-sub">내 블로그 최근 글을 로컬 AI가 분석합니다. 적용 전 추가·삭제·순서를 변경할 수 있습니다.</p></div><button type="button" class="modal-close" id="closeEngTargetManagerBtn">✕</button></div><div class="target-analysis-summary hidden" id="engTargetAnalysisSummary"></div><div class="modal-toolbar"><button type="button" class="button primary" id="analyzeEngTargetsBtn">내 블로그 AI 분석</button><span id="engTargetAnalysisStatus">분석 전</span></div><div class="target-add-row"><input type="text" id="engTargetAddInput" placeholder="직접 키워드 추가"><button type="button" class="button secondary" id="addEngTargetBtn">추가</button></div><div class="target-manager-list" id="engTargetManagerList"></div><div class="modal-toolbar" style="justify-content:flex-end;"><button type="button" class="button ghost" id="cancelEngTargetsBtn">취소</button><button type="button" class="button primary" id="applyEngTargetsBtn">선택 목록 적용</button></div></div>
+      </div>
 
       <!-- Engagement History & CSV Export Modal -->
       <div class="modal-overlay hidden" id="engHistoryModal">
@@ -601,27 +690,24 @@
 
         <!-- Mode 1: Article / Post Rewrite Mode Container -->
         <div id="articleModeContainer">
-          <div class="publish-step">
+          <form id="articleDraftForm" class="publish-step">
             <div class="publish-step-heading">
-              <div><b>1</b><span><strong>참조할 뉴스 기사 URL 또는 본문 텍스트 입력</strong><small>기사 링크(URL)를 넣거나 텍스트 원문을 붙여넣으면 LLM이 핵심을 분석하고 재해석합니다.</small></span></div>
+              <div><b>1</b><span><strong>참조할 뉴스 기사 URL 또는 본문 텍스트 입력</strong><small>기사 링크(URL)나 텍스트 원문을 붙여넣으면 한 번에 자동 분석·재해석하여 글과 그림을 완성합니다.</small></span></div>
             </div>
-            <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px;">
-              <textarea id="articleSourceInput" rows="5" placeholder="뉴스 기사 링크(URL) 또는 기사/블로그 본문 텍스트를 복사해서 붙여넣으세요.&#10;예: https://n.news.naver.com/mnews/article/... 또는 기사 내용 전문" style="width:100%; border:1px solid #cbd5e0; border-radius:8px; padding:12px; font-size:14px; font-family:inherit; line-height:1.6; resize:vertical;"></textarea>
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:12px; color:#718096;">💡 URL을 입력하면 본문과 대표 이미지를 자동으로 스크랩해 분석합니다.</span>
-                <button type="button" class="button secondary small" id="extractArticleBtn">🔍 본문/제목 미리 가져오기</button>
+            <div style="margin-top:12px;">
+              <textarea id="articleSourceInput" rows="4" placeholder="뉴스 기사 링크(URL) 또는 기사/블로그 본문 텍스트를 복사해서 붙여넣으세요.&#10;예: https://n.news.naver.com/mnews/article/... 또는 기사 내용 전문" style="width:100%; border:1.5px solid #cbd5e0; border-radius:10px; padding:14px; font-size:14px; font-family:inherit; line-height:1.6; resize:vertical; box-sizing:border-box;"></textarea>
+              <div style="margin-top:4px;">
+                <small style="font-size:12px; color:#718096;">💡 링크(URL)만 넣으면 기사 본문과 공식 보도사진을 자동으로 가져와 완벽 분석합니다.</small>
               </div>
             </div>
-          </div>
 
-          <form id="articleDraftForm" class="publish-step" style="margin-top:16px;">
-            <div class="publish-step-heading">
-              <div><b>2</b><span><strong>AI 재해석 스타일 및 이미지 자동 생성 설정</strong><small>단순 복사가 아닌 새로운 시각과 어조로 매력적인 블로그 글로 재창작합니다.</small></span></div>
+            <div class="publish-step-heading" style="margin-top:20px;">
+              <div><b>2</b><span><strong>AI 글 재해석 스타일 및 그림 화풍 설정</strong><small>원하는 글 분위기와 AI 그림 화풍을 선택하세요.</small></span></div>
             </div>
-            <div class="publish-options" style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:12px;">
+            <div class="publish-options" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:16px; margin-top:12px;">
               <label>글 분위기 (말투)
                 <select id="articleTone" class="custom-select">
-                  <option value="friendly" selected>친근한 대화체 (이웃 소통형 ~해요, 꿀팁 공유)</option>
+                  <option value="friendly" selected>친근한 대화체 (~해요, 꿀팁 공유)</option>
                   <option value="informative">전문 정보형 (깔끔하고 신뢰감 있는 설명)</option>
                   <option value="review">솔직 리뷰/체험형 (장단점 및 실사용 분석)</option>
                   <option value="column">인사이트 칼럼형 (트렌드 분석 및 시각 제시)</option>
@@ -634,13 +720,26 @@
                   <option value="long">길게 (2,000~3,000자)</option>
                 </select>
               </label>
+              <label>AI 그림 화풍 (스타일)
+                <select id="articleImageStyle" class="custom-select">
+                  <option value="photorealistic" selected>📸 실사 고화질 사진</option>
+                  <option value="cartoon_3d">🎨 3D 픽사/디즈니 카툰</option>
+                  <option value="anime_webtoon">🖌️ 감성 애니/웹툰 일러스트</option>
+                  <option value="digital_art">🖼️ 트렌디 디지털 아트</option>
+                </select>
+              </label>
+              <label>적용할 AI 모델
+                <select id="articleModelSelect" class="custom-select ai-model-global-select">
+                  <option value="" selected>현재 활성 로컬 모델</option>
+                </select>
+              </label>
             </div>
-            <label class="publish-notes" style="margin-top:12px;">강조하고 싶은 포인트 / 추가 요청사항 (선택)
+            <label class="publish-notes" style="margin-top:16px;">강조하고 싶은 포인트 / 추가 요청사항 (선택)
               <textarea id="articleNotes" maxlength="1000" placeholder="예: 초보자도 이해하기 쉽게 설명해줘, 결론에 실생활 적용 팁을 더 강조해줘"></textarea>
             </label>
-            <div class="draft-action" style="margin-top:16px;">
-              <button class="button primary large" type="submit" id="articleDraftBtn">
-                <span class="btn-icon">✨</span> <strong>AI 글 재해석 &amp; 고화질 이미지 자동 생성</strong>
+            <div class="draft-action" style="margin-top:18px;">
+              <button class="button primary large" type="submit" id="articleDraftBtn" style="width:100%; height:50px; font-size:16px;">
+                <span class="btn-icon">✨</span> <strong>AI 기사 분석 &amp; 맞춤 그림 자동 생성 (1클릭 완료)</strong>
               </button>
             </div>
           </form>
@@ -659,14 +758,19 @@
 
           <form id="draftForm" class="publish-step">
             <div class="publish-step-heading">
-              <div><b>2</b><span><strong>핫딜 블로그 글 자동생성</strong><small>수집된 5개 최저가 핫딜로 112 로컬 LLM이 네이버 블로그 스타일 글을 작성합니다.</small></span></div>
+              <div><b>2</b><span><strong>핫딜 블로그 글 자동생성</strong><small>수집된 5개 최저가 핫딜로 선택한 AI 모델이 네이버 블로그 스타일 글을 작성합니다.</small></span></div>
             </div>
-            <div class="publish-options">
+            <div class="publish-options" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:14px;">
               <label>글 분위기
                 <select id="postTone"><option value="informative" selected>정보형 (깔끔한 쇼핑가이드)</option><option value="friendly">친근한 말투 (차분한 이웃 추천)</option><option value="review">리뷰형 (장단점 중심)</option></select>
               </label>
               <label>글 길이
                 <select id="postLength"><option value="short">짧게 (700~1000자)</option><option value="medium" selected>보통 (1200~1800자)</option><option value="long">길게 (2000~3000자)</option></select>
+              </label>
+              <label>적용할 AI 모델
+                <select id="dealsModelSelect" class="custom-select ai-model-global-select">
+                  <option value="" selected>현재 활성 로컬 모델</option>
+                </select>
               </label>
             </div>
             <label class="publish-notes">추가 요청사항<textarea id="postNotes" maxlength="1000" placeholder="예: 첫 번째 상품을 더 강조해줘, 배송비 혜택을 부각해줘"></textarea></label>

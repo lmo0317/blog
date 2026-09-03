@@ -1,0 +1,3 @@
+/* Engagement is a standalone app: promotion tools and their settings stay visible. */
+#publishTab, #publishWorkspace { display: none !important; }
+.workspace-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }

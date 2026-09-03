@@ -15,14 +15,27 @@ import { getSystemHardwareSummary, MODEL_CATALOG } from './lib/hardware.js';
 import { ModelManager } from './lib/model-manager.js';
 import { EmbeddedLlamaServer } from './lib/embedded-llama.js';
 import { EngagementAutomationManager } from './lib/engagement-automation.js';
+import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
+import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
 const app = express();
 const port = Number(process.env.PORT || 4310);
-const llmBaseUrl = process.env.LLM_BASE_URL || 'http://192.168.219.112:8081';
-const llmModel = process.env.LLM_MODEL || 'gemma-4-e4b-it-q4km';
-const llmClient = new LocalLlmClient({ baseUrl: llmBaseUrl, model: llmModel });
+
+const modelManager = new ModelManager(path.join(__dirname, '.models'));
+const embeddedLlama = new EmbeddedLlamaServer({ 
+  modelManager, 
+  binDir: path.join(__dirname, 'bin'),
+  port: 8089,
+  host: '127.0.0.1'
+});
+
+const llmClient = new LocalLlmClient({ 
+  baseUrl: `http://${embeddedLlama.host}:${embeddedLlama.port}`, 
+  model: 'gemma-4-12b' 
+});
+
 const browserSession = new NaverBrowserSession({
   headless: String(process.env.NAVER_HEADLESS).toLowerCase() === 'true',
   profileDir: path.join(__dirname, '.playwright', 'naver-profile'),
@@ -32,9 +45,25 @@ const historyStore = new NeighborHistoryStore(path.join(__dirname, '.data', 'nei
 const automationManager = new NeighborAutomationManager({ browserSession, historyStore });
 
 const engagementHistoryStore = new EngagementHistoryStore(path.join(__dirname, '.data', 'engagement-history.json'));
-const modelManager = new ModelManager(path.join(__dirname, '.models'));
-const embeddedLlama = new EmbeddedLlamaServer({ modelManager, fallbackExternalUrl: llmBaseUrl });
 const engagementManager = new EngagementAutomationManager({ browserSession, embeddedLlama, historyStore: engagementHistoryStore });
+
+async function resolveActiveLlmEndpoint() {
+  const activeModel = await modelManager.getActiveModel();
+  if (activeModel && activeModel.actualPath) {
+    if (embeddedLlama.status !== 'running') {
+      await embeddedLlama.start().catch((err) => {
+        console.error('Failed to start embedded llama-server:', err);
+      });
+    }
+    return {
+      type: 'local_gpu',
+      label: `내 PC 로컬 GPU (${activeModel.name})`,
+      baseUrl: `http://${embeddedLlama.host}:${embeddedLlama.port}`,
+      model: activeModel.id
+    };
+  }
+  throw new Error('내 PC에 다운로드된 Gemma 모델이 없습니다. [⚙️ 공통 환경 설정]에서 Gemma 모델을 다운로드해주세요.');
+}
 
 browserSession.restoreSession().then((res) => {
   if (res?.connected) console.log('Naver session automatically restored on server startup.');
@@ -59,6 +88,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 }));
+app.use('/generated-images', express.static(path.join(__dirname, '.images'), { etag: false, maxAge: 0 }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, connected: browserSession.connected });
@@ -342,9 +372,13 @@ app.post('/api/models/select', async (req, res, next) => {
     const { modelId } = req.body || {};
     if (!modelId) return res.status(400).json({ error: '선택할 모델 ID를 지정해주세요.' });
     const selected = await modelManager.setActiveModel(modelId);
+    const engineMode = 'local_gpu';
+    llmClient.model = modelId;
+    llmClient.baseUrl = `http://${embeddedLlama.host}:${embeddedLlama.port}`;
     // Restart embedded llama-server with new model
     embeddedLlama.restartWithModel(modelId).catch(() => {});
-    res.json({ ok: true, model: selected });
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    res.json({ ok: true, model: selected, engineMode, activeEndpoint });
   } catch (error) {
     next(error);
   }
@@ -355,7 +389,30 @@ app.post('/api/models/delete', async (req, res, next) => {
     const { modelId } = req.body || {};
     if (!modelId) return res.status(400).json({ error: '삭제할 모델 ID를 지정해주세요.' });
     await modelManager.deleteModel(modelId);
+    const installed = await modelManager.getInstalledModels();
     res.json({ ok: true, message: '모델 파일이 삭제되었습니다.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Common Settings & LLM Endpoints
+app.get('/api/settings', async (_req, res, next) => {
+  try {
+    const activeModel = await modelManager.getActiveModel();
+    const installedModels = await modelManager.getInstalledModels();
+    let activeEndpoint = null;
+    try {
+      activeEndpoint = await resolveActiveLlmEndpoint();
+    } catch {}
+    res.json({
+      connected: browserSession.connected,
+      accountLabel: browserSession.accountLabel || '',
+      engineMode: 'local_gpu',
+      activeModel,
+      installedCount: installedModels.filter((m) => m.isInstalled).length,
+      activeEndpoint
+    });
   } catch (error) {
     next(error);
   }
@@ -397,6 +454,10 @@ app.get('/api/models/events', (req, res) => {
 
 app.get('/api/engagement/status', (_req, res) => {
   res.json(engagementManager.getStatus());
+});
+
+app.get('/api/engagement/keyword-recommendations', async (_req, res, next) => {
+  try { const source = await browserSession.analyzeMyBlogKeywords(); const analysis = await embeddedLlama.analyzeBlogTargetKeywords({ texts: source.texts, fallbackKeywords: source.keywords }); res.json({ ...analysis, analyzedTextCount: source.analyzedTextCount, blogUrl: source.blogUrl }); } catch (error) { next(error); }
 });
 
 app.get('/api/engagement/events', (req, res) => {
@@ -591,11 +652,17 @@ app.post('/api/blog/deals/draft', async (req, res, next) => {
     const notes = String(req.body?.notes || '').trim();
     if (notes.length > 1000) return res.status(400).json({ error: '추가 요청은 1,000자 이하로 입력해주세요.' });
 
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    const targetModel = activeEndpoint.model;
+    llmClient.baseUrl = activeEndpoint.baseUrl;
+    llmClient.model = targetModel;
+
     const post = await llmClient.generateDealsBlogPost({
       deals: deals.slice(0, 5),
       tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
       length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
-      notes
+      notes,
+      model: targetModel
     });
 
     const dealImages = deals.slice(0, 5).map((deal, index) => {
@@ -620,7 +687,10 @@ app.post('/api/blog/deals/draft', async (req, res, next) => {
       deals,
       dealImages,
       sourceUrl: 'https://www.algumon.com/n/deal/rank',
-      model: llmModel
+      model: targetModel,
+      engineType: activeEndpoint.type,
+      engineLabel: activeEndpoint.label,
+      serverUrl: activeEndpoint.baseUrl
     });
   } catch (error) {
     next(error);
@@ -636,6 +706,12 @@ app.post('/api/blog/draft', async (req, res, next) => {
     const sourceUrl = normalizeHttpUrl(req.body?.sourceUrl);
     const newsTitle = String(req.body?.newsTitle || '').trim().slice(0, 500);
     const source = String(req.body?.source || '').trim().slice(0, 100);
+
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    const targetModel = activeEndpoint.model;
+    llmClient.baseUrl = activeEndpoint.baseUrl;
+    llmClient.model = targetModel;
+
     const post = await llmClient.generateBlogPost({
       topic,
       newsTitle,
@@ -643,12 +719,30 @@ app.post('/api/blog/draft', async (req, res, next) => {
       sourceUrl,
       tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
       length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
-      notes
+      notes,
+      model: targetModel
     });
     if (sourceUrl) {
       post.content = `${post.content}\n\n참고 자료\n${newsTitle || source || '관련 자료'}\n${sourceUrl}`;
     }
-    res.json({ ...post, model: llmModel });
+
+    const imageStyle = String(req.body?.imageStyle || 'photorealistic');
+    let autoImages = [];
+    try {
+      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle });
+    } catch (err) {
+      console.error('Failed to generate AI drawings:', err);
+    }
+
+    res.json({
+      ...post,
+      autoImages,
+      images: autoImages,
+      model: targetModel,
+      engineType: activeEndpoint.type,
+      engineLabel: activeEndpoint.label,
+      serverUrl: activeEndpoint.baseUrl
+    });
   } catch (error) {
     next(error);
   }
@@ -667,20 +761,30 @@ app.post('/api/blog/article/extract', async (req, res, next) => {
 
 app.post('/api/blog/article/draft', async (req, res, next) => {
   try {
-    const sourceTitle = String(req.body?.sourceTitle || req.body?.title || '').trim();
+    let sourceTitle = String(req.body?.sourceTitle || req.body?.title || '').trim();
     let sourceContent = String(req.body?.sourceContent || req.body?.content || req.body?.urlOrText || '').trim();
-    const sourceUrl = normalizeHttpUrl(req.body?.sourceUrl || req.body?.url);
+    let sourceUrl = normalizeHttpUrl(req.body?.sourceUrl || req.body?.url);
     const notes = String(req.body?.notes || '').trim();
     const customFocus = String(req.body?.customFocus || '').trim();
+    let scrapedImages = [];
 
-    if (/^https?:\/\//i.test(sourceContent) && sourceContent.length < 300) {
-      const extracted = await extractArticleContent(sourceContent);
+    if (/^https?:\/\//i.test(sourceContent) || /^https?:\/\//i.test(sourceUrl)) {
+      const targetUrl = /^https?:\/\//i.test(sourceContent) ? sourceContent : sourceUrl;
+      const extracted = await extractArticleContent(targetUrl);
       sourceContent = extracted.content || sourceContent;
+      if (!sourceTitle) sourceTitle = extracted.title;
+      sourceUrl = extracted.sourceUrl || sourceUrl;
+      scrapedImages = extracted.images || [];
     }
 
     if (!sourceContent || sourceContent.length < 10) {
       return res.status(400).json({ error: '참조할 기사 내용이나 텍스트를 충분히 입력해주세요.' });
     }
+
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    const targetModel = activeEndpoint.model;
+    llmClient.baseUrl = activeEndpoint.baseUrl;
+    llmClient.model = targetModel;
 
     const post = await llmClient.generateArticleRewriteBlogPost({
       sourceTitle,
@@ -689,55 +793,50 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
       tone: ['informative', 'friendly', 'review', 'column'].includes(req.body?.tone) ? req.body.tone : 'friendly',
       length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
       notes,
-      customFocus
+      customFocus,
+      model: targetModel
     });
 
     if (sourceUrl) {
       post.content = `${post.content}\n\n참고 자료\n${sourceTitle || '원문 기사'}\n${sourceUrl}`;
     }
 
+    const imageStyle = String(req.body?.imageStyle || 'photorealistic');
     let autoImages = [];
+
     try {
-      const plans = (post.imagePlans || []).slice(0, 3);
-      if (plans.length > 0) {
-        const candidateGroups = await Promise.all(plans.map((plan) => searchOpenImages(plan.query, { limit: 10, sourceUrl })));
-        const rankingPlans = plans.map((plan, index) => ({
-          planIndex: index,
-          query: plan.query,
-          afterHeading: plan.afterHeading,
-          candidates: candidateGroups[index].map((img) => ({
-            id: img.id,
-            title: img.title,
-            description: img.description,
-            keywords: img.searchText || '',
-            provider: img.provider || 'Wikimedia Commons'
-          }))
-        }));
-        const selections = await llmClient.selectRelevantImages({ topic: post.title, plans: rankingPlans });
-        const used = new Set();
-        autoImages = selections.map((selection) => {
-          const planIndex = Number(selection.planIndex);
-          const image = candidateGroups[planIndex]?.find((c) => c.id === String(selection.imageId || ''));
-          if (!image || used.has(image.downloadUrl)) return null;
-          used.add(image.downloadUrl);
-          return {
-            ...image,
-            afterHeading: plans[planIndex]?.afterHeading || '',
-            caption: String(selection.caption || '').trim().slice(0, 300),
-            autoSelected: true
-          };
-        }).filter(Boolean).slice(0, 3);
-      }
-    } catch {
-      // Fallback
+      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle });
+    } catch (err) {
+      console.error('Failed to generate AI drawings:', err);
     }
 
     res.json({
       ...post,
       autoImages,
+      images: autoImages,
       sourceUrl,
-      model: llmModel
+      model: targetModel,
+      engineType: activeEndpoint.type,
+      serverUrl: activeEndpoint.baseUrl,
+      engineLabel: activeEndpoint.label
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/blog/images/generate', async (req, res, next) => {
+  try {
+    const { prompt, title, style = 'photorealistic', afterHeading } = req.body || {};
+    const textPrompt = prompt || title;
+    if (!textPrompt) return res.status(400).json({ error: '생성할 그림 프롬프트를 입력해주세요.' });
+    const image = await generateAiDrawing({
+      prompt: textPrompt,
+      style,
+      outputDir: path.join(__dirname, '.images')
+    });
+    if (afterHeading) image.afterHeading = afterHeading;
+    res.json({ ok: true, image });
   } catch (error) {
     next(error);
   }
@@ -816,7 +915,8 @@ app.post('/api/blog/publish', async (req, res, next) => {
       title: req.body?.title,
       content: appendImageAttributions(req.body?.content, downloadedImages),
       tags: req.body?.tags,
-      images: downloadedImages
+      images: downloadedImages,
+      isDeals: req.body?.isDeals === true
     });
     res.json(result);
   } catch (error) {

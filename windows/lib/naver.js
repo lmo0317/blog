@@ -4,6 +4,8 @@ import { existsSync } from 'node:fs';
 import path, { dirname } from 'node:path';
 
 const BLOG_ID_PATTERN = /^[a-zA-Z0-9_.-]{2,50}$/;
+const KEYWORD_CATEGORIES = [['육아', /육아|아이|아기|유아|어린이|엄마|아빠|키즈|교육|학교|가족/g], ['쇼핑', /쇼핑|구매|제품|상품|리뷰|추천|할인|특가|사용기|언박싱/g], ['건강', /건강|운동|다이어트|영양|병원|의료|식단|헬스|질환|치료/g], ['맛집', /맛집|음식|메뉴|식당|카페|디저트|요리|레시피|먹방/g], ['여행', /여행|관광|숙소|호텔|펜션|캠핑|나들이|해외|국내여행/g], ['뷰티', /뷰티|화장품|피부|메이크업|헤어|네일|스킨케어/g], ['패션', /패션|코디|의류|옷|신발|가방|스타일/g], ['IT', /IT|컴퓨터|스마트폰|앱|소프트웨어|인공지능|AI|전자기기/g], ['재테크', /재테크|주식|부동산|투자|경제|금융|절약|저축/g], ['일상', /일상|하루|주말|생활|기록|소통/g]];
+export function recommendKeywordsFromTexts(texts = [], limit = 7) { const source = texts.join(' ').replace(/\s+/g, ' '); return KEYWORD_CATEGORIES.map(([keyword, pattern]) => ({ keyword, score: (source.match(pattern) || []).length })).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, Math.min(Math.max(Number(limit) || 7, 1), 10)).map((item) => item.keyword); }
 
 export function normalizeBlogItem(item) {
   const link = String(item?.bloggerlink || item?.link || '').trim();
@@ -25,6 +27,17 @@ export function extractBlogId(value) {
     const first = url.pathname.split('/').filter(Boolean)[0] || '';
     if (/\.(naver|nhn)$/i.test(first)) return '';
     return BLOG_ID_PATTERN.test(first) ? first : '';
+  } catch {
+    return '';
+  }
+}
+
+export function normalizeSearchPostKey(value) {
+  try {
+    const url = new URL(String(value || ''));
+    const logNo = url.searchParams.get('logNo') || url.pathname.match(/\/(\d{8,15})(?:\/|$)/)?.[1];
+    const blogId = url.searchParams.get('blogId') || extractBlogId(url.href);
+    return blogId && logNo ? `${blogId.toLowerCase()}/${logNo}` : '';
   } catch {
     return '';
   }
@@ -907,6 +920,20 @@ export class NaverBrowserSession {
     }
   }
 
+  async analyzeMyBlogKeywords() {
+    if (!this.connected) throw new Error('먼저 네이버 계정을 연결해주세요.');
+    const page = await this.context.newPage();
+    try {
+      const preferredUrl = this.connectedId && this.connectedId !== 'saved-session' ? `https://blog.naver.com/${encodeURIComponent(this.connectedId)}` : 'https://blog.naver.com/MyBlog.naver';
+      await page.goto(preferredUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.waitForTimeout(1500);
+      const contentFrame = page.frames().find((frame) => frame.name() === 'mainFrame') || page.mainFrame();
+      const texts = await contentFrame.evaluate(() => { const selectors = ['.title__Area', '.title_post', '.se-title-text', '.postlist__title', '.text__Content', '.se-text-paragraph']; const selected = Array.from(document.querySelectorAll(selectors.join(','))).map((node) => (node.innerText || node.textContent || '').trim()).filter((text) => text.length >= 2); if (selected.length) return selected.slice(0, 80); return Array.from(document.querySelectorAll('a[href*="PostView.naver"], a[href*="blog.naver.com/"]')).map((node) => (node.innerText || node.textContent || '').trim()).filter((text) => text.length >= 4 && text.length <= 200).slice(0, 80); });
+      if (!texts.length) throw new Error('내 블로그 최근 글을 찾지 못했습니다. 네이버 로그인 계정에 연결된 블로그가 있는지 확인해주세요.');
+      return { keywords: recommendKeywordsFromTexts(texts, 7), texts, analyzedTextCount: texts.length, blogUrl: contentFrame.url() || page.url() };
+    } finally { await page.close().catch(() => {}); }
+  }
+
   /**
    * Inspect a blog post to extract content snippet, images, and engagement status.
    */
@@ -973,6 +1000,7 @@ export class NaverBrowserSession {
         // Comment Status
         const commentBtn = document.querySelector('button[class*="Interact__comment_btn"], button[data-click-area="pst.re"], .u_cbox_btn_comment, button[data-action="comment"], a.btn_comment, .btn_reply, .u_cbox_write_box, [contenteditable="true"]');
         const canComment = !!commentBtn || !!document.querySelector('.u_cbox, textarea[placeholder*="댓글"], div.u_cbox_text_mention');
+        const alreadyCommented = !!document.querySelector('.u_cbox_comment_my, .u_cbox_mine, [class*="comment_my"], [data-is-mine="true"], .u_cbox_btn_delete, .u_cbox_btn_modify');
 
         return {
           title,
@@ -982,6 +1010,7 @@ export class NaverBrowserSession {
           alreadyLiked,
           canLike,
           canComment
+          ,alreadyCommented
         };
       });
 
@@ -1144,6 +1173,12 @@ export class NaverBrowserSession {
               }
             }
 
+            const ownCommentExists = await frame.locator('.u_cbox_comment_my, .u_cbox_mine, [class*="comment_my"], [data-is-mine="true"], .u_cbox_btn_delete, .u_cbox_btn_modify').first().isVisible().catch(() => false);
+            if (ownCommentExists) {
+              result.commentReason = '이미 내가 작성한 댓글이 있는 포스팅';
+              return result;
+            }
+
             // Step B: Click placeholder box to activate input mode if needed
             const placeholderSelectors = [
               '.u_cbox_write_box',
@@ -1193,29 +1228,17 @@ export class NaverBrowserSession {
               await textarea.click({ force: true }).catch(() => {});
               await page.waitForTimeout(300);
 
-              // Fill via evaluate and dispatch events to trigger submit button activation
-              await frame.evaluate(({ text }) => {
-                const el = document.querySelector('div.u_cbox_text_mention, div.u_cbox_text, [contenteditable="true"], textarea.u_cbox_text_mention, textarea.u_cbox_text, #comment_write_textarea');
-                if (el) {
-                  if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-                    el.value = text;
-                  } else {
-                    el.innerText = text;
-                  }
-                  el.dispatchEvent(new Event('input', { bubbles: true }));
-                  el.dispatchEvent(new Event('change', { bubbles: true }));
-                  el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-                }
-              }, { text: commentText }).catch(() => {});
-
-              // Key typing to trigger UI state
-              await page.keyboard.type(' ').catch(() => {});
-              await page.keyboard.press('Backspace').catch(() => {});
+              await textarea.fill(commentText).catch(async () => {
+                await textarea.pressSequentially(commentText, { delay: 5 });
+              });
               await page.waitForTimeout(600);
 
               // Step D: Submit comment
               const submitSelectors = [
                 'button.u_cbox_btn_upload',
+                '.u_cbox_write_wrap button[class*="upload"]',
+                '.u_cbox_write_box button[class*="upload"]',
+                '.u_cbox_write_area button[type="button"]',
                 'button.__uis_naverComment_writeButton',
                 'button[type="submit"].u_cbox_btn',
                 '.u_cbox_upload button',
@@ -1233,15 +1256,23 @@ export class NaverBrowserSession {
                   await submitBtn.evaluate((btn) => btn.removeAttribute('disabled')).catch(() => {});
                   await submitBtn.click({ force: true }).catch(() => submitBtn.dispatchEvent('click'));
                   await page.waitForTimeout(2000);
-                  result.commented = true;
-                  result.commentText = commentText;
-                  result.commentReason = '댓글 등록 성공';
-                  submitted = true;
+                  const normalizedExpected = String(commentText).replace(/\s+/g, ' ').trim();
+                  const confirmed = await frame.locator('.u_cbox_contents, .u_cbox_text_wrap, .u_cbox_comment_box, [class*="comment"]')
+                    .filter({ hasText: normalizedExpected.slice(0, Math.min(24, normalizedExpected.length)) })
+                    .first().isVisible().catch(() => false);
+                  if (confirmed) {
+                    result.commented = true;
+                    result.commentText = commentText;
+                    result.commentReason = '댓글 등록 및 화면 확인 성공';
+                    submitted = true;
+                  } else {
+                    result.commentReason = '등록 클릭 후 댓글 표시를 확인하지 못함';
+                  }
                   break;
                 }
               }
 
-              if (!submitted) {
+              if (!submitted && !result.commentReason) {
                 result.commentReason = '댓글 등록 버튼 클릭 실패 (작성 제한/권한 없음)';
               }
             }
@@ -1274,7 +1305,7 @@ export class NaverBrowserSession {
     const page = await this.context.newPage();
     const excludeSet = new Set((excludeBlogIds || []).map((id) => String(id).toLowerCase().trim()));
     try {
-      const limit = Math.min(Math.max(Number(display) || 30, 1), 100);
+      const limit = Math.min(Math.max(Number(display) || 30, 1), 1000);
       const url = `https://search.naver.com/search.naver?ssc=tab.blog.all&sm=tab_jum&query=${encodeURIComponent(query)}`;
       await page.goto(url, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1000);
@@ -1308,8 +1339,9 @@ export class NaverBrowserSession {
           if (activeWithinDays > 0 && card.postDate && !isPostActiveWithinDays(card.postDate, activeWithinDays)) {
             continue;
           }
-          if (!blogsMap.has(blogId)) {
-            blogsMap.set(blogId, {
+          const postKey = normalizeSearchPostKey(card.href) || `${blogId}:${card.title}`;
+          if (!blogsMap.has(postKey)) {
+            blogsMap.set(postKey, {
               blogId,
               title: card.title || '',
               description: card.description || '',
@@ -1351,7 +1383,7 @@ export class NaverBrowserSession {
     }
   }
 
-  async publishBlogPost({ title, content, tags = [], images = [], imagePaths = [] }) {
+  async publishBlogPost({ title, content, tags = [], images = [], imagePaths = [], isDeals = false }) {
     if (!this.connected || !await this.hasAuthenticatedSession()) {
       const error = new Error('네이버 로그인 세션이 만료되었습니다. 계정을 다시 연결해주세요.');
       error.code = 'NAVER_SESSION_EXPIRED';
@@ -1415,9 +1447,11 @@ export class NaverBrowserSession {
         ? images
         : (Array.isArray(imagePaths) ? imagePaths : []).map((filePath) => ({ filePath })))
         .slice(0, 5);
-      await insertEditorContentWithImages(page, editorFrame, finalContent, selectedImages);
+      await insertEditorContentWithImages(page, editorFrame, finalContent, selectedImages, isDeals);
       await applyInlineLinks(page, editorFrame, finalContent);
-      await verifyEditorProductLayout(page, editorFrame, finalContent, selectedImages);
+      if (isDeals) {
+        await verifyEditorProductLayout(page, editorFrame, finalContent, selectedImages);
+      }
 
       // Remove any lingering dim / tooltip / help overlays
       await editorFrame.evaluate(() => {
@@ -1432,7 +1466,7 @@ export class NaverBrowserSession {
       }
 
       await openPublish.click({ force: true }).catch(() => openPublish.dispatchEvent('click'));
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(2000);
 
       const confirmPublish = await findFinalPublishButton(page, editorFrame);
       if (!confirmPublish) {
@@ -1441,7 +1475,9 @@ export class NaverBrowserSession {
         return { status: 'manual_required', message: '초안과 발행 설정을 열었습니다. 마지막 발행 버튼을 확인해주세요.', url: page.url() };
       }
 
+      await confirmPublish.scrollIntoViewIfNeeded().catch(() => {});
       await confirmPublish.click({ force: true }).catch(() => confirmPublish.dispatchEvent('click'));
+      await page.waitForTimeout(1000);
       
       let publishedPostUrl = '';
       for (let s = 0; s < 30; s++) {
@@ -1452,6 +1488,15 @@ export class NaverBrowserSession {
         if (found) {
           publishedPostUrl = found;
           break;
+        }
+
+        // If after 3s the publish layer is still open, retry clicking confirm
+        if (s === 3 || s === 6) {
+          const retryConfirm = await findFinalPublishButton(page, editorFrame);
+          if (retryConfirm && await retryConfirm.isVisible().catch(() => false)) {
+            await retryConfirm.click({ force: true }).catch(() => {});
+            await retryConfirm.dispatchEvent('click').catch(() => {});
+          }
         }
       }
 
@@ -1593,22 +1638,38 @@ async function findVisibleLocator(page, selectors, exactText = '') {
 }
 
 async function findFinalPublishButton(page, editorFrame) {
-  // The first visible "발행" button is often the toolbar button that merely
-  // opens the settings layer.  Prefer Naver's explicit final-action marker,
-  // then accept only a visible button whose own label is a publish action.
   const targets = [editorFrame, page];
+
+  // 1. Explicit Naver SmartEditor ONE confirm data attribute or class
   for (const target of targets) {
-    const marked = target.locator('[data-click-area="ptp.publish"]').first();
-    if (await marked.isVisible().catch(() => false)) return marked;
+    const ptp = target.locator('[data-click-area="ptp.publish"]').first();
+    if (await ptp.isVisible().catch(() => false)) return ptp;
+
+    const confirmBtn = target.locator('button[class*="confirm_btn"], button[class*="btn_confirm"], button[class*="publish_confirm"]').first();
+    if (await confirmBtn.isVisible().catch(() => false)) return confirmBtn;
   }
+
+  // 2. Look inside the publish settings layer first
+  for (const target of targets) {
+    const layer = target.locator('.publish_layer, [class*="publish_layer"], [class*="layer_publish"], .se-publish-layer, [data-layer="publish"], [class*="setting_layer"], [class*="popup_publish"]');
+    if (await layer.count().catch(() => 0) > 0) {
+      const confirmInLayer = layer.locator('button').filter({ hasText: /발행/ }).last();
+      if (await confirmInLayer.isVisible().catch(() => false)) return confirmInLayer;
+    }
+  }
+
+  // 3. Search buttons in reverse order, strictly ignoring the top toolbar button (tpb.publish)
   for (const target of targets) {
     const buttons = target.locator('button');
     const count = await buttons.count().catch(() => 0);
-    for (let index = 0; index < count; index += 1) {
+    for (let index = count - 1; index >= 0; index -= 1) {
       const button = buttons.nth(index);
       if (!await button.isVisible().catch(() => false)) continue;
+      const clickArea = await button.getAttribute('data-click-area').catch(() => '');
+      if (clickArea === 'tpb.publish') continue; // NEVER click top toolbar button!
+
       const label = (await button.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
-      if (/^(?:발행|발행하기|게시하기)$/.test(label)) return button;
+      if (/(?:발행|발행하기|게시하기)/.test(label)) return button;
     }
   }
   return null;
@@ -1636,7 +1697,7 @@ async function replaceEditorText(page, editorFrame, locator, value, isTitle = fa
   await typeEditorLines(page, value);
 }
 
-async function insertEditorContentWithImages(page, editorFrame, content, images = []) {
+async function insertEditorContentWithImages(page, editorFrame, content, images = [], isDeals = false) {
   const pending = images
     .filter((image) => image?.filePath && existsSync(image.filePath))
     .map((image) => ({ ...image }));
@@ -1653,7 +1714,7 @@ async function insertEditorContentWithImages(page, editorFrame, content, images 
     const line = lines[lineIndex];
     const emphasize = /^(오늘의 핫딜 한눈에 보기|상품 \d+ \||마무리$)/.test(line.trim());
     if (emphasize) await page.keyboard.press('Control+B');
-    const lineResult = line ? await typeEditorLine(page, line) : {};
+    const lineResult = line ? await typeEditorLine(page, line, isDeals) : {};
     if (emphasize) await page.keyboard.press('Control+B');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(10);
@@ -1661,7 +1722,7 @@ async function insertEditorContentWithImages(page, editorFrame, content, images 
       await page.waitForTimeout(350);
       let linkPlacement = await focusEditorEnd(editorFrame);
       if (!linkPlacement.found) linkPlacement = await focusEditorEndWithKeyboard(page, editorFrame);
-      if (!linkPlacement.found) throw new Error(`상품 링크 다음 본문 위치를 준비하지 못했습니다: ${line}`);
+      if (!linkPlacement.found) throw new Error(`링크 다음 본문 위치를 준비하지 못했습니다: ${line}`);
       await page.keyboard.press('Enter');
       await page.waitForTimeout(80);
     }
@@ -1670,24 +1731,24 @@ async function insertEditorContentWithImages(page, editorFrame, content, images 
       await uploadEditorImages(page, editorFrame, [image.filePath]);
       let placement = await focusEditorEnd(editorFrame);
       if (!placement.found) placement = await focusEditorEndWithKeyboard(page, editorFrame);
-      if (!placement.found) throw new Error(`이미지 다음 본문 위치를 준비하지 못했습니다: ${image.title || '알 수 없는 상품'}`);
+      if (!placement.found) throw new Error(`이미지 다음 본문 위치를 준비하지 못했습니다: ${image.title || '이미지'}`);
       await page.keyboard.press('Enter');
       await page.waitForTimeout(100);
     }
   }
 }
 
-async function typeEditorLines(page, value) {
+async function typeEditorLines(page, value, isDeals = false) {
   const lines = String(value || '').split('\n');
   for (const line of lines) {
-    const result = line ? await typeEditorLine(page, line) : {};
+    const result = line ? await typeEditorLine(page, line, isDeals) : {};
     await page.keyboard.press('Enter');
     if (result?.pastedUrl) await page.keyboard.press('Control+End');
     await page.waitForTimeout(10);
   }
 }
 
-async function typeEditorLine(page, line) {
+async function typeEditorLine(page, line, isDeals = false) {
   const value = String(line || '');
   const urlMatch = value.match(/^(.*?)(https?:\/\/\S+)(\s+.*)?$/);
   if (!urlMatch) {
@@ -1709,11 +1770,16 @@ async function typeEditorLine(page, line) {
     linkedPaste = true;
   } catch {}
   if (!linkedPaste) await page.keyboard.type(urlMatch[2], { delay: 1 });
-  // Always keep plain explanatory text after the URL. This prevents SmartEditor
-  // from replacing the visible blue URL with an inconsistently placed OG card.
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(80);
-  await page.keyboard.insertText(urlMatch[3]?.trimStart() || '상품 페이지 열기');
+
+  if (urlMatch[3]?.trim()) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(80);
+    await page.keyboard.insertText(urlMatch[3].trim());
+  } else if (isDeals) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(80);
+    await page.keyboard.insertText('상품 페이지 열기');
+  }
   return { pastedUrl: true };
 }
 
@@ -1806,18 +1872,73 @@ async function applyInlineLinks(page, editorFrame, content, requestedLinks = [])
 export function mapImagesToContentLines(content, images = []) {
   const lines = String(content || '').split('\n');
   const mapped = new Map();
-  for (const image of images) {
-    const expectedHeading = normalizePlacementText(editorHeadingText(image?.afterHeading));
-    const expectedTitle = normalizePlacementText(image?.title);
-    let lineIndex = lines.findIndex((line) => expectedHeading && normalizePlacementText(editorHeadingText(line)) === expectedHeading);
-    if (lineIndex < 0 && expectedTitle) {
-      lineIndex = lines.findIndex((line) => /^\s*\d+\s*[.위]/.test(line) && normalizePlacementText(line).includes(expectedTitle));
+  const totalImages = images.length;
+  if (!totalImages || !lines.length) return mapped;
+
+  // Identify all potential heading/section separator lines
+  const candidateHeadingIndices = [];
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+    if (trimmed.length > 0) {
+      if (/^(\d+\s*[\.위\)]|[#■◆●▶★\-]|\[\d+\]|STEP\s*\d+|첫[째번째]|둘[째번째]|셋[째번째]|넷[째번째]|다섯[째번째])/i.test(trimmed) || (trimmed.length < 50 && trimmed.endsWith(':'))) {
+        candidateHeadingIndices.push(idx);
+      }
     }
-    if (lineIndex < 0) lineIndex = Math.max(0, lines.length - 1);
-    const group = mapped.get(lineIndex) || [];
+  });
+
+  const usedLineIndices = new Set();
+
+  images.forEach((image, imgIdx) => {
+    const rawHeading = String(image?.afterHeading || '').trim();
+    const cleanHeading = rawHeading.replace(/^[#\s0-9.\[\]■◆●▶★\-:위]+/g, '').replace(/\s+/g, '').toLowerCase();
+    const cleanTitle = String(image?.title || '').replace(/^[#\s0-9.\[\]■◆●▶★\-:위]+/g, '').replace(/\s+/g, '').toLowerCase();
+
+    let bestLineIndex = -1;
+
+    // 1. Try to find line matching afterHeading
+    if (cleanHeading.length >= 2) {
+      bestLineIndex = lines.findIndex((line, lIdx) => {
+        if (usedLineIndices.has(lIdx)) return false;
+        const cl = line.replace(/^[#\s0-9.\[\]■◆●▶★\-:위]+/g, '').replace(/\s+/g, '').toLowerCase();
+        return cl.length >= 2 && (cl.includes(cleanHeading) || cleanHeading.includes(cl));
+      });
+    }
+
+    // 2. Try to find line matching image title
+    if (bestLineIndex < 0 && cleanTitle.length >= 2) {
+      bestLineIndex = lines.findIndex((line, lIdx) => {
+        if (usedLineIndices.has(lIdx)) return false;
+        const cl = line.replace(/^[#\s0-9.\[\]■◆●▶★\-:위]+/g, '').replace(/\s+/g, '').toLowerCase();
+        return cl.length >= 2 && cl.includes(cleanTitle);
+      });
+    }
+
+    // 3. Match candidate heading index based on image sequence
+    if (bestLineIndex < 0 && candidateHeadingIndices.length > 0) {
+      const targetCandidate = candidateHeadingIndices[Math.min(imgIdx, candidateHeadingIndices.length - 1)];
+      if (targetCandidate !== undefined && !usedLineIndices.has(targetCandidate)) {
+        bestLineIndex = targetCandidate;
+      }
+    }
+
+    // 4. Distribute evenly across non-empty lines if still not matched
+    if (bestLineIndex < 0) {
+      const nonEmpty = lines.map((l, i) => ({ text: l.trim(), i })).filter((item) => item.text.length > 10);
+      if (nonEmpty.length > 0) {
+        const step = Math.floor(nonEmpty.length / (totalImages + 1));
+        const chosen = nonEmpty[Math.min((imgIdx + 1) * step, nonEmpty.length - 1)];
+        bestLineIndex = chosen ? chosen.i : Math.min(imgIdx * 4 + 2, lines.length - 1);
+      } else {
+        bestLineIndex = Math.min(imgIdx * 4 + 2, lines.length - 1);
+      }
+    }
+
+    usedLineIndices.add(bestLineIndex);
+    const group = mapped.get(bestLineIndex) || [];
     group.push(image);
-    mapped.set(lineIndex, group);
-  }
+    mapped.set(bestLineIndex, group);
+  });
+
   return mapped;
 }
 

@@ -29,9 +29,13 @@ export class EngagementAutomationManager extends EventEmitter {
       neighborSuccessCount: 0,
       skippedCount: 0,
       failedCount: 0,
+      targetReached: false,
       startTime: null,
       endTime: null,
       currentPost: null,
+      currentKeyword: '',
+      keywordProcessedCounts: {},
+      phase: 'idle',
       delayCountdown: 0
     };
 
@@ -89,17 +93,18 @@ export class EngagementAutomationManager extends EventEmitter {
       throw new Error('네이버 계정이 연결되어 있지 않습니다. 먼저 로그인을 완료해주세요.');
     }
 
-    const cleanKeyword = String(keyword || '').trim();
-    if (!cleanKeyword) {
+    const keywords = [...new Set(String(keyword || '').split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))].slice(0, 10);
+    if (!keywords.length) {
       throw new Error('검색 키워드를 입력해주세요.');
     }
 
-    const cleanTarget = Math.min(Math.max(Number(targetCount) || 20, 1), 100);
+    const targetPerKeyword = Math.min(Math.max(Number(targetCount) || 20, 1), 500);
+    const cleanTarget = targetPerKeyword * keywords.length;
     const cleanMinDelay = Math.max(Number(minDelay) || 15, 5);
     const cleanMaxDelay = Math.max(Number(maxDelay) || 30, cleanMinDelay);
 
     this.config = {
-      keyword: cleanKeyword,
+      keyword: keywords.join(', '), keywords, targetPerKeyword,
       targetCount: cleanTarget,
       doLike: Boolean(doLike),
       doComment: Boolean(doComment),
@@ -119,16 +124,20 @@ export class EngagementAutomationManager extends EventEmitter {
       neighborSuccessCount: 0,
       skippedCount: 0,
       failedCount: 0,
+      targetReached: false,
       startTime: new Date().toISOString(),
       endTime: null,
       currentPost: null,
+      currentKeyword: keywords[0],
+      keywordProcessedCounts: Object.fromEntries(keywords.map((value) => [value, 0])),
+      phase: 'preparing',
       delayCountdown: 0
     };
 
     this.shouldStop = false;
     this.isPaused = false;
     this.state = 'running';
-    this.log(`🚀 '${cleanKeyword}' 키워드로 공감(❤️), AI 댓글${this.config.doNeighbor ? ', 서로이웃(👥)' : ''} 소통을 시작합니다. (목표: ${cleanTarget}개 포스팅)`, 'info');
+    this.log(`🚀 ${keywords.length}개 키워드(${keywords.join(', ')})를 순차 실행합니다. (키워드당 ${targetPerKeyword}건, 총 ${cleanTarget}건)`, 'info');
     this.emit('status', this.getStatus());
 
     // Run in background
@@ -143,16 +152,16 @@ export class EngagementAutomationManager extends EventEmitter {
 
   async runLoop() {
     try {
-      this.log('🔍 관련 타겟 포스팅을 검색하고 있습니다...', 'info');
-      const excludedIds = this.historyStore ? await this.historyStore.getEngagedBlogIds() : [];
-      const searchResults = await this.browserSession.searchBlogs({
-        query: this.config.keyword,
-        display: Math.min(this.config.targetCount * 2, 80),
-        activeWithinDays: this.config.activeWithinDays,
-        excludeBlogIds: excludedIds
-      });
-
-      const items = Array.isArray(searchResults) ? searchResults : (searchResults?.items || []);
+      const items = [];
+      for (const keyword of this.config.keywords) {
+        this.stats.currentKeyword = keyword;
+        this.stats.phase = 'searching';
+        this.emit('status', this.getStatus());
+        this.log(`🔍 [${keyword}] 관련 타겟 포스팅을 검색하고 있습니다...`, 'info');
+        const found = await this.browserSession.searchBlogs({ query: keyword, display: Math.min(Math.max(this.config.targetPerKeyword * 2, 100), 1000), activeWithinDays: this.config.activeWithinDays, excludeBlogIds: [] });
+        const candidates = Array.isArray(found) ? found : (found?.items || []);
+        items.push(...candidates.map((post) => ({ ...post, engagementKeyword: keyword })));
+      }
 
       if (!items || items.length === 0) {
         this.state = 'completed';
@@ -162,6 +171,9 @@ export class EngagementAutomationManager extends EventEmitter {
       }
 
       this.log(`총 ${items.length}개의 포스팅을 발견했습니다. 순차적으로 반응을 진행합니다.`, 'info');
+      const keywordProcessedCounts = Object.fromEntries(this.config.keywords.map((keyword) => [keyword, 0]));
+      this.stats.keywordProcessedCounts = { ...keywordProcessedCounts };
+      this.stats.phase = 'engaging';
 
       for (let i = 0; i < items.length; i += 1) {
         if (this.shouldStop) {
@@ -180,13 +192,16 @@ export class EngagementAutomationManager extends EventEmitter {
           this.log('▶️ 작업이 재개되었습니다.', 'info');
         }
 
-        if ((this.stats.likeSuccessCount + this.stats.commentSuccessCount) >= this.config.targetCount) {
+        if (this.stats.processedCount >= this.config.targetCount) {
+          this.stats.targetReached = true;
           this.log(`🎉 설정한 목표(${this.config.targetCount}건)를 달성하여 작업을 성공적으로 종료합니다.`, 'success');
           this.state = 'completed';
           break;
         }
 
         const post = items[i];
+        const currentKeyword = post.engagementKeyword || this.config.keywords[0];
+        if (keywordProcessedCounts[currentKeyword] >= this.config.targetPerKeyword) continue;
         const targetUrl = post.url || post.link || `https://blog.naver.com/${post.blogId}`;
 
         // Check deduplication
@@ -203,6 +218,9 @@ export class EngagementAutomationManager extends EventEmitter {
           url: targetUrl
         };
         this.stats.processedCount += 1;
+        keywordProcessedCounts[currentKeyword] += 1;
+        this.stats.currentKeyword = currentKeyword;
+        this.stats.keywordProcessedCounts = { ...keywordProcessedCounts };
         this.emit('status', this.getStatus());
 
         this.log(`[${i + 1}/${items.length}] @${post.blogId} ('${post.title.slice(0, 25)}...') 분석 중...`, 'info');
@@ -211,18 +229,29 @@ export class EngagementAutomationManager extends EventEmitter {
           // 1. Inspect post
           const inspection = await this.browserSession.inspectPostForEngagement(targetUrl);
 
+          if (inspection.alreadyCommented) {
+            this.stats.processedCount -= 1;
+            keywordProcessedCounts[currentKeyword] -= 1;
+            this.stats.skippedCount += 1;
+            this.log(`⏩ [중복 댓글 제외] @${post.blogId} 이미 내 댓글이 확인된 포스팅입니다.`, 'warn');
+            continue;
+          }
+
           // 2. Generate AI comment if requested
           let generatedComment = '';
           if (this.config.doComment) {
             this.log(`🤖 AI가 포스팅 내용과 사진을 읽고 맞춤 댓글을 생성하고 있습니다...`, 'info');
             const imageSummary = inspection.firstImage?.alt || (inspection.images.length > 0 ? `${inspection.images.length}장의 본문 사진 포함` : '');
+            const recentComments = this.historyStore?.getRecentComments ? await this.historyStore.getRecentComments(30) : [];
             generatedComment = await this.embeddedLlama.generateBlogComment({
               title: inspection.title || post.title,
               contentSnippet: inspection.snippet,
               imageSummary,
-              tone: this.config.tone
+              tone: this.config.tone,
+              recentComments
             });
-            this.log(`💬 생성된 댓글: "${generatedComment}"`, 'info');
+            if (!generatedComment) this.log('⏩ 글 관련성·문자·중복 검증을 통과한 댓글을 만들지 못해 댓글 등록을 건너뜁니다.', 'warn');
+            else this.log(`💬 검증된 댓글: "${generatedComment}"`, 'info');
           }
 
           // 3. Like and Comment
@@ -286,21 +315,21 @@ export class EngagementAutomationManager extends EventEmitter {
           }
 
           // Save record in history store for deduplication & Excel export
-          if (this.historyStore && (result.liked || result.commented || neighborRequested)) {
+          if (this.historyStore) {
             const finalStatusMsg = `${result.message}${neighborRequested ? ' | 서로이웃 신청 완료' : (neighborStatus && neighborStatus !== 'requested' ? ` | 서로이웃: ${neighborResultMsg || neighborStatus}` : '')}`;
             await this.historyStore.addRecord({
               blogId: post.blogId,
               bloggerName: post.bloggerName || post.blogId,
               title: inspection.title || post.title,
               postUrl: targetUrl,
-              keyword: this.config.keyword,
+              keyword: currentKeyword,
               liked: result.liked,
               commented: result.commented,
               commentText: generatedComment,
               neighborRequested,
               neighborStatus,
               neighborMessage: this.config.neighborMessage,
-              status: (result.liked && result.commented) ? 'success' : 'partial',
+              status: (result.liked && result.commented) ? 'success' : ((result.liked || result.commented || neighborRequested) ? 'partial' : 'failed'),
               statusMessage: finalStatusMsg
             }).catch(() => {});
           }
@@ -319,10 +348,16 @@ export class EngagementAutomationManager extends EventEmitter {
 
       if (this.state === 'running') {
         this.state = 'completed';
-        this.log(`🏁 모든 대상 포스팅 소통 작업을 마쳤습니다. (공감: ${this.stats.likeSuccessCount}건, 댓글: ${this.stats.commentSuccessCount}건)`, 'success');
+        if (this.stats.processedCount >= this.config.targetCount) {
+          this.stats.targetReached = true;
+          this.log(`🏁 목표 ${this.config.targetCount}개 포스팅 소통을 마쳤습니다. (공감: ${this.stats.likeSuccessCount}건, 댓글: ${this.stats.commentSuccessCount}건, 서로이웃: ${this.stats.neighborSuccessCount}건)`, 'success');
+        } else {
+          this.log(`⚠️ 후보 포스팅이 부족해 목표 ${this.config.targetCount}건 중 ${this.stats.processedCount}건만 처리했습니다. 목표 달성으로 기록하지 않습니다.`, 'warn');
+        }
       }
     } finally {
       this.stats.endTime = new Date().toISOString();
+      this.stats.phase = this.state;
       this.stats.currentPost = null;
       this.stats.delayCountdown = 0;
       this.emit('status', this.getStatus());

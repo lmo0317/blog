@@ -4,20 +4,62 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { detectGpuSpecs } from './hardware.js';
 
+const COMMENT_STOPWORDS = new Set(['그리고', '하지만', '정말', '너무', '관련', '대한', '이번', '오늘', '포스팅', '블로그', '후기', '정보', '내용', '사진', '입니다', '있습니다', '했어요', '하는', '에서', '으로']);
+
+export function normalizeCommentText(value) {
+  return String(value || '')
+    .normalize('NFC')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\ufeff\ufffd]/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/^(?:댓글|답변|assistant|comment)\s*[:：-]\s*/i, '')
+    .replace(/^["'“”‘’「」『』]+|["'“”‘’「」『』]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function contentKeywords({ title = '', contentSnippet = '', imageSummary = '' }) {
+  const source = `${title} ${contentSnippet} ${imageSummary}`.normalize('NFC');
+  return [...new Set(source.match(/[가-힣A-Za-z0-9]{2,}/g) || [])]
+    .filter((word) => !COMMENT_STOPWORDS.has(word) && !/^\d+$/.test(word))
+    .sort((a, b) => b.length - a.length);
+}
+
+function similarity(a, b) {
+  const grams = (text) => {
+    const clean = normalizeCommentText(text).replace(/\s/g, '');
+    return new Set(Array.from({ length: Math.max(0, clean.length - 1) }, (_, i) => clean.slice(i, i + 2)));
+  };
+  const left = grams(a);
+  const right = grams(b);
+  if (!left.size || !right.size) return 0;
+  const overlap = [...left].filter((gram) => right.has(gram)).length;
+  return overlap / Math.min(left.size, right.size);
+}
+
+export function validateBlogComment(comment, context = {}, recentComments = []) {
+  const text = normalizeCommentText(comment);
+  const reasons = [];
+  if (text.length < 15 || text.length > 120) reasons.push('length');
+  if (/[<>\[\]{}]|https?:\/\/|www\.|```|\b(?:system|assistant|user)\b/i.test(text)) reasons.push('artifact');
+  if (/([!?.ㅋㅎㅠㅜ])\1{3,}/.test(text)) reasons.push('noise');
+  const keywords = contentKeywords(context);
+  if (keywords.length && !keywords.slice(0, 30).some((word) => text.toLowerCase().includes(word.toLowerCase()))) reasons.push('irrelevant');
+  if (recentComments.some((previous) => similarity(text, previous) >= 0.72)) reasons.push('duplicate');
+  return { ok: reasons.length === 0, text, reasons, keywords };
+}
+
 export class EmbeddedLlamaServer extends EventEmitter {
   constructor({ 
     modelManager, 
     binDir = path.join(process.cwd(), 'bin'),
     port = 8089,
-    host = '127.0.0.1',
-    fallbackExternalUrl = process.env.LOCAL_LLM_URL || 'http://192.168.219.112:8081'
+    host = '127.0.0.1'
   }) {
     super();
     this.modelManager = modelManager;
     this.binDir = binDir;
     this.port = port;
     this.host = host;
-    this.fallbackExternalUrl = fallbackExternalUrl;
 
     this.serverProcess = null;
     this.status = 'stopped'; // 'stopped' | 'starting' | 'running' | 'error'
@@ -64,8 +106,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
       '--host', this.host,
       '--port', String(this.port),
       '-c', '4096', // Context window
-      '-ngl', String(gpuLayers),
-      '--flash-attn'
+      '-ngl', String(gpuLayers)
     ];
 
     try {
@@ -97,15 +138,15 @@ export class EmbeddedLlamaServer extends EventEmitter {
         this.serverProcess = null;
       });
 
-      // Wait for health check
-      const isReady = await this.waitForReady(15000);
+      // Wait for health check (up to 30s for large 6.6GB models)
+      const isReady = await this.waitForReady(30000);
       if (isReady) {
         this.status = 'running';
         this.emit('ready', { port: this.port, modelId: this.currentModelId });
         return { status: 'running', port: this.port, modelId: this.currentModelId };
       } else {
         this.status = 'fallback';
-        return { status: 'fallback', message: '내장 llama-server 구동 대기시간 초과 (외부/하이브리드 모드로 전환)' };
+        return { status: 'fallback', message: '내장 llama-server 구동 대기시간 초과' };
       }
     } catch (err) {
       this.status = 'fallback';
@@ -154,7 +195,18 @@ export class EmbeddedLlamaServer extends EventEmitter {
   /**
    * Generate human-like natural blog comment using the embedded AI model.
    */
-  async generateBlogComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly' }) {
+  async analyzeBlogTargetKeywords({ texts = [], fallbackKeywords = [] }) {
+    const source = texts.map((text) => normalizeCommentText(text)).filter(Boolean).slice(0, 80).join('\n').slice(0, 12000);
+    if (this.status === 'running' && source) {
+      try {
+        const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(30000), body: JSON.stringify({ temperature: 0.25, max_tokens: 700, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: '네이버 블로그 콘텐츠 전략가입니다. 최근 글만 근거로 분석해 검색량을 확보할 수 있는 핵심 명사 1~2개, 한글 2~10자의 짧은 소통 타겟 키워드를 추천하세요. 방법, 효능, 추천, 좋은 음식, 높이는 법 같은 설명구는 붙이지 말고 JSON만 출력하세요.' }, { role: 'user', content: `[최근 글]\n${source}\n\n{"summary":"블로그 성격 요약","audience":"주요 독자","targets":[{"keyword":"2~10자의 짧은 검색 키워드","reason":"추천 근거","score":1~100}]}` }] }) });
+        if (response.ok) { const data = await response.json(); const raw = String(data.choices?.[0]?.message?.content || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, ''); const parsed = JSON.parse(raw); const targets = (Array.isArray(parsed.targets) ? parsed.targets : []).map((item) => ({ keyword: String(item.keyword || '').replace(/[,，\n]/g, '').replace(/\s+/g, '').trim(), reason: String(item.reason || '').trim().slice(0, 160), score: Math.min(Math.max(Number(item.score) || 50, 1), 100) })).filter((item) => item.keyword.length >= 2 && item.keyword.length <= 10 && !/(방법|효능|추천|좋은음식|높이는법)$/.test(item.keyword)).slice(0, 8); if (targets.length) return { summary: String(parsed.summary || '').trim(), audience: String(parsed.audience || '').trim(), targets, method: 'llm' }; }
+      } catch (error) { this.addLog(`Keyword analysis fallback: ${error.message}`, 'warn'); }
+    }
+    return { summary: '최근 글에서 반복해서 나타난 주제를 기준으로 분석했습니다.', audience: '해당 주제에 관심 있는 네이버 블로그 독자', targets: fallbackKeywords.map((keyword, index) => ({ keyword, reason: '최근 글에서 반복적으로 확인된 주제', score: Math.max(55, 85 - index * 5) })), method: 'fallback' };
+  }
+
+  async generateBlogComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
     const systemPrompt = `당신은 네이버 블로그를 즐겨보는 따뜻하고 진정성 있는 20~30대 한국인 이웃 블로거입니다.
 상대방의 블로그 포스팅 제목, 본문 내용, 사진(이미지) 정보를 바탕으로 상대방이 기분 좋아할 만한 '자연스럽고 정중한 1~2줄 칭찬/공감 댓글'을 작성하세요.
 
@@ -162,8 +214,10 @@ export class EmbeddedLlamaServer extends EventEmitter {
 1. 절대로 매크로나 봇처럼 보이면 안 됩니다. '안녕하세요 블로거님' 같은 억지 호칭은 절대 쓰지 마세요.
 2. 사진 속 내용(음식, 인테리어, 풍경 등)이나 본문의 구체적인 포인트를 1개 자연스럽게 언급하세요.
 3. 길이는 1~2문장 (50~100자 내외)으로 간결하고 깔끔하게 작성하세요.
-4. 적절한 이모티콘(😊, ㅎㅎ, :), 👍)을 자연스럽게 1~2개 섞어주세요.
-5. 오직 작성된 댓글 본문만 출력하고, 따옴표나 기타 부연설명은 일절 출력하지 마세요.`;
+4. 제목이나 본문에 실제로 나온 고유한 대상·장소·메뉴·경험 중 하나를 댓글에 그대로 포함하세요. 근거 없는 맛, 방문, 구매, 효과를 지어내지 마세요.
+5. 최근 댓글과 문장 구조 및 표현을 반복하지 마세요. 이모지는 없어도 되며 최대 1개만 사용하세요.
+6. 깨진 문자, 제어문자, 마크다운, 따옴표, 해시태그, URL, 자기소개, 이웃 신청 문구를 쓰지 마세요.
+7. 오직 댓글 본문만 출력하세요. 조건을 만족할 근거가 부족하면 정확히 SKIP만 출력하세요.`;
 
     const toneDescriptions = {
       friendly: '친근하고 발랄한 이웃 말투 (~해요! ㅎㅎ, 넘 맛있어보여요)',
@@ -179,6 +233,9 @@ ${contentSnippet || '본문 내용'}
 
 ${imageSummary ? `[사진/이미지 정보]\n${imageSummary}` : ''}
 
+[최근 작성 댓글 - 표현 중복 금지]
+${recentComments.slice(0, 8).map((comment) => `- ${normalizeCommentText(comment)}`).join('\n') || '- 없음'}
+
 [원하는 말투]
 ${toneDescriptions[tone] || toneDescriptions.friendly}
 
@@ -187,74 +244,43 @@ ${toneDescriptions[tone] || toneDescriptions.friendly}
     // 1. Try local embedded llama-server first
     if (this.status === 'running') {
       try {
-        const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            temperature: 0.7,
-            max_tokens: 150
-          }),
-          signal: AbortSignal.timeout(10000)
-        });
-
-        if (response.ok) {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `${userPrompt}\n${attempt ? `이전 출력은 검증에 실패했습니다. 글의 실제 핵심어를 포함해 완전히 새로 작성하세요. 재시도 ${attempt + 1}/3` : ''}` }], temperature: 0.45 + attempt * 0.05, max_tokens: 120 }),
+            signal: AbortSignal.timeout(12000)
+          });
+          if (!response.ok) continue;
           const data = await response.json();
-          const text = data.choices?.[0]?.message?.content?.trim();
-          if (text) return this.cleanCommentOutput(text);
+          const candidate = data.choices?.[0]?.message?.content?.trim();
+          if (candidate === 'SKIP') break;
+          const checked = validateBlogComment(candidate, { title, contentSnippet, imageSummary }, recentComments);
+          if (checked.ok) return checked.text;
+          this.addLog(`Comment rejected: ${checked.reasons.join(', ')}`, 'warn');
         }
       } catch (err) {
         this.addLog(`Local inference failed, falling back: ${err.message}`, 'warn');
       }
     }
 
-    // 2. Try fallback external local LLM (e.g. 192.168.219.112:8081)
-    if (this.fallbackExternalUrl) {
-      try {
-        const response = await fetch(`${this.fallbackExternalUrl}/v1/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            temperature: 0.7,
-            max_tokens: 150
-          }),
-          signal: AbortSignal.timeout(10000)
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const text = data.choices?.[0]?.message?.content?.trim();
-          if (text) return this.cleanCommentOutput(text);
-        }
-      } catch {}
-    }
-
-    // 3. Smart Template Fallback if no LLM is currently reachable
-    return this.generateSmartTemplateComment({ title, tone });
+    // 2. Smart Template Fallback if local LLM is still loading
+    const fallback = this.generateSmartTemplateComment({ title, contentSnippet, imageSummary, tone, recentComments });
+    return validateBlogComment(fallback, { title, contentSnippet, imageSummary }, recentComments).ok ? fallback : '';
   }
 
   cleanCommentOutput(text) {
-    return text
-      .replace(/^["'「](.*)["'」]$/, '$1')
-      .replace(/^(댓글\s*:\s*|작성된\s*댓글\s*:\s*)/i, '')
-      .trim();
+    return normalizeCommentText(text);
   }
 
-  generateSmartTemplateComment({ title = '', tone = 'friendly' }) {
+  generateSmartTemplateComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
     const cleanTitle = title.replace(/[\[\(][^\]\)]*[\]\)]/g, '').trim();
+    const topic = contentKeywords({ title: cleanTitle, contentSnippet, imageSummary })[0] || '';
+    if (!topic) return '';
     const templates = [
-      `포스팅 글 재미있게 잘 읽고 가요! ${cleanTitle ? `'${cleanTitle}' 관련해서 ` : ''}유익한 꿀팁 많이 얻어갑니다 ㅎㅎ 좋은 하루 되세요 :)`,
-      `사진이랑 글 설명이 너무 알차서 집중해서 봤어요! 정성스러운 포스팅 감사히 보고 갑니다 😊`,
-      `오 유용한 정보네요! 저도 관심 있던 주제인데 덕분에 도움 많이 되었습니다. 자주 소통해요! 👍`,
-      `포스팅 내용이 너무 유익하고 정리가 잘 되어 있네요 ㅎㅎ 이웃 맺고 자주 들릴게요 :)`
+      `${topic}에 관해 직접 정리해 주신 부분이 특히 눈에 들어왔어요. 차분하게 잘 읽었습니다.`,
+      `${topic} 이야기를 구체적으로 풀어주셔서 흐름을 이해하기 좋았어요. 정성스러운 글 잘 봤습니다.`,
+      `${topic} 부분이 궁금했는데 글에서 짚어주신 내용이 인상적이네요. 공유해 주셔서 감사합니다.`
     ];
-    return templates[Math.floor(Math.random() * templates.length)];
+    return templates.find((candidate) => !recentComments.some((previous) => similarity(candidate, previous) >= 0.72)) || '';
   }
 }

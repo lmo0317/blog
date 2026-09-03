@@ -2,10 +2,16 @@
   "name": "blog-suite",
   "version": "1.0.0",
   "private": true,
-  "workspaces": ["windows"],
+  "workspaces": ["windows", "apps/engagement", "apps/posting"],
   "scripts": {
     "start:windows": "npm --prefix windows start",
+    "start:engagement": "npm --prefix apps/engagement start",
+    "start:posting": "npm --prefix apps/posting start",
     "test:windows": "npm --prefix windows test",
-    "check": "npm --prefix windows run check"
+    "test:engagement": "npm --prefix apps/engagement test",
+    "test:posting": "npm --prefix apps/posting test",
+    "check": "npm --prefix windows run check",
+    "check:engagement": "npm --prefix apps/engagement run check",
+    "check:posting": "npm --prefix apps/posting run check"
   }
 }

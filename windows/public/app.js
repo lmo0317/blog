@@ -17,18 +17,37 @@ function setConnected(connected, label = '') {
   const accountLabel = $('#accountLabel');
   const loginFormContainer = $('#loginFormContainer');
   const connectedCard = $('#connectedCard');
+  
+  const settingsStatusBadge = $('#settingsAccountStatus');
+  const settingsAccountLabel = $('#settingsAccountLabel');
+  const settingsLoginFormContainer = $('#settingsLoginFormContainer');
+  const settingsConnectedCard = $('#settingsConnectedCard');
+
   const engLoginBanner = $('#engLoginBanner');
   const publishLoginBanner = $('#publishLoginBanner');
+  const publishAccountStatus = $('#publishAccountStatus');
 
   if (statusBadge) {
     statusBadge.className = `status ${connected ? 'online' : ''}`;
     statusBadge.innerHTML = `<i></i> ${connected ? '연결됨' : '연결 안 됨'}`;
   }
-  if (accountLabel && label) {
-    accountLabel.textContent = label;
+  if (settingsStatusBadge) {
+    settingsStatusBadge.className = `status ${connected ? 'online' : ''}`;
+    settingsStatusBadge.innerHTML = `<i></i> ${connected ? '연결됨' : '연결 안 됨'}`;
   }
+  if (publishAccountStatus) {
+    publishAccountStatus.className = `status ${connected ? 'online' : ''}`;
+    publishAccountStatus.innerHTML = `<i></i> ${connected ? '네이버 연결됨' : '네이버 연결 안 됨'}`;
+  }
+
+  if (accountLabel && label) accountLabel.textContent = label;
+  if (settingsAccountLabel && label) settingsAccountLabel.textContent = label;
+
   if (loginFormContainer) loginFormContainer.classList.toggle('hidden', connected);
   if (connectedCard) connectedCard.classList.toggle('hidden', !connected);
+  if (settingsLoginFormContainer) settingsLoginFormContainer.classList.toggle('hidden', connected);
+  if (settingsConnectedCard) settingsConnectedCard.classList.toggle('hidden', !connected);
+
   if (engLoginBanner) engLoginBanner.classList.toggle('hidden', connected);
   if (publishLoginBanner) publishLoginBanner.classList.toggle('hidden', connected);
 }
@@ -163,13 +182,15 @@ draftForm?.addEventListener('submit', async (event) => {
   button.textContent = '112 LLM 핫딜 글 작성 중…';
   $('#llmStatus').className = 'status';
   try {
+    const model = $('#dealsModelSelect')?.value || '';
     const data = await api('/api/blog/deals/draft', {
       method: 'POST',
       body: JSON.stringify({
         deals: state.deals,
         tone: $('#postTone').value,
         length: $('#postLength').value,
-        notes: $('#postNotes').value
+        notes: $('#postNotes').value,
+        model
       })
     });
     $('#postTitle').value = data.title;
@@ -183,13 +204,13 @@ draftForm?.addEventListener('submit', async (event) => {
     state.selectedImages = new Set(state.images.map((_, i) => i));
     renderImages();
 
-    $('#draftModel').textContent = data.model || '112 로컬 LLM';
+    $('#draftModel').textContent = data.engineLabel || data.model || '112 로컬 LLM';
     renderPostSource({ sourceUrl: 'https://www.algumon.com/n/deal/rank', source: '알구몬 실시간 핫딜 랭킹' });
     publishForm.classList.remove('hidden');
     $('#llmStatus').className = 'status online';
     publishForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
     updatePublishState();
-    toast('로컬 LLM이 핫딜 블로그 글 작성을 완료했습니다. 검토 후 발행하세요!');
+    toast(`[${data.engineLabel || data.model || 'AI'}] 핫딜 블로그 글 작성을 완료했습니다. 검토 후 발행하세요!`);
   } catch (error) {
     $('#llmStatus').className = 'status';
     toast(error.message, true);
@@ -250,13 +271,15 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
 
   const btn = $('#articleDraftBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="btn-icon">⏳</span> <strong>AI가 기사를 분석하고 고화질 이미지를 배치하는 중...</strong>';
+  btn.innerHTML = '<span class="btn-icon">⏳</span> <strong>AI가 기사를 분석하고 맞춤 고화질 그림을 생성 중...</strong>';
   $('#llmStatus').className = 'status';
 
   try {
     const tone = $('#articleTone')?.value || 'friendly';
     const length = $('#articleLength')?.value || 'medium';
     const notes = $('#articleNotes')?.value?.trim() || '';
+    const model = $('#articleModelSelect')?.value || '';
+    const imageStyle = $('#articleImageStyle')?.value || 'photorealistic';
 
     const data = await api('/api/blog/article/draft', {
       method: 'POST',
@@ -264,7 +287,9 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
         urlOrText: sourceInput,
         tone,
         length,
-        notes
+        notes,
+        model,
+        imageStyle
       })
     });
 
@@ -279,7 +304,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     state.selectedImages = new Set(state.images.map((_, i) => i));
     renderImages();
 
-    $('#draftModel').textContent = data.model || '112 로컬 LLM';
+    $('#draftModel').textContent = data.engineLabel || data.model || '112 로컬 LLM';
     if (data.sourceUrl) {
       renderPostSource({ sourceUrl: data.sourceUrl, source: '참조 뉴스/포스팅 원문' });
     } else {
@@ -289,14 +314,15 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     publishForm.classList.remove('hidden');
     $('#llmStatus').className = 'status online';
     publishForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (publishConfirm) publishConfirm.checked = true;
     updatePublishState();
-    toast('✨ AI가 기사를 완벽 재해석하고 고화질 이미지를 자동 배치했습니다! 검토 후 발행하세요.');
+    toast(`✨ [${data.engineLabel || data.model}] 기사 재해석 및 고화질 맞춤 그림 생성이 완료되었습니다!`);
   } catch (error) {
     $('#llmStatus').className = 'status';
     toast(`AI 글 작성 실패: ${error.message}`, true);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="btn-icon">✨</span> <strong>AI 글 재해석 &amp; 고화질 이미지 자동 생성</strong>';
+    btn.innerHTML = '<span class="btn-icon">✨</span> <strong>AI 기사 분석 &amp; 맞춤 그림 자동 생성 (1클릭 완료)</strong>';
   }
 });
 
@@ -367,16 +393,25 @@ function renderImages() {
   if ($('#imageEmpty')) {
     $('#imageEmpty').textContent = state.images.length
       ? ''
-      : '관련 이미지가 아직 없습니다. 검색어를 바꿔 다시 찾아보세요.';
+      : '배치된 시각 이미지가 없습니다. 상단에서 AI 글을 작성하거나 이미지를 추가해보세요.';
   }
   imageResults?.classList.toggle('hidden', state.images.length === 0);
   if (imageResults) {
-    imageResults.innerHTML = state.images.map((image, index) => `
-      <label class="image-card${state.selectedImages.has(index) ? ' selected' : ''}" data-image-index="${index}">
+    imageResults.innerHTML = state.images.map((image, index) => {
+      const isAi = image.isAiGenerated || image.license?.includes('Gemma');
+      return `
+      <label class="image-card${state.selectedImages.has(index) ? ' selected' : ''}${isAi ? ' ai-card' : ''}" data-image-index="${index}" style="${isAi ? 'border: 2px solid #3182ce; background: #f0f7ff;' : ''}">
         <input type="checkbox" value="${escapeHtml(image.id)}" aria-label="${escapeHtml(image.title)} 선택"${state.selectedImages.has(index) ? ' checked' : ''}>
-        <img src="${escapeHtml(image.previewUrl)}" alt="${escapeHtml(image.description || image.title)}" loading="lazy">
-        <span><strong>${escapeHtml(image.title)}</strong><small>${escapeHtml([image.author, image.license].filter(Boolean).join(' · '))}</small>${image.afterHeading ? `<em>“${escapeHtml(image.afterHeading)}” 뒤에 삽입</em>` : ''}${image.caption ? `<p>${escapeHtml(image.caption)}</p>` : ''}</span>
-      </label>`).join('');
+        <img src="${escapeHtml(image.previewUrl)}" alt="${escapeHtml(image.description || image.title)}" loading="lazy" style="object-fit:cover; border-radius:6px;">
+        <span>
+          ${isAi ? `<div style="color:#2b6cb0; font-size:11px; font-weight:800; margin-bottom:2px;">⚡ 로컬 AI 생성 그림</div>` : ''}
+          <strong>${escapeHtml(image.title)}</strong>
+          <small>${escapeHtml([image.author, image.license].filter(Boolean).join(' · '))}</small>
+          ${image.afterHeading ? `<em>“${escapeHtml(image.afterHeading)}” 뒤에 삽입</em>` : ''}
+          ${image.caption ? `<p>${escapeHtml(image.caption)}</p>` : ''}
+        </span>
+      </label>`;
+    }).join('');
     imageResults.querySelectorAll('input').forEach((input) => input.addEventListener('change', () => {
       if (input.checked && state.selectedImages.size >= 5) {
         input.checked = false;
@@ -398,7 +433,6 @@ function updatePublishState() {
   const title = ($('#postTitle')?.value || '').trim();
   const content = ($('#postContent')?.value || '').trim();
   const ready = state.connected
-    && publishConfirm?.checked
     && title.length >= 2
     && content.length >= 20;
   publishButton.disabled = !ready;
@@ -407,7 +441,7 @@ function updatePublishState() {
 
 publishForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (!state.connected || !publishConfirm?.checked) return updatePublishState();
+  if (!state.connected) return updatePublishState();
   publishButton.disabled = true;
   publishButton.textContent = '네이버에 발행 중…';
   $('#publishedLink')?.classList.add('hidden');
@@ -418,7 +452,7 @@ publishForm?.addEventListener('submit', async (event) => {
         title: $('#postTitle')?.value || '',
         content: $('#postContent')?.value || '',
         tags: ($('#postTags')?.value || '').split(',').map((tag) => tag.trim()).filter(Boolean),
-        images: [...state.selectedImages].map((index, order) => {
+        images: [...state.selectedImages].sort((a, b) => a - b).map((index, order) => {
           const image = state.images[index];
           return image ? { ...image, afterHeading: image.afterHeading || state.imagePlans[order]?.afterHeading || '' } : null;
         }).filter(Boolean),
@@ -939,63 +973,198 @@ function escapeHtml(value) {
   })[character]);
 }
 
-// ---------------------------------------------------------------------------
-// Hardware Specs & AI Model Hub Controller
-// ---------------------------------------------------------------------------
 let currentHardwareSpecs = null;
 let currentModelsList = [];
-let activeModelId = 'gemma-4-e4b';
+let activeModelId = null;
+
+function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
+  const globalStatus = $('#globalEngineStatusText');
+  const summaryModel = $('#summaryModelName');
+  const summaryEndpoint = $('#summaryEndpointUrl');
+  const currentBadge = $('#currentEngineBadge');
+
+  if (activeModel) {
+    if (summaryModel) summaryModel.textContent = `${activeModel.name} (${activeModel.sizeFormatted || ''})`;
+    if (summaryEndpoint) summaryEndpoint.textContent = activeEndpoint?.baseUrl || 'http://127.0.0.1:8089';
+    if (globalStatus) {
+      globalStatus.textContent = `⚡ 내 PC 로컬 GPU (${activeModel.name})`;
+      globalStatus.style.color = '#234e52';
+    }
+    if (currentBadge) {
+      currentBadge.className = 'pill pill-green';
+      currentBadge.textContent = `⚡ ${activeModel.name}`;
+    }
+    if ($('#llmStatus')) {
+      $('#llmStatus').className = 'status online';
+      $('#llmStatus').innerHTML = `<i></i> ⚡ 로컬 GPU (${escapeHtml(activeModel.name)})`;
+    }
+  } else {
+    if (summaryModel) summaryModel.textContent = '미설치 (Gemma 모델 다운로드 필요)';
+    if (summaryEndpoint) summaryEndpoint.textContent = '-';
+    if (globalStatus) {
+      globalStatus.textContent = '⚠️ AI 모델 다운로드 필요';
+      globalStatus.style.color = '#c53030';
+    }
+    if (currentBadge) {
+      currentBadge.className = 'pill pill-gray';
+      currentBadge.textContent = '미설치';
+    }
+    if ($('#llmStatus')) {
+      $('#llmStatus').className = 'status offline';
+      $('#llmStatus').innerHTML = `<i></i> ⚠️ 모델 설치 필요`;
+    }
+  }
+}
+
+function initSettingsController() {
+  // Global Header Status Click
+  $('#globalEngineStatusBox')?.addEventListener('click', () => {
+    setActiveTab('settings', true);
+  });
+
+  // 1. Settings Naver Login & Logout
+  $('#settingsAccountForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await handleIdPwLogin($('#settingsAccountForm'), '#settingsUserId', '#settingsUserPassword');
+  });
+
+  $('#settingsLogoutButton')?.addEventListener('click', async () => {
+    await api('/api/naver/logout', { method: 'POST' }).catch(() => {});
+    setConnected(false);
+    toast('네이버 계정 연결이 해제되었습니다.');
+  });
+}
 
 async function initAiHardwareAndModels() {
   try {
+    const settings = await api('/api/settings').catch(() => null);
+
     const specs = await api('/api/hardware/specs');
     currentHardwareSpecs = specs;
     
-    // Update GPU badge
-    const gpuBadge = $('#gpuSpecBadge');
-    if (gpuBadge && specs.gpu?.primaryGpu) {
-      gpuBadge.innerHTML = `🎮 ${escapeHtml(specs.gpu.primaryGpu.name)} <strong>(${escapeHtml(specs.gpu.vramFormatted)})</strong>`;
-    }
+    // Update GPU badges & text
+    const gpuNameText = specs.gpu?.primaryGpu ? `${specs.gpu.primaryGpu.name} (${specs.gpu.vramFormatted})` : '시스템 GPU';
+    if ($('#gpuSpecBadge')) $('#gpuSpecBadge').innerHTML = `🎮 ${escapeHtml(gpuNameText)}`;
+    if ($('#localGpuSummaryText')) $('#localGpuSummaryText').textContent = `🎮 내 그래픽: ${gpuNameText} · 전용 VRAM ${specs.gpu?.vramFormatted || '8GB'}`;
 
-    // Update recommendation intro
-    const recommendIntro = $('#hardwareRecommendText');
-    if (recommendIntro && specs.recommendedModel) {
-      recommendIntro.innerHTML = `내 컴퓨터 사양(<strong>${escapeHtml(specs.gpu?.primaryGpu?.name || 'GPU')}</strong> / 전용 VRAM <strong>${escapeHtml(specs.gpu?.vramFormatted || '8GB')}</strong>)에 최적화된 <strong>[${escapeHtml(specs.recommendedModel.modelInfo?.name || 'Gemma 4')}]</strong> 모델이 추천되었습니다. 100% GPU 가속으로 비용 0원에 1초 만에 맞춤 댓글을 자동 생성합니다.`;
-    }
+    const summaryHtml = `내 컴퓨터 사양(<strong>${escapeHtml(specs.gpu?.primaryGpu?.name || 'GPU')}</strong> / <strong>${escapeHtml(specs.gpu?.vramFormatted || '8GB')}</strong>)에 맞는 <strong>[${escapeHtml(specs.recommendedModel?.modelInfo?.name || '로컬 AI')}]</strong> 모델을 추천합니다. 실제 설치된 모델만 선택해 글과 댓글을 생성합니다.`;
+
+    if ($('#hardwareRecommendText')) $('#hardwareRecommendText').innerHTML = summaryHtml;
 
     const modelsRes = await api('/api/models/list').catch(() => null);
     if (modelsRes) {
       currentModelsList = modelsRes.models || [];
-      activeModelId = modelsRes.activeModel?.id || specs.recommendedModel?.id || 'gemma-4-e4b';
-      renderModelCards(modelsRes.models, activeModelId, specs.recommendedModel?.id);
+      activeModelId = modelsRes.activeModel?.id || null;
+      
+      renderModelCards(modelsRes.models, activeModelId, specs.recommendedModel?.id, '#aiModelCardsGrid');
+      renderModelCards(modelsRes.models, activeModelId, specs.recommendedModel?.id, '#settingsAiModelCardsGrid');
+      
+      updateLocalAiSummaryUI(modelsRes.activeModel, settings?.activeEndpoint);
+
+      // Synchronize global select dropdowns
+      $$('.ai-model-global-select').forEach((sel) => {
+        if (!sel) return;
+        sel.replaceChildren();
+        const option = document.createElement('option');
+        option.value = activeModelId || '';
+        option.textContent = modelsRes.activeModel?.name || '활성 로컬 모델 없음';
+        sel.append(option);
+      });
     }
   } catch (err) {
     console.error('Failed to init hardware specs:', err);
   }
 }
 
-function renderModelCards(models, activeId, recommendedId) {
-  const container = $('#aiModelCardsGrid');
+let modelEventSource = null;
+
+function initModelEvents() {
+  if (modelEventSource) return;
+  try {
+    modelEventSource = new EventSource('/api/models/events');
+    
+    modelEventSource.addEventListener('progress', (e) => {
+      const data = JSON.parse(e.data || '{}');
+      updateDownloadProgressUI(data);
+    });
+
+    modelEventSource.addEventListener('complete', (e) => {
+      const data = JSON.parse(e.data || '{}');
+      toast(`✨ [${data.meta?.name || data.modelId}] 다운로드가 완료되어 내 PC GPU 활성 모델로 설정되었습니다!`);
+      initAiHardwareAndModels();
+    });
+
+    modelEventSource.addEventListener('error', (e) => {
+      const data = JSON.parse(e.data || '{}');
+      if (data.error) toast(`다운로드 실패: ${data.error}`, true);
+      initAiHardwareAndModels();
+    });
+  } catch (err) {
+    console.error('Failed to connect model events SSE:', err);
+  }
+}
+
+function updateDownloadProgressUI(data) {
+  const { modelId, percent, downloadedFormatted, totalFormatted, speedMbps, remainingSec } = data;
+  $$(`.ai-model-card[data-model="${modelId}"]`).forEach((card) => {
+    let progressBox = card.querySelector('.model-download-progress');
+    if (!progressBox) {
+      progressBox = document.createElement('div');
+      progressBox.className = 'model-download-progress';
+      progressBox.style.cssText = 'margin-top:10px; padding:10px 12px; background:#ebf8ff; border:1px solid #bee3f8; border-radius:8px;';
+      card.querySelector('.model-card-footer')?.before(progressBox);
+    }
+    
+    const timeText = remainingSec > 60 ? `약 ${Math.floor(remainingSec / 60)}분 ${remainingSec % 60}초 남음` : `${remainingSec}초 남음`;
+    progressBox.innerHTML = `
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; color:#2b6cb0; margin-bottom:5px;">
+        <span>📥 다운로드 진행 중: <strong>${percent}%</strong> (${downloadedFormatted} / ${totalFormatted})</span>
+        <span style="color:#2b6cb0; font-weight:700;">⚡ ${speedMbps}</span>
+      </div>
+      <div style="width:100%; height:8px; background:#bee3f8; border-radius:4px; overflow:hidden;">
+        <div style="width:${percent}%; height:100%; background:#3182ce; transition:width 0.3s ease;"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#4a5568; margin-top:5px;">
+        <span>내 PC GPU VRAM에 로컬 모델 파일 설치 중</span>
+        <span>⏳ ${timeText}</span>
+      </div>
+    `;
+
+    const btn = card.querySelector('.model-select-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = `다운로드 중 (${percent}%)`;
+    }
+  });
+}
+
+function renderModelCards(models, activeId, recommendedId, containerSelector = '#aiModelCardsGrid') {
+  const container = $(containerSelector);
   if (!container || !models || !models.length) return;
 
   container.innerHTML = models.map((m) => {
     const isRecommended = m.id === recommendedId;
-    const isActive = m.id === activeId;
-    const isInstalled = m.isInstalled;
+    const isInstalled = Boolean(m.isInstalled);
+    const isActive = Boolean(isInstalled && m.id === activeId);
     
     let btnHtml = '';
+    let statusPill = '';
+
     if (isActive) {
-      btnHtml = `<button type="button" class="button small model-select-btn" disabled style="background:#3182ce; color:#fff;">✓ 사용 중</button>`;
+      btnHtml = `<button type="button" class="button small model-select-btn" disabled style="background:#2b6cb0; color:#fff; font-weight:700;">✓ 사용 중 (내 PC GPU)</button>`;
+      statusPill = `<span class="pill pill-green" style="font-size:11px;">⚡ 내 PC GPU 활성</span>`;
     } else if (isInstalled) {
-      btnHtml = `<button type="button" class="button small model-select-btn" data-action="select" data-id="${escapeHtml(m.id)}">전환하기</button>`;
+      btnHtml = `<button type="button" class="button small model-select-btn" data-action="select" data-id="${escapeHtml(m.id)}">내 PC GPU로 전환</button>`;
+      statusPill = `<span class="pill" style="font-size:11px; background:#edf2f7; color:#4a5568;">💾 설치됨 (대기)</span>`;
     } else {
       btnHtml = `<button type="button" class="button small ghost model-select-btn" data-action="download" data-id="${escapeHtml(m.id)}">다운로드 (${escapeHtml(m.sizeFormatted)})</button>`;
+      statusPill = `<span class="pill" style="font-size:11px; background:#fffaf0; color:#dd6b20; border:1px solid #feebc8;">미설치 (다운로드 필요)</span>`;
     }
 
     const tierPills = {
-      'gemma-4-e2b': '<span class="model-tier-pill">초고속 경량</span>',
-      'gemma-4-e4b': '<span class="model-tier-pill pill-gold">밸런스 고품질</span>',
-      'gemma-4-12b': '<span class="model-tier-pill pill-purple">최고급 고지능</span>'
+      'gemma-4-e2b-it-qat-q4-0': '<span class="model-tier-pill">경량</span>',
+      'gemma-4-e4b-it-qat-q4-0': '<span class="model-tier-pill pill-gold">균형</span>',
+      'gemma-4-12b-it-qat-q4-0': '<span class="model-tier-pill pill-purple">고성능</span>'
     };
 
     return `
@@ -1005,7 +1174,10 @@ function renderModelCards(models, activeId, recommendedId) {
             <strong>${escapeHtml(m.name)}</strong>
             <span class="model-badge-sub">${escapeHtml(m.sizeFormatted)} GGUF · ${escapeHtml(m.description?.slice(0, 30) || '')}</span>
           </div>
-          ${tierPills[m.id] || '<span class="model-tier-pill">AI 모델</span>'}
+          <div style="display:flex; align-items:center; gap:6px;">
+            ${statusPill}
+            ${tierPills[m.id] || '<span class="model-tier-pill">AI 모델</span>'}
+          </div>
         </div>
         <p class="model-card-desc">${escapeHtml(m.description || '')}</p>
         <div class="model-card-footer">
@@ -1033,11 +1205,14 @@ function renderModelCards(models, activeId, recommendedId) {
         }
       } else if (action === 'download') {
         try {
-          await api('/api/models/download', { method: 'POST', body: JSON.stringify({ modelId }) });
-          toast(`'${modelId}' 모델 다운로드를 시작했습니다. 백그라운드에서 완료 후 자동 활성화됩니다.`);
           btn.disabled = true;
-          btn.textContent = '다운로드 중...';
+          btn.textContent = '다운로드 요청 중...';
+          await api('/api/models/download', { method: 'POST', body: JSON.stringify({ modelId }) });
+          toast(`'${modelId}' 모델 다운로드를 시작했습니다. 실시간 진행률을 확인하세요.`);
+          initModelEvents();
         } catch (err) {
+          btn.disabled = false;
+          btn.textContent = '다운로드';
           toast(err.message, true);
         }
       }
@@ -1049,20 +1224,63 @@ function renderModelCards(models, activeId, recommendedId) {
 // Engagement (Heart & AI Custom Comment) Automation Controller
 // ---------------------------------------------------------------------------
 let engagementEventSource = null;
+let engagementTargetDraft = [];
 
 function initEngagementAutomation() {
   // 0. Go to login button
   $('#engGoLoginBtn')?.addEventListener('click', () => {
-    setActiveTab('neighbor', true);
+    setActiveTab('settings', true);
   });
 
   // 1. Keyword Chips
+  const syncEngKeywordChips = () => {
+    const selected = new Set(($('#engKeyword')?.value || '').split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean));
+    $$('.eng-chips button').forEach((button) => {
+      const active = selected.has(button.textContent.trim());
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  };
   $$('.eng-chips button').forEach((btn) => {
     btn.addEventListener('click', () => {
       const input = $('#engKeyword');
-      if (input) input.value = btn.textContent.trim();
+      if (!input) return;
+      const keyword = btn.textContent.trim();
+      const keywords = [...new Set(input.value.split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))];
+      const next = keywords.includes(keyword) ? keywords.filter((value) => value !== keyword) : [...keywords, keyword];
+      input.value = next.join(', ');
+      syncEngKeywordChips();
     });
   });
+  $('#engKeyword')?.addEventListener('input', syncEngKeywordChips);
+  syncEngKeywordChips();
+
+  const readEngTargets = () => [...new Set(($('#engKeyword')?.value || '').split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))].map((keyword) => ({ keyword, reason: '직접 추가', score: null }));
+  const renderEngTargetManager = () => { const list = $('#engTargetManagerList'); if (!list) return; list.innerHTML = engagementTargetDraft.length ? engagementTargetDraft.map((item, index) => `<div class="target-manager-item"><div><strong>${escapeHtml(item.keyword)}</strong>${item.score ? `<span class="target-score">적합도 ${item.score}</span>` : ''}<small>${escapeHtml(item.reason || '직접 추가')}</small></div><div><button type="button" data-target-up="${index}" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" data-target-down="${index}" ${index === engagementTargetDraft.length - 1 ? 'disabled' : ''}>↓</button><button type="button" class="danger" data-target-remove="${index}">삭제</button></div></div>`).join('') : '<div class="empty-state" style="padding:24px;">관리할 키워드를 추가하거나 AI 분석을 실행하세요.</div>'; };
+  const closeTargetManager = () => $('#engTargetManagerModal')?.classList.add('hidden');
+  $('#openEngTargetManagerBtn')?.addEventListener('click', () => { engagementTargetDraft = readEngTargets(); renderEngTargetManager(); $('#engTargetManagerModal')?.classList.remove('hidden'); });
+  $('#closeEngTargetManagerBtn')?.addEventListener('click', closeTargetManager); $('#cancelEngTargetsBtn')?.addEventListener('click', closeTargetManager);
+  $('#engTargetManagerModal')?.addEventListener('click', (event) => { if (event.target.id === 'engTargetManagerModal') closeTargetManager(); });
+  $('#analyzeEngTargetsBtn')?.addEventListener('click', async () => {
+    const button = $('#analyzeEngTargetsBtn'); const status = $('#engTargetAnalysisStatus');
+    try {
+      button.disabled = true;
+      button.textContent = '분석 중...';
+      if (status) status.textContent = '최근 글 수집 → 로컬 LLM 주제·독자 분석 중...';
+      const result = await api('/api/engagement/keyword-recommendations');
+      if (!result.targets?.length) throw new Error('최근 글에서 추천할 주제를 찾지 못했습니다.');
+      engagementTargetDraft = result.targets; renderEngTargetManager(); const summary = $('#engTargetAnalysisSummary'); if (summary) { summary.classList.remove('hidden'); summary.innerHTML = `<strong>${escapeHtml(result.summary || '분석 완료')}</strong><span>주요 독자: ${escapeHtml(result.audience || '-')}</span>`; } if (status) status.textContent = `${result.analyzedTextCount}개 요소 · ${result.method === 'llm' ? '로컬 LLM 분석' : '규칙 기반 보완'} 완료`;
+    } catch (error) {
+      if (status) status.textContent = error.message;
+      toast(error.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = '내 블로그 AI 재분석';
+    }
+  });
+  $('#addEngTargetBtn')?.addEventListener('click', () => { const input = $('#engTargetAddInput'); const keyword = input?.value.trim().replace(/[,，\n]/g, ''); if (!keyword || engagementTargetDraft.some((item) => item.keyword === keyword)) return; engagementTargetDraft.push({ keyword, reason: '직접 추가', score: null }); input.value = ''; renderEngTargetManager(); });
+  $('#engTargetManagerList')?.addEventListener('click', (event) => { const button = event.target.closest('button'); if (!button) return; const remove = button.dataset.targetRemove; const up = button.dataset.targetUp; const down = button.dataset.targetDown; if (remove !== undefined) engagementTargetDraft.splice(Number(remove), 1); else { const from = Number(up ?? down); const to = up !== undefined ? from - 1 : from + 1; if (from >= 0 && to >= 0 && to < engagementTargetDraft.length) [engagementTargetDraft[from], engagementTargetDraft[to]] = [engagementTargetDraft[to], engagementTargetDraft[from]]; } renderEngTargetManager(); });
+  $('#applyEngTargetsBtn')?.addEventListener('click', () => { if (!engagementTargetDraft.length) return toast('소통 타겟을 한 개 이상 추가해주세요.', true); $('#engKeyword').value = engagementTargetDraft.map((item) => item.keyword).join(', '); syncEngKeywordChips(); closeTargetManager(); toast(`${engagementTargetDraft.length}개 소통 타겟을 적용했습니다.`); });
 
   // 2. Quick Counts
   $$('.eng-quick-counts button').forEach((btn) => {
@@ -1121,7 +1339,8 @@ function initEngagementAutomation() {
         method: 'POST',
         body: JSON.stringify({ keyword, targetCount, doLike, doComment, doNeighbor, neighborMessage, tone, minDelay, maxDelay })
       });
-      toast(`'${keyword}' 키워드로 공감, AI 댓글 및 서로이웃 소통을 시작합니다!`);
+      const keywordCount = keyword.split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean).length;
+      toast(`${keywordCount}개 키워드를 순차 실행합니다. 키워드당 ${targetCount}건`);
       initEngagementEvents();
     } catch (err) {
       toast(err.message, true);
@@ -1221,9 +1440,13 @@ function updateEngagementDashboard(data) {
   // Status text
   const statusEl = $('#engDashboardStatusText');
   if (statusEl) {
-    if (isRunning) statusEl.textContent = `🚀 '${config.keyword || ''}' AI 공감, 댓글 및 서로이웃 소통 진행 중...`;
+    if (isRunning) statusEl.textContent = stats.phase === 'searching' ? `🔍 '${stats.currentKeyword || ''}' 후보 검색 중...` : `🚀 '${stats.currentKeyword || ''}' 주제 소통 진행 중...`;
     else if (isPaused) statusEl.textContent = '⏸️ 작업 일시정지됨';
-    else if (state === 'completed') statusEl.textContent = '🎉 모든 소통 작업 완료!';
+    else if (state === 'completed') {
+      statusEl.textContent = stats.targetReached
+        ? `🎉 목표 ${stats.targetCount || config.targetCount || 0}개 포스팅 소통 완료!`
+        : `⚠️ 후보 부족: ${stats.processedCount || 0} / ${stats.targetCount || config.targetCount || 0}개 포스팅 처리`;
+    }
     else if (state === 'stopped') statusEl.textContent = '⏹️ 사용자에 의해 중단됨';
     else if (state === 'error') statusEl.textContent = '⚠️ 오류로 인해 중단됨';
     else statusEl.textContent = '대기 중';
@@ -1231,8 +1454,8 @@ function updateEngagementDashboard(data) {
 
   // Progress Bar
   const total = stats.targetCount || config.targetCount || 20;
-  const current = (stats.likeSuccessCount || 0) + (stats.commentSuccessCount || 0);
-  const percent = Math.min(Math.round((current / (total * 2 || 1)) * 100), 100);
+  const current = stats.processedCount || 0;
+  const percent = Math.min(Math.round((current / (total || 1)) * 100), 100);
   
   const fill = $('#engProgressBarFill');
   const percentText = $('#engProgressPercent');
@@ -1240,7 +1463,15 @@ function updateEngagementDashboard(data) {
 
   if (fill) fill.style.width = `${percent}%`;
   if (percentText) percentText.textContent = `${percent}%`;
-  if (countsText) countsText.textContent = `${stats.processedCount || 0} / ${total}건 분석 완료 (공감: ${stats.likeSuccessCount || 0}, 댓글: ${stats.commentSuccessCount || 0}, 서로이웃: ${stats.neighborSuccessCount || 0})`;
+  if (countsText) countsText.textContent = `${current} / ${total}개 포스팅 처리 (공감: ${stats.likeSuccessCount || 0}, 댓글: ${stats.commentSuccessCount || 0}, 서로이웃: ${stats.neighborSuccessCount || 0})`;
+
+  const topicProgress = $('#engTopicProgress');
+  if (topicProgress) {
+    const keywords = config.keywords || (config.keyword ? config.keyword.split(/[,，]/).map((value) => value.trim()).filter(Boolean) : []);
+    const perTarget = config.targetPerKeyword || total;
+    const counts = stats.keywordProcessedCounts || {};
+    topicProgress.innerHTML = keywords.map((keyword) => { const count = counts[keyword] || 0; const done = count >= perTarget; const currentTopic = !done && stats.currentKeyword === keyword; const stateLabel = done ? '완료' : currentTopic ? (stats.phase === 'searching' ? '후보 검색 중' : '진행 중') : '대기'; return `<div class="eng-topic-row ${done ? 'done' : currentTopic ? 'current' : 'pending'}"><span>${done ? '✅' : currentTopic ? '▶' : '○'} <strong>${escapeHtml(keyword)}</strong></span><span>${count} / ${perTarget} · ${stateLabel}</span></div>`; }).join('');
+  }
 
   // Stat Cards
   if ($('#engStatTarget')) $('#engStatTarget').textContent = total;
@@ -1282,7 +1513,9 @@ function appendEngagementLog(entry) {
 
 // Initial health check and session restoration
 api('/api/health').then(async (data) => {
+  initSettingsController();
   initAiHardwareAndModels();
+  initModelEvents();
   initEngagementAutomation();
 
   if (data.connected) {
@@ -1302,8 +1535,8 @@ api('/api/health').then(async (data) => {
   }
 }).catch(() => {
   setConnected(false);
+  initSettingsController();
   initAiHardwareAndModels();
+  initModelEvents();
   initEngagementAutomation();
 });
-
-

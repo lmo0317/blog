@@ -223,12 +223,16 @@ export class EngagementHistoryStore {
 
   normalizeUrlKey(url) {
     if (!url) return '';
-    return String(url)
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/^m\./, '')
-      .replace(/\?.*$/, '')
-      .replace(/\/+$/, '');
+    const text = String(url).trim();
+    try {
+      const parsed = new URL(text.startsWith('http') ? text : `https://${text}`);
+      const logNo = parsed.searchParams.get('logNo') || parsed.pathname.match(/\/(\d{8,15})(?:\/|$)/)?.[1];
+      const blogId = parsed.searchParams.get('blogId') || parsed.pathname.match(/\/(?:PostView\.naver\/)?([^/]+)\/(?:\d{8,15})(?:\/|$)/i)?.[1];
+      if (blogId && logNo) return `${blogId.toLowerCase()}/${logNo}`;
+      return `${parsed.hostname.replace(/^m\./, '').toLowerCase()}${parsed.pathname.replace(/\/+$/, '').toLowerCase()}`;
+    } catch {
+      return text.toLowerCase().replace(/^https?:\/\//, '').replace(/^m\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+    }
   }
 
   async hasEngagedPost(postUrl, blogId = '') {
@@ -238,7 +242,7 @@ export class EngagementHistoryStore {
 
     return this.data.records.some((r) => {
       if (urlKey && this.normalizeUrlKey(r.postUrl) === urlKey) return true;
-      if (cleanId && String(r.blogId).trim().toLowerCase() === cleanId) return true;
+      if (!urlKey && cleanId && String(r.blogId).trim().toLowerCase() === cleanId) return true;
       return false;
     });
   }
@@ -246,6 +250,11 @@ export class EngagementHistoryStore {
   async getEngagedBlogIds() {
     await this.load();
     return [...new Set(this.data.records.map((r) => String(r.blogId).trim().toLowerCase()).filter(Boolean))];
+  }
+
+  async getRecentComments(limit = 30) {
+    await this.load();
+    return this.data.records.filter((record) => record.commented && record.commentText).slice(0, limit).map((record) => record.commentText);
   }
 
   async addRecord({
@@ -271,7 +280,7 @@ export class EngagementHistoryStore {
     const urlKey = this.normalizeUrlKey(postUrl);
     const existingIndex = this.data.records.findIndex((r) => {
       if (urlKey && this.normalizeUrlKey(r.postUrl) === urlKey) return true;
-      if (cleanId && String(r.blogId).trim().toLowerCase() === cleanId.toLowerCase()) return true;
+      if (!urlKey && cleanId && String(r.blogId).trim().toLowerCase() === cleanId.toLowerCase()) return true;
       return false;
     });
 

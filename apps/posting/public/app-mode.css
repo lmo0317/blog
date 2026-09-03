@@ -1,0 +1,80 @@
+/* Posting is a standalone app: only publishing and its own settings are visible. */
+#neighborTab, #engagementTab, #neighborWorkspace, #engagementWorkspace { display: none !important; }
+.workspace-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.auto-publish-consent {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 13px;
+  margin-top: 16px;
+  padding: 15px 17px;
+  border: 1px solid #d9e2e8;
+  border-radius: 13px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.auto-publish-consent:hover {
+  border-color: #90d8ae;
+  box-shadow: 0 4px 14px rgba(21, 128, 61, .08);
+}
+
+.auto-publish-consent:has(input:checked) {
+  border-color: #38b76a;
+  background: #f0fff5;
+  box-shadow: 0 0 0 3px rgba(56, 183, 106, .1);
+}
+
+.auto-publish-consent input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auto-publish-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: #edf2f7;
+  font-size: 20px;
+}
+
+.auto-publish-consent:has(input:checked) .auto-publish-icon { background: #d9fbe6; }
+.auto-publish-copy { min-width: 0; }
+.auto-publish-copy strong { display: block; color: #1f2937; font-size: 14px; line-height: 1.35; }
+.auto-publish-copy small { display: block; margin-top: 4px; color: #718096; font-size: 12px; line-height: 1.45; }
+
+.auto-publish-switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: #cbd5df;
+  transition: background .18s ease;
+}
+
+.auto-publish-switch i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
+  transition: transform .18s ease;
+}
+
+.auto-publish-consent:has(input:checked) .auto-publish-switch { background: #16a34a; }
+.auto-publish-consent:has(input:checked) .auto-publish-switch i { transform: translateX(20px); }
+.auto-publish-consent:focus-within { outline: 3px solid rgba(49, 130, 206, .22); outline-offset: 2px; }
+
+@media (max-width: 560px) {
+  .auto-publish-consent { grid-template-columns: 36px minmax(0, 1fr) 44px; padding: 13px; gap: 10px; }
+  .auto-publish-icon { width: 36px; height: 36px; font-size: 18px; }
+}

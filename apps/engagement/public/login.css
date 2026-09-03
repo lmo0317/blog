@@ -1,0 +1,13 @@
+.login-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  .login-actions,
+  .login-actions .button {
+    width: 100%;
+  }
+}

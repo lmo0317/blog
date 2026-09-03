@@ -4,8 +4,9 @@ import path from 'node:path';
 import { rm } from 'node:fs/promises';
 import { detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG } from '../lib/hardware.js';
 import { ModelManager } from '../lib/model-manager.js';
-import { EmbeddedLlamaServer } from '../lib/embedded-llama.js';
+import { EmbeddedLlamaServer, normalizeCommentText, validateBlogComment } from '../lib/embedded-llama.js';
 import { EngagementAutomationManager } from '../lib/engagement-automation.js';
+import { recommendKeywordsFromTexts } from '../lib/naver.js';
 
 test('detectGpuSpecs and getSystemHardwareSummary return valid system metrics and model recommendations', async () => {
   const summary = await getSystemHardwareSummary();
@@ -47,6 +48,15 @@ test('EmbeddedLlamaServer generates clean human-like comment templates', async (
   assert.equal(server.cleanCommentOutput('댓글 : 유익한 정보 감사합니다.'), '유익한 정보 감사합니다.');
 });
 
+test('comment harness rejects irrelevant, duplicated, noisy, and prompt-artifact output', () => {
+  const context = { title: '강남역 수플레 팬케이크 맛집', contentSnippet: '딸기 토핑과 폭신한 수플레를 주문했습니다.' };
+  assert.equal(validateBlogComment('제주 바다가 정말 아름답고 멋지네요!', context).ok, false);
+  assert.ok(validateBlogComment('딸기 토핑이 올라간 수플레 설명이 특히 인상적이었어요.', context).ok);
+  assert.equal(validateBlogComment('딸기 토핑이 올라간 수플레 설명이 특히 인상적이었어요!', context, ['딸기 토핑이 올라간 수플레 설명이 특히 인상적이었어요.']).ok, false);
+  assert.equal(validateBlogComment('assistant: 딸기 수플레!!!! \uFFFD', context).ok, false);
+  assert.equal(normalizeCommentText('댓글 : \u200b딸기 수플레 후기 잘 봤어요.\uFFFD'), '딸기 수플레 후기 잘 봤어요.');
+});
+
 test('EngagementAutomationManager validates configuration', async () => {
   const mockSession = { connected: false };
   const manager = new EngagementAutomationManager({ browserSession: mockSession, embeddedLlama: null, historyStore: null });
@@ -62,6 +72,94 @@ test('EngagementAutomationManager validates configuration', async () => {
     async () => manager.start({ keyword: '' }),
     /검색 키워드를 입력해주세요/
   );
+});
+
+test('EngagementAutomationManager preserves a 500-post target and requests extra candidates', async () => {
+  let requestedDisplay = 0;
+  const manager = new EngagementAutomationManager({
+    browserSession: { connected: true, async searchBlogs({ display }) { requestedDisplay = display; return []; } },
+    embeddedLlama: null,
+    historyStore: null
+  });
+  await manager.start({ keyword: '육아', targetCount: 500, doLike: true, doComment: false, doNeighbor: false });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(manager.config.targetCount, 500);
+  assert.equal(manager.stats.targetCount, 500);
+  assert.equal(requestedDisplay, 1000);
+});
+
+test('multi-keyword harness runs the per-keyword target sequentially', async () => {
+  const searched = [];
+  let reactions = 0;
+  const session = { connected: true, async searchBlogs({ query }) { searched.push(query); return Array.from({ length: 4 }, (_, i) => ({ blogId: `${query}${i}`, title: `${query} 글 ${i}`, url: `https://blog.naver.com/${query}${i}/${10000000 + i}` })); }, async inspectPostForEngagement(postUrl) { return { title: postUrl, snippet: '본문', images: [] }; }, async likeAndCommentPost() { reactions += 1; return { liked: true, commented: false, message: '완료' }; } };
+  const history = { async hasEngagedPost() { return false; }, async addRecord() {} };
+  const manager = new EngagementAutomationManager({ browserSession: session, embeddedLlama: null, historyStore: history });
+  manager.countdownDelay = async () => {};
+  await manager.start({ keyword: '육아, 쇼핑, 건강', targetCount: 2, doComment: false, doNeighbor: false, minDelay: 5, maxDelay: 5 });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.deepEqual(searched, ['육아', '쇼핑', '건강']);
+  assert.equal(manager.config.targetPerKeyword, 2);
+  assert.equal(manager.stats.targetCount, 6);
+  assert.equal(reactions, 6);
+  assert.deepEqual(manager.stats.keywordProcessedCounts, { 육아: 2, 쇼핑: 2, 건강: 2 });
+});
+
+test('blog-style keyword analyzer ranks recurring categories', () => {
+  assert.deepEqual(recommendKeywordsFromTexts(['아이와 육아 일상 및 키즈 교육', '아기 건강 식단', '육아용품 쇼핑 제품 리뷰'], 3), ['육아', '쇼핑', '건강']);
+});
+
+test('EngagementAutomationManager counts completed posts once, not likes and comments separately', async () => {
+  const calls = { reactions: 0, neighbors: 0, searchDisplay: 0 };
+  const posts = Array.from({ length: 5 }, (_value, index) => ({
+    blogId: `blog${index}`,
+    title: `테스트 글 ${index}`,
+    url: `https://blog.naver.com/blog${index}/${1000 + index}`
+  }));
+  const mockSession = {
+    connected: true,
+    async searchBlogs({ display }) { calls.searchDisplay = display; return posts; },
+    async inspectPostForEngagement() { return { title: '테스트 글', snippet: '', images: [] }; },
+    async likeAndCommentPost() { calls.reactions += 1; return { liked: true, commented: true, message: '완료' }; },
+    async addNeighbor() { calls.neighbors += 1; return { status: 'requested', message: '완료' }; }
+  };
+  const mockHistory = {
+    async getEngagedBlogIds() { return []; },
+    async hasEngagedPost() { return false; },
+    async addRecord() {}
+  };
+  const mockLlm = { async generateBlogComment() { return '좋은 글 감사합니다.'; } };
+  const manager = new EngagementAutomationManager({ browserSession: mockSession, embeddedLlama: mockLlm, historyStore: mockHistory });
+  manager.countdownDelay = async () => {};
+
+  await manager.start({ keyword: '테스트', targetCount: 3, doLike: true, doComment: true, doNeighbor: true, minDelay: 5, maxDelay: 5 });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+
+  assert.equal(calls.searchDisplay, 100);
+  assert.equal(manager.stats.processedCount, 3);
+  assert.equal(manager.stats.likeSuccessCount, 3);
+  assert.equal(manager.stats.commentSuccessCount, 3);
+  assert.equal(manager.stats.neighborSuccessCount, 3);
+  assert.equal(calls.reactions, 3);
+  assert.equal(calls.neighbors, 3);
+  assert.equal(manager.stats.targetReached, true);
+});
+
+test('EngagementAutomationManager skips a post when Naver already shows my comment', async () => {
+  let reactionCalls = 0;
+  const mockSession = {
+    connected: true,
+    async searchBlogs() { return [{ blogId: 'already', title: '기존 댓글 글', url: 'https://blog.naver.com/already/12345678' }]; },
+    async inspectPostForEngagement() { return { title: '기존 댓글 글', snippet: '본문', images: [], alreadyCommented: true }; },
+    async likeAndCommentPost() { reactionCalls += 1; return { liked: true, commented: true }; }
+  };
+  const mockHistory = { async getEngagedBlogIds() { return []; }, async hasEngagedPost() { return false; } };
+  const manager = new EngagementAutomationManager({ browserSession: mockSession, embeddedLlama: null, historyStore: mockHistory });
+  manager.countdownDelay = async () => {};
+  await manager.start({ keyword: '테스트', targetCount: 1, doNeighbor: false, minDelay: 5, maxDelay: 5 });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(reactionCalls, 0);
+  assert.equal(manager.stats.skippedCount, 1);
+  assert.equal(manager.stats.commentSuccessCount, 0);
 });
 
 test('EngagementHistoryStore stores records, prevents duplicates, and exports CSV', async () => {
@@ -91,6 +189,8 @@ test('EngagementHistoryStore stores records, prevents duplicates, and exports CS
   });
 
   assert.equal(await store.hasEngagedPost('https://blog.naver.com/testuser/12345678', 'testuser'), true);
+  assert.equal(await store.hasEngagedPost('https://blog.naver.com/testuser/87654321', 'testuser'), false);
+  assert.equal(await store.hasEngagedPost('https://blog.naver.com/PostView.naver?blogId=testuser&logNo=12345678', ''), true);
   assert.equal(await store.hasEngagedPost('https://m.blog.naver.com/otheruser/99999999', 'otheruser'), false);
 
   const engagedIds = await store.getEngagedBlogIds();
@@ -132,4 +232,39 @@ test('extractArticleContent parses raw text and mock HTML correctly', async () =
   const urlResult = await extractArticleContent('https://news.naver.com/article/123', { fetchImpl: mockFetch });
   assert.ok(urlResult.title.includes('2026 AI 신기술 발표'));
   assert.ok(urlResult.content.includes('2026년 최신 인공지능 모델이 공개'));
+});
+
+test('visual-renderer generates valid 1200x800 card HTML and structure', async () => {
+  const { generateCardHtml } = await import('../lib/visual-renderer.js');
+  const html = generateCardHtml({
+    type: 'summary_card',
+    badge: '⚡ Gemma 4 12B AI 인포그래픽',
+    title: '성공적인 블로그 운영 핵심 가이드',
+    subtitle: '100% 로컬 연산으로 완성하는 비주얼 콘텐츠',
+    items: [
+      { title: '핵심 1', desc: '고품질 글과 이미지의 완벽한 조화' },
+      { title: '핵심 2', desc: '독자의 시선을 사로잡는 인포그래픽' }
+    ],
+    highlight: 'Gemma 4 12B가 직접 디자인한 인포그래픽입니다.',
+    theme: 'indigo'
+  });
+
+  assert.ok(html.includes('1200px'));
+  assert.ok(html.includes('800px'));
+  assert.ok(html.includes('성공적인 블로그 운영 핵심 가이드'));
+  assert.ok(html.includes('Gemma 4 12B Local AI Studio'));
+});
+
+test('ai-image-generator builds rich artistic prompts for multiple styles', async () => {
+  const { buildEnhancedImagePrompt, AI_IMAGE_STYLES } = await import('../lib/ai-image-generator.js');
+
+  const photoPrompt = buildEnhancedImagePrompt('cozy coffee shop table', 'photorealistic');
+  assert.ok(photoPrompt.includes('coffee'));
+  assert.ok(photoPrompt.includes('photorealistic'));
+
+  const cartoonPrompt = buildEnhancedImagePrompt('happy puppy in park', 'cartoon_3d');
+  assert.ok(cartoonPrompt.includes('Pixar'));
+
+  const animePrompt = buildEnhancedImagePrompt('sunset mountain view', 'anime_webtoon');
+  assert.ok(animePrompt.includes('Makoto Shinkai'));
 });
