@@ -1,6 +1,6 @@
 ---
 name: naver-auto-posting
-description: Research a useful and timely topic, write a source-grounded Korean article, generate section-matched images, route it to the correct Naver category, and publish through Naver SmartEditor or the authenticated publishing helper. Use when the user asks to choose a topic or content and complete Naver Blog posting. Do not use when the user wants only a draft, prompt, or engagement automation.
+description: Research a useful and timely topic, write a source-grounded Korean article, generate section-matched Gemini images (Google Imagen), route it to the correct Naver category, and publish through Naver SmartEditor or the authenticated publishing helper. Use when the user asks to choose a topic or content and complete Naver Blog posting. Do not use when the user wants only a draft, prompt, or engagement automation.
 ---
 
 # Naver Auto Posting
@@ -10,7 +10,7 @@ Choose, research, create, and publish one complete Naver Blog post. Optimize for
 ## Scope and authorization
 
 - Work in `D:\work\dev\blog` for generated assets and records. Publish directly using the authenticated publishing script (`scripts/publish-post.js`) or the Playwright browser session (`windows/lib/naver.js`).
-- Write the final article directly with authoritative research, and create section-matched visual assets using the `generate_image` tool or project image generators.
+- **Natively Gemini-powered**: Never use OpenAI, GPT, DALL-E, or external paid APIs. Write the final article directly in Gemini with authoritative research, and generate every requested image using Gemini's built-in `generate_image` tool (Google Imagen engine).
 - A request to use this skill for posting authorizes one new Naver post. Draft-only requests do not authorize publication. A request to revise identified published posts authorizes updating only those posts while preserving their existing URLs.
 - Do not overwrite an existing post, publish promotional claims, or perform engagement actions unless the user separately requests them.
 - If a publish attempt fails, verify that no public post was created before one corrected retry. Never retry blindly or create duplicates.
@@ -54,14 +54,14 @@ Classify the finished article by its primary reader purpose before opening the f
 
 The category must be selected in Naver's final publish settings. A similarly named tag does not count. Confirm the selected category immediately before the final publish click and include it in the completion report.
 
-## Image creation and placement
+## Image creation and placement (Gemini Imagen)
 
-1. Unless the user requests another count, plan and publish exactly three images for each normal standalone post after the article structure is fixed. Each image must illustrate the exact section beside it, not just the broad topic.
-2. Give every image a different exact `afterHeading` value copied from a real body heading. Use three distinct roles: representative scene, concrete detail or preparation, and practical action or completed result.
-3. Use the `generate_image` tool (or project visual engines) to generate distinct assets with separate, descriptive prompts.
-4. Prefer natural Korean everyday scenes when people or homes are involved. Request realistic anatomy, an editorial rather than advertising look, no branding, no watermark, and no text unless exact text is essential.
-5. Inspect the actual output. Regenerate images with broken anatomy, garbled text, irrelevant objects, or weak section relevance.
-6. Save accepted images under `D:\work\dev\blog\output\images\<date>-<topic>\` with ordered descriptive filenames.
+1. **Gemini Engine Only**: All images must be generated using Gemini's native `generate_image` tool (Google Imagen engine). Do NOT use GPT, DALL-E, or external image generation APIs.
+2. Unless the user requests another count, plan and publish exactly three images for each normal standalone post after the article structure is fixed. Each image must illustrate the exact section beside it, not just the broad topic.
+3. Give every image a different exact `afterHeading` value copied from a real body heading. Use three distinct roles: representative scene, concrete detail or preparation, and practical action or completed result.
+4. Call `generate_image` with distinct, high-quality prompts and set appropriate AspectRatio (e.g. `1:1` or `4:3` or `16:9`). Prefer natural Korean everyday scenes when people or homes are involved. Request realistic anatomy, an editorial photo look, no branding, no watermark, and no text in the image.
+5. Inspect the generated image artifact. If there are any flaws, regenerate with an adjusted prompt.
+6. Save or copy accepted images under `D:\work\dev\blog\output\gemini-images\<date>-<topic>\` with ordered descriptive filenames.
 7. Before publishing, verify all three accepted files exist, all three anchors occur exactly in the article, and the images are not merely variants of one generic scene. Do not publish when the image count or placement contract is incomplete.
 
 ## Publish through the selected path
