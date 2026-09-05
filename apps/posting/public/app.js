@@ -313,7 +313,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
 
   const btn = $('#articleDraftBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="btn-icon">⏳</span> <strong>GPT가 글과 이미지 3장을 만드는 중...</strong>';
+  btn.innerHTML = '<span class="btn-icon">⏳</span> <strong>LLM이 글과 이미지를 만드는 중...</strong>';
   $('#llmStatus').className = 'status';
   const generationId = crypto.randomUUID();
   const stopProgress = startGenerationProgress(generationId);
@@ -323,9 +323,16 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     const tone = $('#articleTone')?.value || 'friendly';
     const length = $('#articleLength')?.value || 'medium';
     const notes = $('#articleNotes')?.value?.trim() || '';
+    const model = $('#articleModelSelect')?.value || '';
     const imageStyle = $('#articleImageStyle')?.value || 'photorealistic';
+    const imageModelId = $('#articleImageModelSelect')?.value || '';
 
-    const payload = { generationId, topic, notes: [brief, notes].filter(Boolean).join('\n\n').slice(0, 3000), tone, length, imageStyle, promptConfig };
+    if (imageModelId && imageModelId !== activeImageModelId) {
+      await api('/api/image-models/select', { method: 'POST', body: JSON.stringify({ modelId: imageModelId }) });
+      activeImageModelId = imageModelId;
+    }
+
+    const payload = { generationId, topic, notes: [brief, notes].filter(Boolean).join('\n\n').slice(0, 3000), tone, length, model, imageStyle, promptConfig };
     const data = await api('/api/blog/draft', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -343,7 +350,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     state.selectedImages = new Set(state.images.map((_, i) => i));
     renderImages();
 
-    $('#draftModel').textContent = data.engineLabel || '로그인된 GPT 계정';
+    $('#draftModel').textContent = data.engineLabel || data.model || '112 로컬 LLM';
     if (data.sourceUrl) {
       renderPostSource({ sourceUrl: data.sourceUrl, source: '참조 뉴스/포스팅 원문' });
     } else {
@@ -371,7 +378,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     toast(`AI 자동 포스팅 실패: ${error.message}`, true);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="btn-icon">✨</span> <strong>GPT 글 작성 + 이미지 3장 자동 생성</strong>';
+    btn.innerHTML = '<span class="btn-icon">✨</span> <strong>LLM 글 작성 + 이미지 자동 생성</strong>';
   }
 });
 
@@ -1065,6 +1072,7 @@ let activeImageModelId = 'pollinations';
 let imageModelRefreshTimer = null;
 
 function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
+  const globalStatus = $('#globalEngineStatusText');
   const summaryModel = $('#summaryModelName');
   const summaryEndpoint = $('#summaryEndpointUrl');
   const currentBadge = $('#currentEngineBadge');
@@ -1072,21 +1080,42 @@ function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
   if (activeModel) {
     if (summaryModel) summaryModel.textContent = `${activeModel.name} (${activeModel.sizeFormatted || ''})`;
     if (summaryEndpoint) summaryEndpoint.textContent = activeEndpoint?.baseUrl || 'http://127.0.0.1:8089';
+    if (globalStatus) {
+      globalStatus.textContent = `⚡ 내 PC 로컬 GPU (${activeModel.name})`;
+      globalStatus.style.color = '#234e52';
+    }
     if (currentBadge) {
       currentBadge.className = 'pill pill-green';
       currentBadge.textContent = `⚡ ${activeModel.name}`;
     }
+    if ($('#llmStatus')) {
+      $('#llmStatus').className = 'status online';
+      $('#llmStatus').innerHTML = `<i></i> ⚡ 로컬 GPU (${escapeHtml(activeModel.name)})`;
+    }
   } else {
     if (summaryModel) summaryModel.textContent = '미설치 (Gemma 모델 다운로드 필요)';
     if (summaryEndpoint) summaryEndpoint.textContent = '-';
+    if (globalStatus) {
+      globalStatus.textContent = '⚠️ AI 모델 다운로드 필요';
+      globalStatus.style.color = '#c53030';
+    }
     if (currentBadge) {
       currentBadge.className = 'pill pill-gray';
       currentBadge.textContent = '미설치';
+    }
+    if ($('#llmStatus')) {
+      $('#llmStatus').className = 'status offline';
+      $('#llmStatus').innerHTML = `<i></i> ⚠️ 모델 설치 필요`;
     }
   }
 }
 
 function initSettingsController() {
+  // Global Header Status Click
+  $('#globalEngineStatusBox')?.addEventListener('click', () => {
+    setActiveTab('settings', true);
+  });
+
   // 1. Settings Naver Login & Logout
   $('#settingsAccountForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1617,10 +1646,6 @@ function appendEngagementLog(entry) {
 
 // Initial health check and session restoration
 api('/api/health').then(async (data) => {
-  if ($('#llmStatus')) {
-    $('#llmStatus').className = `status ${data.gpt?.connected ? 'online' : 'offline'}`;
-    $('#llmStatus').innerHTML = `<i></i> ${data.gpt?.connected ? 'GPT 계정 연결됨' : 'GPT 로그인 필요'}`;
-  }
   initSettingsController();
   initAiHardwareAndModels();
   initModelEvents();

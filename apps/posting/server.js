@@ -20,7 +20,6 @@ import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-re
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { ImageModelManager } from './lib/image-model-manager.js';
 import { contentSimilarity, PostHistoryStore } from './lib/post-history.js';
-import { CodexAccountClient } from './lib/codex-account-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
@@ -48,10 +47,6 @@ const imageModelManager = new ImageModelManager({
 });
 await imageModelManager.init();
 const postHistoryStore = new PostHistoryStore(path.join(__dirname, '.data', 'published-post-history.json'));
-const codexAccountClient = new CodexAccountClient({
-  appDir: __dirname,
-  imagesDir: path.join(__dirname, '.images')
-});
 
 const browserSession = new NaverBrowserSession({
   headless: String(process.env.NAVER_HEADLESS).toLowerCase() === 'true',
@@ -172,13 +167,8 @@ app.get('/generated-images/thumb/:filename', async (req, res) => {
 
 app.use('/generated-images', express.static(imagesStorageDir, { etag: false, maxAge: 0 }));
 
-app.get('/api/health', async (_req, res) => {
-  const gpt = await codexAccountClient.status();
-  res.json({ ok: true, connected: browserSession.connected, gpt });
-});
-
-app.get('/api/gpt/status', async (_req, res) => {
-  res.json(await codexAccountClient.status());
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, connected: browserSession.connected });
 });
 
 app.get('/api/blog/generation-status/:id', (req, res) => {
@@ -764,12 +754,17 @@ app.post('/api/blog/deals/draft', async (req, res, next) => {
     const notes = String(req.body?.notes || '').trim();
     if (notes.length > 2000) return res.status(400).json({ error: '간략한 내용과 추가 요청은 합계 2,000자 이하로 입력해주세요.' });
 
-    const post = await codexAccountClient.generateDealsBlogPost({
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    const targetModel = activeEndpoint.model;
+    llmClient.baseUrl = activeEndpoint.baseUrl;
+    llmClient.model = targetModel;
+
+    const post = await llmClient.generateDealsBlogPost({
       deals: deals.slice(0, 5),
       tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
       length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
       notes,
-      model: codexAccountClient.model
+      model: targetModel
     });
 
     const dealImages = deals.slice(0, 5).map((deal, index) => {
@@ -794,10 +789,10 @@ app.post('/api/blog/deals/draft', async (req, res, next) => {
       deals,
       dealImages,
       sourceUrl: 'https://www.algumon.com/n/deal/rank',
-      model: codexAccountClient.model,
-      engineType: 'chatgpt_account',
-      engineLabel: '로그인된 GPT 계정',
-      serverUrl: ''
+      model: targetModel,
+      engineType: activeEndpoint.type,
+      engineLabel: activeEndpoint.label,
+      serverUrl: activeEndpoint.baseUrl
     });
   } catch (error) {
     next(error);
@@ -829,6 +824,11 @@ app.post('/api/blog/draft', async (req, res, next) => {
     const source = String(req.body?.source || '').trim().slice(0, 100);
     const promptConfig = normalizePromptConfig(req.body?.promptConfig);
 
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    const targetModel = activeEndpoint.model;
+    llmClient.baseUrl = activeEndpoint.baseUrl;
+    llmClient.model = targetModel;
+
     const avoidHistory = await postHistoryStore.recent(25);
     const promptUrl = `${topic}\n${notes}`.match(/https?:\/\/[^\s<>()]+/i)?.[0] || '';
     sourceUrl = sourceUrl || normalizeHttpUrl(promptUrl);
@@ -839,8 +839,8 @@ app.post('/api/blog/draft', async (req, res, next) => {
       const extracted = await extractArticleContent(sourceUrl);
       resolvedSourceTitle = extracted.title || resolvedSourceTitle;
       const promptWithoutUrl = notes.replace(promptUrl, '').trim();
-      setGenerationProgress(generationId, { phase: 'writing', message: 'GPT가 원문을 재해석해 본문을 작성하는 중' });
-      post = await codexAccountClient.generateArticleRewriteBlogPost({
+      setGenerationProgress(generationId, { phase: 'writing', message: 'Gemma 4 12B가 원문을 재해석해 본문을 작성하는 중' });
+      post = await llmClient.generateArticleRewriteBlogPost({
         sourceTitle: extracted.title || newsTitle || topic,
         sourceContent: extracted.content,
         sourceUrl,
@@ -848,13 +848,13 @@ app.post('/api/blog/draft', async (req, res, next) => {
         length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
         notes: promptWithoutUrl,
         customFocus: topic,
-        model: codexAccountClient.model,
+        model: targetModel,
         avoidHistory,
         promptConfig
       });
     } else {
-      setGenerationProgress(generationId, { phase: 'writing', message: 'GPT가 제목과 본문을 작성하는 중' });
-      post = await codexAccountClient.generateBlogPost({
+      setGenerationProgress(generationId, { phase: 'writing', message: 'Gemma 4 12B가 제목과 본문을 작성하는 중' });
+      post = await llmClient.generateBlogPost({
         topic,
         newsTitle,
         source,
@@ -862,7 +862,7 @@ app.post('/api/blog/draft', async (req, res, next) => {
         tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
         length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
         notes,
-        model: codexAccountClient.model,
+        model: targetModel,
         avoidHistory,
         promptConfig
       });
@@ -877,13 +877,13 @@ app.post('/api/blog/draft', async (req, res, next) => {
     let autoImages = [];
     try {
       setGenerationProgress(generationId, { phase: 'image', current: 0, total: 3, message: '본문 작성 완료 · 이미지 생성을 준비하는 중' });
-      autoImages = await codexAccountClient.generateImagesForPost(post, {
-        style: imageStyle,
-        onProgress: (progress) => setGenerationProgress(generationId, progress)
-      });
+      if (imageModelManager.activeModelId !== 'pollinations') await embeddedLlama.stop();
+      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle, imageModelManager });
     } catch (err) {
-      console.error('Failed to generate GPT images:', err);
-      throw new Error(`GPT 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
+      console.error('Failed to generate local AI drawings:', err);
+      if (imageModelManager.activeModelId !== 'pollinations') {
+        throw new Error(`로컬 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
+      }
     }
 
     setGenerationProgress(generationId, { status: 'complete', phase: 'complete', current: 3, total: 3, message: '글과 이미지 3장 생성 완료' });
@@ -891,10 +891,10 @@ app.post('/api/blog/draft', async (req, res, next) => {
       ...post,
       autoImages,
       images: autoImages,
-      model: codexAccountClient.model,
-      engineType: 'chatgpt_account',
-      engineLabel: '로그인된 GPT 계정',
-      serverUrl: '',
+      model: targetModel,
+      engineType: activeEndpoint.type,
+      engineLabel: activeEndpoint.label,
+      serverUrl: activeEndpoint.baseUrl,
       sourceUrl
     });
   } catch (error) {
@@ -936,8 +936,13 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
       return res.status(400).json({ error: '참조할 기사 내용이나 텍스트를 충분히 입력해주세요.' });
     }
 
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    const targetModel = activeEndpoint.model;
+    llmClient.baseUrl = activeEndpoint.baseUrl;
+    llmClient.model = targetModel;
+
     const avoidHistory = await postHistoryStore.recent(25);
-    const post = await codexAccountClient.generateArticleRewriteBlogPost({
+    const post = await llmClient.generateArticleRewriteBlogPost({
       sourceTitle,
       sourceContent,
       sourceUrl,
@@ -945,7 +950,7 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
       length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
       notes,
       customFocus,
-      model: codexAccountClient.model,
+      model: targetModel,
       avoidHistory
     });
     const duplicate = await postHistoryStore.findSimilar({ topic: sourceTitle, title: post.title, content: post.content });
@@ -959,10 +964,13 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
     let autoImages = [];
 
     try {
-      autoImages = await codexAccountClient.generateImagesForPost(post, { style: imageStyle });
+      if (imageModelManager.activeModelId !== 'pollinations') await embeddedLlama.stop();
+      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle, imageModelManager });
     } catch (err) {
-      console.error('Failed to generate GPT images:', err);
-      throw new Error(`GPT 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
+      console.error('Failed to generate local AI drawings:', err);
+      if (imageModelManager.activeModelId !== 'pollinations') {
+        throw new Error(`로컬 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
+      }
     }
 
     res.json({
@@ -970,10 +978,10 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
       autoImages,
       images: autoImages,
       sourceUrl,
-      model: codexAccountClient.model,
-      engineType: 'chatgpt_account',
-      serverUrl: '',
-      engineLabel: '로그인된 GPT 계정'
+      model: targetModel,
+      engineType: activeEndpoint.type,
+      serverUrl: activeEndpoint.baseUrl,
+      engineLabel: activeEndpoint.label
     });
   } catch (error) {
     next(error);

@@ -1,6 +1,6 @@
 /* Posting is a standalone app: only publishing and its own settings are visible. */
-#settingsTab, #settingsWorkspace, #neighborTab, #engagementTab, #neighborWorkspace, #engagementWorkspace { display: none !important; }
-.workspace-tabs { grid-template-columns: minmax(0, 1fr); }
+#neighborTab, #engagementTab, #neighborWorkspace, #engagementWorkspace { display: none !important; }
+.workspace-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .auto-publish-consent {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 48px;
