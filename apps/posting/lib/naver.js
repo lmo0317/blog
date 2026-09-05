@@ -52,8 +52,8 @@ export function classifyLoginPage({ authenticated = false, text = '' } = {}) {
 export function normalizePublishCategoryName(value) {
   const categoryName = String(value || '').trim();
   if (!categoryName) return '';
-  if (!['건강', '생활'].includes(categoryName)) {
-    throw new Error('발행 카테고리는 건강 또는 생활만 선택할 수 있습니다.');
+  if (!['건강', '생활', '자동화'].includes(categoryName)) {
+    throw new Error('발행 카테고리는 건강 또는 생활, 자동화만 선택할 수 있습니다.');
   }
   return categoryName;
 }

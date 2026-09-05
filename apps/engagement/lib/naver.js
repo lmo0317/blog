@@ -1591,7 +1591,7 @@ export class NaverBrowserSession {
     }
   }
 
-  async publishBlogPost({ title, content, tags = [], images = [], imagePaths = [], isDeals = false }) {
+  async publishBlogPost({ title, content, tags = [], images = [], imagePaths = [], isDeals = false, categoryName = '' }) {
     if (!this.connected || !await this.hasAuthenticatedSession()) {
       const error = new Error('네이버 로그인 세션이 만료되었습니다. 계정을 다시 연결해주세요.');
       error.code = 'NAVER_SESSION_EXPIRED';
@@ -1675,6 +1675,10 @@ export class NaverBrowserSession {
 
       await openPublish.click({ force: true }).catch(() => openPublish.dispatchEvent('click'));
       await page.waitForTimeout(2000);
+
+      if (categoryName) {
+        await selectPublishCategory(editorFrame, categoryName);
+      }
 
       const confirmPublish = await findFinalPublishButton(page, editorFrame);
       if (!confirmPublish) {
@@ -1881,6 +1885,37 @@ async function findFinalPublishButton(page, editorFrame) {
     }
   }
   return null;
+}
+
+async function selectPublishCategory(editorFrame, categoryName) {
+  const trigger = editorFrame.locator('button[data-click-area="tpb*i.category"], button.selectbox_button__jb1Dt, button[class*="selectbox_button"]').first();
+  if (await trigger.count().catch(() => 0) === 0) {
+    throw new Error(`네이버 발행 설정에서 ${categoryName} 카테고리 선택기를 찾지 못했습니다.`);
+  }
+
+  const current = String(await trigger.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+  if (current !== categoryName) {
+    await trigger.click({ force: true });
+    await editorFrame.page().waitForTimeout(300);
+    const options = editorFrame.locator('li.item__sAGX9, [class*="item__"]');
+    const count = await options.count().catch(() => 0);
+    let selected = false;
+    for (let index = 0; index < count; index++) {
+      const option = options.nth(index);
+      const text = String(await option.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+      if (text !== categoryName || !await option.isVisible().catch(() => false)) continue;
+      await option.click({ force: true });
+      selected = true;
+      break;
+    }
+    if (!selected) throw new Error(`네이버 블로그에 ${categoryName} 카테고리가 없습니다.`);
+  }
+
+  const confirmed = String(await trigger.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+  if (confirmed !== categoryName) {
+    throw new Error(`네이버 발행 카테고리를 ${categoryName}(으)로 확인하지 못했습니다.`);
+  }
+  return categoryName;
 }
 
 async function replaceEditorText(page, editorFrame, locator, value, isTitle = false) {
