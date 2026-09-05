@@ -17,7 +17,10 @@ test('auto posting UI uses topic and free-form prompt with explicit immediate-pu
   assert.doesNotMatch(html, /id="dealsModeContainer"/);
   assert.match(html, /id="autoPublishNow"/);
   assert.match(html, /id="autoPostProgress"/);
-  assert.match(html, /id="articleImageModelSelect"/);
+  assert.doesNotMatch(html, /id="articleImageModelSelect"/);
+  assert.doesNotMatch(html, /id="articleModelSelect"/);
+  assert.match(html, /로그인된 GPT 계정 사용/);
+  assert.match(html, /이미지 3장 자동 생성/);
   assert.match(html, /id="settingsImageModelCardsGrid"/);
   assert.match(html, /id="openPromptJsonBtn"/);
   assert.match(html, /id="promptJsonEditor"/);
@@ -34,6 +37,9 @@ test('auto posting client routes the unified user prompt through draft, image, a
   assert.match(script, /publishCurrentDraft\(\)/);
   assert.match(script, /state\.images = data\.autoImages \|\| \[\]/);
   assert.match(script, /3\/3 생성된 글과 이미지를 네이버 블로그에 발행/);
+  assert.match(script, /generation-status/);
+  assert.match(script, /경과 시간/);
+  assert.match(script, /오류 발생/);
   assert.match(script, /\/api\/image-models\/select/);
   assert.match(script, /\/api\/image-models\/download/);
   assert.match(script, /function resetPublishedPostWorkspace\(\)/);
@@ -51,6 +57,20 @@ test('draft endpoint detects a URL inside the user prompt for automatic reinterp
   assert.match(server, /promptConfig/);
   assert.doesNotMatch(server, /rememberBatchImports/);
   assert.doesNotMatch(server, /findSimilarImport/);
+});
+
+test('posting drafts use the logged-in GPT account instead of local Gemma or ComfyUI', async () => {
+  const server = await readFile(path.join(appRoot, 'server.js'), 'utf8');
+  const client = await readFile(path.join(appRoot, 'lib', 'codex-account-client.js'), 'utf8');
+  assert.match(server, /new CodexAccountClient/);
+  assert.match(server, /codexAccountClient\.generateBlogPost/);
+  assert.match(server, /codexAccountClient\.generateImagesForPost/);
+  assert.match(server, /engineType: 'chatgpt_account'/);
+  assert.match(client, /auth\.json/);
+  assert.match(client, /'exec', '--ephemeral'/);
+  assert.match(client, /공백 제외 최소 1,500자/);
+  assert.match(client, /이미지 생성 계획은 정확히 3개/);
+  assert.match(client, /이미지를 정확히 1장 생성/);
 });
 
 test('editable prompt JSON exposes the complete writing and image instructions', async () => {

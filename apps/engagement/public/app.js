@@ -8,8 +8,11 @@ const state = {
   deals: [],
   images: [],
   selectedImages: new Set(),
-  imagePlans: []
+  imagePlans: [],
+  managedComments: []
 };
+
+let commentAutoTimer = null;
 
 function setConnected(connected, label = '') {
   state.connected = Boolean(connected);
@@ -26,6 +29,15 @@ function setConnected(connected, label = '') {
   const engLoginBanner = $('#engLoginBanner');
   const publishLoginBanner = $('#publishLoginBanner');
   const publishAccountStatus = $('#publishAccountStatus');
+
+  const topAccountBadge = $('#topAccountBadge');
+  const topAccountStatusText = $('#topAccountStatusText');
+  if (topAccountBadge) {
+    topAccountBadge.className = `header-account-badge ${connected ? 'online' : 'offline'}`;
+  }
+  if (topAccountStatusText) {
+    topAccountStatusText.textContent = connected ? (label ? `${label}` : '연결됨') : '네이버 로그인 필요';
+  }
 
   if (statusBadge) {
     statusBadge.className = `status ${connected ? 'online' : ''}`;
@@ -101,6 +113,213 @@ workspaceTabs.forEach((tab, index) => {
 // This desktop app exposes engagement only; settings remains available as its
 // independent configuration surface.
 setActiveTab('engagement');
+
+function renderManagedComments() {
+  const body = $('#commentManagementBody');
+  const processButton = $('#processMyCommentsBtn');
+  if (!body) return;
+  if (!state.managedComments.length) {
+    body.innerHTML = `<tr>
+      <td colspan="5" class="comment-empty-cell">
+        <div class="comment-empty-state">
+          <span class="empty-icon">💬</span>
+          <div class="empty-text">
+            <strong>새로 처리할 댓글이 없습니다</strong>
+            <small>'새 댓글 스캔' 버튼을 눌러 최근 댓글을 확인하세요.</small>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+    if (processButton) processButton.disabled = true;
+    return;
+  }
+  body.innerHTML = state.managedComments.map((item, index) => {
+    const authorInitial = escapeHtml((item.authorName || item.authorId || '?').slice(0, 1));
+    return `<tr>
+      <td style="text-align: center;"><input type="checkbox" class="managed-comment-check" data-index="${index}" checked></td>
+      <td><a href="${escapeHtml(item.postUrl)}" target="_blank" rel="noopener noreferrer" class="post-link" title="${escapeHtml(item.postTitle || '게시글 바로가기')}">${escapeHtml(item.postTitle || '제목 없음')} ↗</a></td>
+      <td>
+        <div class="author-badge">
+          <span class="author-avatar">${authorInitial}</span>
+          <div class="author-meta">
+            <strong class="author-name">${escapeHtml(item.authorName || item.authorId || '알 수 없음')}</strong>
+            <small class="author-id">${escapeHtml(item.authorId || '')}</small>
+          </div>
+        </div>
+      </td>
+      <td><div class="comment-bubble-inbox">${escapeHtml(item.text || '')}</div></td>
+      <td style="text-align: right;"><span class="date-badge">${escapeHtml(item.dateText || '-')}</span></td>
+    </tr>`;
+  }).join('');
+  if (processButton) processButton.disabled = false;
+}
+
+async function loadCommentManagementHistory() {
+  const container = $('#commentManagementHistory');
+  if (!container) return;
+  const data = await api('/api/comment-management/history').catch(() => ({ records: [] }));
+  const records = (data.records || []).slice(0, 50);
+  container.innerHTML = records.length ? records.map((item) => {
+    const authorInitial = escapeHtml((item.authorName || item.authorId || '?').slice(0, 1));
+    const isCompleted = item.status === 'completed';
+    const neighborText = item.neighborMessage || item.neighborStatus || '';
+    const isNeighborOk = neighborText.includes('완료') || neighborText.includes('확인') || neighborText.includes('성공');
+    const timeFormatted = item.repliedAt ? new Date(item.repliedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    return `<div class="managed-history-card">
+      <div class="mhc-header">
+        <div class="mhc-author-group">
+          <span class="mhc-avatar">${authorInitial}</span>
+          <div class="mhc-author-info">
+            <strong class="mhc-name">${escapeHtml(item.authorName || item.authorId || '댓글 작성자')}</strong>
+            <span class="mhc-time">${escapeHtml(timeFormatted)}</span>
+          </div>
+        </div>
+        <span class="mhc-status-pill ${isCompleted ? 'pill-success' : 'pill-danger'}">
+          ${isCompleted ? '✓ 완료' : '⚠️ 실패'}
+        </span>
+      </div>
+      <div class="mhc-body">
+        <div class="mhc-quote received">
+          <span class="quote-label">💬 받은 댓글</span>
+          <div class="quote-text">${escapeHtml(item.text || '')}</div>
+        </div>
+        <div class="mhc-quote reply">
+          <span class="quote-label">✨ 작성된 AI 대댓글</span>
+          <div class="quote-text">${escapeHtml(item.replyText || item.error || '-')}</div>
+        </div>
+      </div>
+      ${neighborText ? `<div class="mhc-footer">
+        <span class="neighbor-badge ${isNeighborOk ? 'neighbor-ok' : ''}">
+          🤝 서로이웃: ${escapeHtml(neighborText)}
+        </span>
+      </div>` : ''}
+    </div>`;
+  }).join('') : `<div class="comment-empty-state">
+    <span class="empty-icon">📋</span>
+    <div class="empty-text">
+      <strong>처리 기록이 없습니다</strong>
+      <small>댓글 처리가 진행되면 AI 대댓글과 서로이웃 신청 내역이 여기에 표시됩니다.</small>
+    </div>
+  </div>`;
+}
+
+async function scanManagedComments({ processAll = false } = {}) {
+  if (!state.connected) throw new Error('먼저 네이버 계정을 연결해주세요.');
+  const button = $('#scanMyCommentsBtn');
+  const status = $('#commentManagementStatus');
+  if (button) button.disabled = true;
+  if (status) { status.className = 'status'; status.innerHTML = '<i></i> 새 댓글 확인 중'; }
+  try {
+    const limit = Math.min(Math.max(Number($('#commentPostLimit')?.value) || 10, 1), 30);
+    const data = await api(`/api/comment-management/scan?postLimit=${limit}`);
+    state.managedComments = data.comments || [];
+    renderManagedComments();
+    if ($('#commentManagementSummary')) $('#commentManagementSummary').textContent = `최근 글 ${data.scannedPosts || 0}개에서 새 댓글 ${state.managedComments.length}개를 찾았습니다.`;
+    if (status) { status.className = `status ${state.managedComments.length ? 'online' : ''}`; status.innerHTML = `<i></i> ${state.managedComments.length}개 대기`; }
+    if (processAll && state.managedComments.length) await processManagedComments(state.managedComments);
+    return data;
+  } finally { if (button) button.disabled = false; }
+}
+
+async function processManagedComments(items = null) {
+  const selected = items || [...document.querySelectorAll('.managed-comment-check:checked')].map((box) => state.managedComments[Number(box.dataset.index)]).filter(Boolean);
+  if (!selected.length) return toast('처리할 댓글을 선택해주세요.', true);
+
+  const button = $('#processMyCommentsBtn');
+  const summary = $('#commentManagementSummary');
+  const requestNeighbor = $('#commentRequestNeighbor')?.checked !== false;
+
+  if (button) button.disabled = true;
+
+  let completedCount = 0;
+  let failedCount = 0;
+
+  try {
+    for (let i = 0; i < selected.length; i++) {
+      const item = selected[i];
+      const authorLabel = item.authorName || item.authorId || '작성자';
+      const progressText = `AI 대댓글·이웃 처리 중 (${i + 1}/${selected.length})`;
+
+      if (button) button.textContent = progressText;
+      if (summary) {
+        summary.innerHTML = `<span style="color: #03c75a; font-weight: 700;">[${i + 1}/${selected.length}]</span> <strong>${escapeHtml(authorLabel)}</strong> 님의 댓글에 AI 대댓글 및 이웃 처리 진행 중...`;
+      }
+
+      try {
+        const data = await api('/api/comment-management/process', {
+          method: 'POST',
+          body: JSON.stringify({ comments: [item], requestNeighbor })
+        });
+
+        const resItem = (data.results || [])[0];
+        if (resItem?.status === 'completed') {
+          completedCount++;
+        } else {
+          failedCount++;
+        }
+
+        // Immediately update state and table so this comment disappears from inbox
+        state.managedComments = state.managedComments.filter((c) => c.commentId !== item.commentId);
+        renderManagedComments();
+
+        // Immediately refresh history feed so the new card appears in real time!
+        await loadCommentManagementHistory();
+      } catch (err) {
+        failedCount++;
+        toast(`'${authorLabel}' 댓글 처리 실패: ${err.message}`, true);
+      }
+    }
+
+    if (summary) {
+      summary.textContent = `처리가 완료되었습니다. (성공: ${completedCount}건${failedCount > 0 ? `, 실패: ${failedCount}건` : ''})`;
+    }
+    toast(`${completedCount}개 댓글 처리를 완료했습니다.${failedCount > 0 ? ` (${failedCount}개 실패)` : ''}`);
+  } finally {
+    if (button) {
+      button.textContent = '✨ 선택 댓글 AI 대댓글 & 이웃 처리';
+      button.disabled = !state.managedComments.length;
+    }
+  }
+}
+
+function initCommentManagement() {
+  $('#scanMyCommentsBtn')?.addEventListener('click', () => scanManagedComments().catch((error) => toast(error.message, true)));
+  $('#processMyCommentsBtn')?.addEventListener('click', () => processManagedComments().catch((error) => toast(error.message, true)));
+  $('#refreshCommentHistoryBtn')?.addEventListener('click', loadCommentManagementHistory);
+  $('#selectAllMyComments')?.addEventListener('change', (event) => $$('.managed-comment-check').forEach((box) => { box.checked = event.target.checked; }));
+  $('#toggleCommentAutoBtn')?.addEventListener('click', async (event) => {
+    if (commentAutoTimer) {
+      clearInterval(commentAutoTimer); commentAutoTimer = null;
+      event.currentTarget.textContent = '⏱️ 5분 자동 관리 시작';
+      return toast('자동 이웃 관리를 멈췄습니다.');
+    }
+    event.currentTarget.textContent = '⏹ 자동관리 중지';
+    const run = () => scanManagedComments({ processAll: true }).catch((error) => toast(error.message, true));
+    await run();
+    commentAutoTimer = setInterval(run, 5 * 60 * 1000);
+  });
+
+  // Post limit quick chips
+  $$('.post-limit-chips .chip-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $$('.post-limit-chips .chip-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const input = $('#commentPostLimit');
+      if (input) {
+        input.value = btn.dataset.limit;
+        input.dispatchEvent(new Event('input'));
+      }
+    });
+  });
+  $('#commentPostLimit')?.addEventListener('input', (e) => {
+    const val = e.target.value;
+    $$('.post-limit-chips .chip-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.limit === val);
+    });
+  });
+
+  loadCommentManagementHistory();
+}
 
 async function api(url, options = {}) {
   try {
@@ -560,7 +779,7 @@ async function refreshDailySummary() {
   try {
     const summary = await api('/api/neighbors/summary');
     if ($('#dailyLimitBadge')) {
-      $('#dailyLimitBadge').innerHTML = `📊 오늘 신청: <strong>${summary.todayCount || 0}</strong> / 100건`;
+      $('#dailyLimitBadge').innerHTML = `📊 오늘 누적 신청: <strong>${summary.todayCount || 0}</strong>건`;
     }
   } catch {}
 }
@@ -737,9 +956,9 @@ $('#startAutoBtn')?.addEventListener('click', async () => {
   const keyword = $('#autoKeyword')?.value?.trim();
   if (!keyword) return toast('타겟 검색 키워드를 입력해주세요.', true);
 
-  const targetCount = Number($('#targetCount')?.value) || 30;
-  const minDelay = Number($('#minDelay')?.value) || 15;
-  const maxDelay = Number($('#maxDelay')?.value) || 30;
+  const targetCount = Number($('#targetCount')?.value) || 50;
+  const minDelay = Number($('#minDelay')?.value) || 45;
+  const maxDelay = Number($('#maxDelay')?.value) || 90;
   const message = $('#autoMessage')?.value?.trim() || '';
   const activeWithinDays = Number($('#activeFilter')?.value) || 0;
 
@@ -1021,8 +1240,11 @@ function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
 }
 
 function initSettingsController() {
-  // Global Header Status Click
+  // Global Header Status Clicks
   $('#globalEngineStatusBox')?.addEventListener('click', () => {
+    setActiveTab('settings', true);
+  });
+  $('#topAccountBadge')?.addEventListener('click', () => {
     setActiveTab('settings', true);
   });
 
@@ -1060,7 +1282,6 @@ async function initAiHardwareAndModels() {
       currentModelsList = modelsRes.models || [];
       activeModelId = modelsRes.activeModel?.id || null;
       
-      renderModelCards(modelsRes.models, activeModelId, specs.recommendedModel?.id, '#aiModelCardsGrid');
       renderModelCards(modelsRes.models, activeModelId, specs.recommendedModel?.id, '#settingsAiModelCardsGrid');
       
       updateLocalAiSummaryUI(modelsRes.activeModel, settings?.activeEndpoint);
@@ -1228,8 +1449,6 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
 // Engagement (Heart & AI Custom Comment) Automation Controller
 // ---------------------------------------------------------------------------
 let engagementEventSource = null;
-let engagementTargetDraft = [];
-
 function initEngagementAutomation() {
   // 0. Go to login button
   $('#engGoLoginBtn')?.addEventListener('click', () => {
@@ -1245,56 +1464,40 @@ function initEngagementAutomation() {
       button.setAttribute('aria-pressed', String(active));
     });
   };
-  $$('.eng-chips button').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const input = $('#engKeyword');
-      if (!input) return;
-      const keyword = btn.textContent.trim();
-      const keywords = [...new Set(input.value.split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))];
-      const next = keywords.includes(keyword) ? keywords.filter((value) => value !== keyword) : [...keywords, keyword];
-      input.value = next.join(', ');
-      syncEngKeywordChips();
-    });
+  $('#engTrendChips')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('button');
+    const input = $('#engKeyword');
+    if (!btn || !input) return;
+    const keyword = btn.dataset.keyword || btn.textContent.trim();
+    const keywords = [...new Set(input.value.split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))];
+    input.value = (keywords.includes(keyword) ? keywords.filter((value) => value !== keyword) : [...keywords, keyword]).join(', ');
+    syncEngKeywordChips();
   });
+  const loadEngagementTrends = async (force = false) => {
+    const container = $('#engTrendChips');
+    const status = $('#engTrendStatus');
+    const refreshButton = $('#refreshEngTrendsBtn');
+    if (!container) return;
+    try {
+      if (refreshButton) refreshButton.disabled = true;
+      if (status) status.textContent = '대한민국 실시간 트렌드 갱신 중...';
+      const data = await api(`/api/blog/trends${force ? '?refresh=true' : ''}`);
+      const trends = (data.items || []).map((item) => ({ keyword: item.keyword || item.topic, topic: item.topic, traffic: item.traffic })).filter((item) => item.keyword).slice(0, 12);
+      if (!trends.length) throw new Error('추천 가능한 실시간 트렌드가 없습니다.');
+      container.innerHTML = trends.map((item) => `<button type="button" data-keyword="${escapeHtml(item.keyword)}" title="${escapeHtml(item.topic)} · 검색량 ${escapeHtml(item.traffic || '-')} ">${escapeHtml(item.keyword)}</button>`).join('');
+      if (status) status.textContent = `실시간 트렌드 ${trends.length}개 · ${new Date(data.refreshedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 갱신`;
+      syncEngKeywordChips();
+    } catch (error) {
+      container.innerHTML = '<button type="button" data-keyword="맛집">맛집</button><button type="button" data-keyword="육아">육아</button><button type="button" data-keyword="여행">여행</button>';
+      if (status) status.textContent = `실시간 트렌드 조회 실패 · 기본 키워드 표시`;
+    } finally {
+      if (refreshButton) refreshButton.disabled = false;
+    }
+  };
+  $('#refreshEngTrendsBtn')?.addEventListener('click', () => loadEngagementTrends(true));
+  loadEngagementTrends();
   $('#engKeyword')?.addEventListener('input', syncEngKeywordChips);
   syncEngKeywordChips();
-
-  const readEngTargets = () => [...new Set(($('#engKeyword')?.value || '').split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))].map((keyword) => ({ keyword, reason: '직접 추가', score: null }));
-  const renderEngTargetManager = () => {
-    const list = $('#engTargetManagerList');
-    if (!list) return;
-    list.innerHTML = engagementTargetDraft.length ? engagementTargetDraft.map((item, index) => `<div class="target-manager-item"><div><strong>${escapeHtml(item.keyword)}</strong>${item.score ? `<span class="target-score">적합도 ${item.score}</span>` : ''}<small>${escapeHtml(item.reason || '직접 추가')}</small></div><div><button type="button" data-target-up="${index}" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" data-target-down="${index}" ${index === engagementTargetDraft.length - 1 ? 'disabled' : ''}>↓</button><button type="button" class="danger" data-target-remove="${index}">삭제</button></div></div>`).join('') : '<div class="empty-state" style="padding:24px;">관리할 키워드를 추가하거나 AI 분석을 실행하세요.</div>';
-  };
-  const closeTargetManager = () => $('#engTargetManagerModal')?.classList.add('hidden');
-  $('#openEngTargetManagerBtn')?.addEventListener('click', () => { engagementTargetDraft = readEngTargets(); renderEngTargetManager(); $('#engTargetManagerModal')?.classList.remove('hidden'); });
-  $('#closeEngTargetManagerBtn')?.addEventListener('click', closeTargetManager);
-  $('#cancelEngTargetsBtn')?.addEventListener('click', closeTargetManager);
-  $('#engTargetManagerModal')?.addEventListener('click', (event) => { if (event.target.id === 'engTargetManagerModal') closeTargetManager(); });
-  $('#analyzeEngTargetsBtn')?.addEventListener('click', async () => {
-    const button = $('#analyzeEngTargetsBtn');
-    const status = $('#engTargetAnalysisStatus');
-    try {
-      button.disabled = true;
-      button.textContent = '분석 중...';
-      if (status) status.textContent = '최근 글 수집 → 로컬 LLM 주제·독자 분석 중...';
-      const result = await api('/api/engagement/keyword-recommendations');
-      if (!result.targets?.length) throw new Error('최근 글에서 추천할 주제를 찾지 못했습니다.');
-      engagementTargetDraft = result.targets;
-      renderEngTargetManager();
-      const summary = $('#engTargetAnalysisSummary');
-      if (summary) { summary.classList.remove('hidden'); summary.innerHTML = `<strong>${escapeHtml(result.summary || '분석 완료')}</strong><span>주요 독자: ${escapeHtml(result.audience || '-')}</span>`; }
-      if (status) status.textContent = `${result.analyzedTextCount}개 요소 · ${result.method === 'llm' ? '로컬 LLM 분석' : '규칙 기반 보완'} 완료`;
-    } catch (error) {
-      if (status) status.textContent = error.message;
-      toast(error.message, true);
-    } finally {
-      button.disabled = false;
-      button.textContent = '내 블로그 AI 재분석';
-    }
-  });
-  $('#addEngTargetBtn')?.addEventListener('click', () => { const input = $('#engTargetAddInput'); const keyword = input?.value.trim().replace(/[,，\n]/g, ''); if (!keyword || engagementTargetDraft.some((item) => item.keyword === keyword)) return; engagementTargetDraft.push({ keyword, reason: '직접 추가', score: null }); input.value = ''; renderEngTargetManager(); });
-  $('#engTargetManagerList')?.addEventListener('click', (event) => { const button = event.target.closest('button'); if (!button) return; const remove = button.dataset.targetRemove; const up = button.dataset.targetUp; const down = button.dataset.targetDown; if (remove !== undefined) engagementTargetDraft.splice(Number(remove), 1); else { const from = Number(up ?? down); const to = up !== undefined ? from - 1 : from + 1; if (from >= 0 && to >= 0 && to < engagementTargetDraft.length) [engagementTargetDraft[from], engagementTargetDraft[to]] = [engagementTargetDraft[to], engagementTargetDraft[from]]; } renderEngTargetManager(); });
-  $('#applyEngTargetsBtn')?.addEventListener('click', () => { if (!engagementTargetDraft.length) return toast('소통 타겟을 한 개 이상 추가해주세요.', true); $('#engKeyword').value = engagementTargetDraft.map((item) => item.keyword).join(', '); syncEngKeywordChips(); closeTargetManager(); toast(`${engagementTargetDraft.length}개 소통 타겟을 적용했습니다.`); });
 
   // 2. Quick Counts
   $$('.eng-quick-counts button').forEach((btn) => {
@@ -1320,21 +1523,21 @@ function initEngagementAutomation() {
 
     if (!state.connected) {
       toast('⚠️ 네이버 계정이 연결되어 있지 않습니다. 먼저 계정을 연결해주세요.', true);
-      setActiveTab('neighbor', true);
+      setActiveTab('settings', true);
       return;
     }
 
     const keyword = $('#engKeyword')?.value?.trim();
     if (!keyword) return toast('소통 타겟 키워드를 입력해주세요.', true);
 
-    const targetCount = Number($('#engTargetCount')?.value) || 20;
+    const targetCount = Number($('#engTargetCount')?.value) || 50;
     const doLike = $('#engDoLike')?.checked ?? true;
     const doComment = $('#engDoComment')?.checked ?? true;
     const doNeighbor = $('#engDoNeighbor')?.checked ?? true;
     const neighborMessage = $('#engNeighborMessage')?.value?.trim() || '안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊';
     const tone = $('#engTone')?.value || 'friendly';
-    const minDelay = Number($('#engMinDelay')?.value) || 15;
-    const maxDelay = Number($('#engMaxDelay')?.value) || 30;
+    const minDelay = Number($('#engMinDelay')?.value) || 45;
+    const maxDelay = Number($('#engMaxDelay')?.value) || 90;
 
     if (!doLike && !doComment && !doNeighbor) {
       return toast('공감(❤️), AI 댓글(💬), 서로이웃(👥) 중 최소 1개 이상을 선택해주세요.', true);
@@ -1366,7 +1569,17 @@ function initEngagementAutomation() {
     }
   });
 
-  // 4-1. Neighbor checkbox toggle message group
+  // 4-1. Toggle card checked state & Neighbor message group toggle
+  ['#engDoLike', '#engDoComment', '#engDoNeighbor'].forEach((selector) => {
+    const el = $(selector);
+    if (!el) return;
+    const updateCard = () => {
+      el.closest('.action-toggle-card')?.classList.toggle('checked', el.checked);
+    };
+    el.addEventListener('change', updateCard);
+    updateCard();
+  });
+
   $('#engDoNeighbor')?.addEventListener('change', (e) => {
     $('#engNeighborMsgGroup')?.classList.toggle('hidden', !e.target.checked);
   });
@@ -1435,9 +1648,9 @@ function updateEngagementDashboard(data) {
   const isPaused = state === 'paused';
   const isIdle = state === 'idle' || state === 'stopped' || state === 'completed' || state === 'error';
 
-  const dashboard = $('#engDashboard');
-  if (dashboard) {
-    if (!isIdle) dashboard.classList.remove('hidden');
+  const statusDot = $('#engStatusDot');
+  if (statusDot) {
+    statusDot.className = `desktop-status-dot ${isRunning ? 'running' : isPaused ? 'paused' : state === 'completed' ? 'completed' : state === 'error' ? 'error' : ''}`;
   }
 
   // Buttons visibility
@@ -1459,11 +1672,11 @@ function updateEngagementDashboard(data) {
     else if (state === 'completed') {
       statusEl.textContent = stats.targetReached
         ? `🎉 목표 ${stats.targetCount || config.targetCount || 0}개 포스팅 소통 완료!`
-        : `⚠️ 후보 부족: ${stats.processedCount || 0} / ${stats.targetCount || config.targetCount || 0}개 포스팅 처리`;
+        : `⚠️ 후보 부족: ${stats.processedCount || 0} / ${stats.targetCount || config.targetCount || 0}개 포스팅 처리 완료`;
     }
     else if (state === 'stopped') statusEl.textContent = '⏹️ 사용자에 의해 중단됨';
     else if (state === 'error') statusEl.textContent = '⚠️ 오류로 인해 중단됨';
-    else statusEl.textContent = '대기 중';
+    else statusEl.textContent = '대기 중 · 설정을 완료하고 시작 버튼을 누르세요';
   }
 
   // Progress Bar
@@ -1525,12 +1738,353 @@ function appendEngagementLog(entry) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Target Finder & AI Recommendation Modal Controller
+// ---------------------------------------------------------------------------
+const CATEGORY_PRESETS = [
+  {
+    title: '🍽️ 맛집 / 카페 / 베이킹',
+    keywords: ['맛집', '카페투어', '성수카페', '디저트', '베이킹', '홈카페', '브런치', '강남맛집']
+  },
+  {
+    title: '✈️ 여행 / 캠핑 / 나들이',
+    keywords: ['국내여행', '해외여행', '제주여행', '차박', '캠핑용품', '감성숙소', '주말나들이', '등산']
+  },
+  {
+    title: '💄 뷰티 / 패션 / 다이어트',
+    keywords: ['데일리룩', '스킨케어', '뷰티템', '올리브영추천', '다이어트식단', '패션코디', '네일아트', '메이크업']
+  },
+  {
+    title: '👶 육아 / 키즈 / 일상',
+    keywords: ['육아소통', '육아맘', '아이간식', '유아식', '책육아', '어린이집', '초등맘', '가족일상']
+  },
+  {
+    title: '💻 IT / 테크 / 전자기기',
+    keywords: ['IT리뷰', '전자기기', '스마트폰', '데스크테리어', '앱추천', '맥북', '아이패드', 'PC조립']
+  },
+  {
+    title: '💰 재테크 / 부동산 / 비즈니스',
+    keywords: ['재테크', '주식투자', '부동산', '청약', '짠테크', '부업', '마케팅', '자기계발']
+  },
+  {
+    title: '🐶 반려동물 (펫)',
+    keywords: ['반려견', '강아지일상', '고양이집사', '댕댕이', '펫스타그램', '애견동반', '멍스타그램', '반려묘']
+  },
+  {
+    title: '📚 문화 / 도서 / 취미',
+    keywords: ['책추천', '독서기록', '영화리뷰', '전시회', '음악추천', '취미미술', '글쓰기', '원데이클래스']
+  }
+];
+
+function initTargetFinderModal() {
+  const modal = $('#targetFinderModal');
+  if (!modal) return;
+
+  let activeTargetInput = $('#engKeyword');
+  const selectedFinderKeywords = new Set();
+  let trendsLoaded = false;
+  let presetsRendered = false;
+  let myBlogAnalysisData = null;
+
+  function updateSelectedClasses() {
+    // Update AI recommendation cards
+    $$('#myBlogKeywordsGrid .rec-card').forEach((card) => {
+      const kw = card.dataset.keyword;
+      card.classList.toggle('selected', selectedFinderKeywords.has(kw));
+    });
+
+    // Update Trends cards
+    $$('#modalTrendsGrid .trend-item-card').forEach((card) => {
+      const kw = card.dataset.keyword;
+      card.classList.toggle('selected', selectedFinderKeywords.has(kw));
+    });
+
+    // Update Presets chips
+    $$('#categoryPresetsGrid .preset-chip').forEach((chip) => {
+      const kw = chip.dataset.keyword;
+      chip.classList.toggle('selected', selectedFinderKeywords.has(kw));
+    });
+
+    // Update Tray
+    const countEl = $('#finderSelectedCount');
+    if (countEl) countEl.textContent = selectedFinderKeywords.size;
+
+    const chipsEl = $('#finderSelectedChips');
+    if (chipsEl) {
+      if (selectedFinderKeywords.size === 0) {
+        chipsEl.innerHTML = '<span class="tray-empty-hint">위 목록에서 키워드를 클릭하여 소통 타겟을 추가하세요.</span>';
+      } else {
+        chipsEl.innerHTML = Array.from(selectedFinderKeywords)
+          .map((kw) => `<span class="selected-tray-chip">${escapeHtml(kw)} <button type="button" class="btn-remove-chip" data-kw="${escapeHtml(kw)}" title="제거">✕</button></span>`)
+          .join('');
+      }
+    }
+
+    const applyBtn = $('#applyTargetFinderBtn');
+    if (applyBtn) {
+      applyBtn.disabled = selectedFinderKeywords.size === 0;
+      const textEl = $('#applyTargetBtnText');
+      if (textEl) {
+        textEl.textContent = selectedFinderKeywords.size > 0 
+          ? `선택 키워드 ${selectedFinderKeywords.size}개 적용하기` 
+          : '선택 키워드 적용하기';
+      }
+    }
+  }
+
+  function toggleKeyword(kw) {
+    if (!kw) return;
+    kw = kw.trim();
+    if (!kw) return;
+    if (selectedFinderKeywords.has(kw)) {
+      selectedFinderKeywords.delete(kw);
+    } else {
+      selectedFinderKeywords.add(kw);
+    }
+    updateSelectedClasses();
+  }
+
+  function openFinder(targetInputEl) {
+    activeTargetInput = targetInputEl || $('#engKeyword');
+    selectedFinderKeywords.clear();
+
+    // Populate from active input
+    if (activeTargetInput && activeTargetInput.value) {
+      activeTargetInput.value.split(/[,，\n]+/)
+        .map((k) => k.trim())
+        .filter(Boolean)
+        .forEach((k) => selectedFinderKeywords.add(k));
+    }
+
+    modal.classList.remove('hidden');
+
+    // Default to first tab or keep state
+    if (!presetsRendered) {
+      renderCategoryPresets();
+    }
+    updateSelectedClasses();
+  }
+
+  function closeFinder() {
+    modal.classList.add('hidden');
+  }
+
+  // Open triggers
+  $('#openTargetFinderBtn')?.addEventListener('click', () => openFinder($('#engKeyword')));
+  $('#openTargetFinderInlineBtn')?.addEventListener('click', () => openFinder($('#engKeyword')));
+  $('#openAutoTargetFinderBtn')?.addEventListener('click', () => openFinder($('#autoKeyword')));
+  $('#openAutoTargetFinderInlineBtn')?.addEventListener('click', () => openFinder($('#autoKeyword')));
+
+  // Close triggers
+  $('#closeTargetFinderModal')?.addEventListener('click', closeFinder);
+  $('#cancelTargetFinderBtn')?.addEventListener('click', closeFinder);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeFinder();
+  });
+
+  // Tray interaction: remove chip
+  $('#finderSelectedChips')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-remove-chip');
+    if (!btn) return;
+    const kw = btn.dataset.kw;
+    if (kw) {
+      selectedFinderKeywords.delete(kw);
+      updateSelectedClasses();
+    }
+  });
+
+  // Tray clear
+  $('#clearFinderSelectionBtn')?.addEventListener('click', () => {
+    selectedFinderKeywords.clear();
+    updateSelectedClasses();
+  });
+
+  // Tray apply
+  $('#applyTargetFinderBtn')?.addEventListener('click', () => {
+    if (selectedFinderKeywords.size === 0) return;
+    if (activeTargetInput) {
+      activeTargetInput.value = Array.from(selectedFinderKeywords).join(', ');
+      activeTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    closeFinder();
+    toast(`소통 타겟 키워드 ${selectedFinderKeywords.size}개가 적용되었습니다.`);
+  });
+
+  // Tab switching
+  $$('.finder-tab').forEach((tabBtn) => {
+    tabBtn.addEventListener('click', () => {
+      const tabId = tabBtn.dataset.finderTab;
+      $$('.finder-tab').forEach((t) => t.classList.remove('active'));
+      tabBtn.classList.add('active');
+
+      $$('.finder-panel').forEach((p) => {
+        if (p.dataset.panel === tabId) {
+          p.classList.remove('hidden');
+        } else {
+          p.classList.add('hidden');
+        }
+      });
+
+      if (tabId === 'trends' && !trendsLoaded) {
+        loadModalTrends();
+      }
+      if (tabId === 'presets' && !presetsRendered) {
+        renderCategoryPresets();
+      }
+    });
+  });
+
+  // TAB 1: My Blog AI Recommendations
+  $('#startMyBlogAnalysisBtn')?.addEventListener('click', async () => {
+    const banner = $('#myBlogAnalysisBanner');
+    const loading = $('#myBlogAnalysisLoading');
+    const result = $('#myBlogAnalysisResult');
+
+    if (!state.connected) {
+      toast('⚠️ 네이버 로그인이 필요합니다. 먼저 네이버 계정을 연결해주세요.', true);
+      return;
+    }
+
+    try {
+      if (banner) banner.classList.add('hidden');
+      if (loading) loading.classList.remove('hidden');
+      if (result) result.classList.add('hidden');
+
+      const data = await api('/api/blog/my-recommendations');
+      myBlogAnalysisData = data;
+
+      if (loading) loading.classList.add('hidden');
+      if (result) result.classList.remove('hidden');
+
+      const summaryText = $('#analysisSummaryText');
+      const audienceText = $('#analysisAudienceText');
+      if (summaryText) summaryText.textContent = data.summary || '최근 작성된 포스팅을 바탕으로 주제 분석을 완료했습니다.';
+      if (audienceText) audienceText.textContent = data.audience || '일상, 리뷰, 관심사 기반의 활발한 소통 이웃';
+
+      const grid = $('#myBlogKeywordsGrid');
+      if (grid) {
+        const targets = data.targets || [];
+        if (targets.length === 0) {
+          grid.innerHTML = '<div style="grid-column:1/-1; color:#94a3b8; text-align:center; padding:20px;">추출된 추천 키워드가 없습니다. 최근 포스팅을 확인해주세요.</div>';
+        } else {
+          grid.innerHTML = targets.map((item) => `
+            <div class="rec-card ${selectedFinderKeywords.has(item.keyword) ? 'selected' : ''}" data-keyword="${escapeHtml(item.keyword)}">
+              <div class="rec-card-header">
+                <span class="rec-keyword">🎯 ${escapeHtml(item.keyword)}</span>
+                <span class="rec-score">${escapeHtml(String(item.score || 90))}점</span>
+              </div>
+              <p class="rec-reason">${escapeHtml(item.reason || '내 블로그 포스팅과의 밀접한 연관성')}</p>
+            </div>
+          `).join('');
+        }
+      }
+      updateSelectedClasses();
+    } catch (err) {
+      if (loading) loading.classList.add('hidden');
+      if (banner) banner.classList.remove('hidden');
+      toast('블로그 분석 실패: ' + (err.message || '알 수 없는 오류'), true);
+    }
+  });
+
+  // Add all AI recommended keywords
+  $('#addAllMyBlogKeywordsBtn')?.addEventListener('click', () => {
+    if (!myBlogAnalysisData?.targets?.length) return;
+    myBlogAnalysisData.targets.forEach((item) => {
+      if (item.keyword) selectedFinderKeywords.add(item.keyword);
+    });
+    updateSelectedClasses();
+    toast(`AI 추천 키워드 ${myBlogAnalysisData.targets.length}개를 담았습니다.`);
+  });
+
+  // Keyword grid click (delegation)
+  $('#myBlogKeywordsGrid')?.addEventListener('click', (e) => {
+    const card = e.target.closest('.rec-card');
+    if (!card) return;
+    toggleKeyword(card.dataset.keyword);
+  });
+
+  // TAB 2: Realtime Trends
+  async function loadModalTrends(force = false) {
+    const grid = $('#modalTrendsGrid');
+    const status = $('#modalTrendStatus');
+    const refreshBtn = $('#refreshModalTrendsBtn');
+
+    try {
+      if (refreshBtn) refreshBtn.disabled = true;
+      if (status) status.textContent = '실시간 검색 트렌드 조회 중...';
+      const data = await api(`/api/blog/trends${force ? '?refresh=true' : ''}`);
+      trendsLoaded = true;
+
+      const items = (data.items || []).slice(0, 20);
+      if (grid) {
+        if (!items.length) {
+          grid.innerHTML = '<div style="grid-column:1/-1; color:#94a3b8; text-align:center; padding:20px;">불러온 실시간 트렌드가 없습니다.</div>';
+        } else {
+          grid.innerHTML = items.map((item, idx) => `
+            <div class="trend-item-card ${selectedFinderKeywords.has(item.keyword) ? 'selected' : ''}" data-keyword="${escapeHtml(item.keyword)}">
+              <span class="trend-rank">${idx + 1}</span>
+              <div class="trend-meta">
+                <span class="trend-kw">${escapeHtml(item.keyword)}</span>
+                <span class="trend-topic">${escapeHtml(item.topic || '실시간 검색어')} ${item.traffic ? `· ${escapeHtml(item.traffic)}` : ''}</span>
+              </div>
+            </div>
+          `).join('');
+        }
+      }
+      if (status) {
+        status.textContent = `트렌드 ${items.length}개 · ${data.refreshedAt ? new Date(data.refreshedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '방금'} 갱신`;
+      }
+      updateSelectedClasses();
+    } catch (err) {
+      if (status) status.textContent = '트렌드 로드 실패: ' + (err.message || '오류');
+    } finally {
+      if (refreshBtn) refreshBtn.disabled = false;
+    }
+  }
+
+  $('#refreshModalTrendsBtn')?.addEventListener('click', () => loadModalTrends(true));
+
+  $('#modalTrendsGrid')?.addEventListener('click', (e) => {
+    const card = e.target.closest('.trend-item-card');
+    if (!card) return;
+    toggleKeyword(card.dataset.keyword);
+  });
+
+  // TAB 3: Category Presets
+  function renderCategoryPresets() {
+    const grid = $('#categoryPresetsGrid');
+    if (!grid) return;
+    presetsRendered = true;
+
+    grid.innerHTML = CATEGORY_PRESETS.map((cat) => `
+      <div class="preset-category-card">
+        <span class="preset-cat-title">${escapeHtml(cat.title)}</span>
+        <div class="preset-chips-wrap">
+          ${cat.keywords.map((kw) => `
+            <button type="button" class="preset-chip ${selectedFinderKeywords.has(kw) ? 'selected' : ''}" data-keyword="${escapeHtml(kw)}">
+              ${escapeHtml(kw)}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  $('#categoryPresetsGrid')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.preset-chip');
+    if (!chip) return;
+    toggleKeyword(chip.dataset.keyword);
+  });
+}
+
 // Initial health check and session restoration
 api('/api/health').then(async (data) => {
   initSettingsController();
   initAiHardwareAndModels();
   initModelEvents();
   initEngagementAutomation();
+  initCommentManagement();
+  initTargetFinderModal();
 
   if (data.connected) {
     setConnected(true);
@@ -1553,4 +2107,6 @@ api('/api/health').then(async (data) => {
   initAiHardwareAndModels();
   initModelEvents();
   initEngagementAutomation();
+  initCommentManagement();
+  initTargetFinderModal();
 });

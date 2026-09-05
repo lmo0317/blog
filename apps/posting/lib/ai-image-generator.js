@@ -32,7 +32,7 @@ export const AI_IMAGE_STYLES = {
 
 // Safety Policy: strictly family-friendly editorial still life and wholesome lifestyle scenes.
 // Policy: ABSOLUTELY NO PEOPLE with inappropriate exposure; all subjects must be fully clothed and modest.
-const SAFE_IMAGE_RULES = 'strictly family-friendly editorial still life, wholesome, high quality professional photography, natural lighting, sharp focus, vibrant colors, authentic lifestyle';
+const SAFE_IMAGE_RULES = 'strictly family-friendly, wholesome, high quality lifestyle photography, natural warm lighting, sharp focus, authentic cozy atmosphere';
 const HUMAN_IMAGE_WORDS = /\b(person|people|woman|women|man|men|girl|boy|female|male|human|model|patient|doctor|worker|citizen|hands?|face|body|neck|shoulders?|chest|legs?|sitting|standing|stretching|rolling|exercising|eating)\b/gi;
 const SENSITIVE_WORDS_REGEX = /\b(chest|breasts?|bust|cleavage|torso|body|flesh|skin|neck|shoulders?|legs?|arms?|thighs?|waist|hips?|belly|underwear|lingerie|bikini|swimwear|swimsuit|nude|naked|erotic|sensual|sexy|provocative|seductive|topless)\b/gi;
 
@@ -126,7 +126,7 @@ export function buildEnhancedImagePrompt(basePrompt, style = 'photorealistic') {
   const attireGuard = hasHumanWord ? 'fully clothed in modest comfortable casual attire, ' : '';
 
   const styleConfig = AI_IMAGE_STYLES[style] || AI_IMAGE_STYLES.photorealistic;
-  return `${attireGuard}${SAFE_IMAGE_RULES}, ${text}, ${styleConfig.suffix}`.slice(0, 900);
+  return `${text}, ${attireGuard}${SAFE_IMAGE_RULES}, ${styleConfig.suffix}`.slice(0, 900);
 }
 
 export async function generateAiDrawing({

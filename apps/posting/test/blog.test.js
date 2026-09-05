@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLlmJson, normalizeGeneratedPost, LocalLlmClient } from '../lib/llm.js';
 import { parseTrendRss } from '../lib/trends.js';
-import { classifyPublishResult, isNaverLoginUrl } from '../lib/naver.js';
+import { classifyPublishResult, isNaverLoginUrl, normalizePublishCategoryName } from '../lib/naver.js';
 import { appendImageAttributions, searchCommonsImages } from '../lib/images.js';
 import { extractAlgumonDestination, isDirectProductUrl, resolveAlgumonOutboundUrl, unwrapKnownRedirectUrl } from '../lib/algumon.js';
 
@@ -94,6 +94,13 @@ test('downloaded deal images preserve their exact paragraph placement metadata',
   }
 });
 
+test('AI-generated images do not append an attribution block to the post body', () => {
+  const images = [
+    { title: '맞춤 이미지', isAiGenerated: true, license: 'OpenAI GPT generated image' }
+  ];
+  assert.equal(appendImageAttributions('본문', images), '본문');
+});
+
 test('local LLM client sends selected topic and returns a post', async () => {
   let requestBody;
   const client = new LocalLlmClient({
@@ -124,6 +131,13 @@ test('publish outcome requires a confirmed Naver result', () => {
   assert.equal(classifyPublishResult({ url: 'https://blog.naver.com/PostWriteForm.naver' }).status, 'manual_required');
   assert.equal(isNaverLoginUrl('https://nid.naver.com/nidlogin.login?mode=form'), true);
   assert.equal(isNaverLoginUrl('https://blog.naver.com/GoBlogWrite.naver'), false);
+});
+
+test('publish category accepts the configured health and living categories only', () => {
+  assert.equal(normalizePublishCategoryName(' 건강 '), '건강');
+  assert.equal(normalizePublishCategoryName('생활'), '생활');
+  assert.equal(normalizePublishCategoryName(''), '');
+  assert.throws(() => normalizePublishCategoryName('기본'), /건강 또는 생활/);
 });
 
 test('local LLM client generates deals blog post from Algumon rankings', async () => {

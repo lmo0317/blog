@@ -7,8 +7,8 @@
   "scripts": {
     "start": "electron .",
     "start:server": "node server.js",
-    "test": "node --test test/ai-hardware.test.js test/neighbor-automation.test.js",
-    "check": "node --check main.js && node --check server.js && node --check lib/hardware.js && node --check lib/model-manager.js && node --check lib/embedded-llama.js && node --check lib/engagement-automation.js && node --check lib/automation.js && node --check lib/history.js && node --check lib/naver.js && node --check lib/article-scraper.js && node --check lib/visual-renderer.js && node --check lib/ai-image-generator.js"
+    "test": "node --test test/ai-hardware.test.js test/neighbor-automation.test.js test/comment-management.test.js",
+    "check": "node --check main.js && node --check server.js && node --check lib/hardware.js && node --check lib/model-manager.js && node --check lib/embedded-llama.js && node --check lib/engagement-automation.js && node --check lib/automation.js && node --check lib/history.js && node --check lib/comment-replies.js && node --check lib/naver.js && node --check lib/article-scraper.js && node --check lib/visual-renderer.js && node --check lib/ai-image-generator.js"
   },
   "dependencies": {
     "express": "^5.1.0",

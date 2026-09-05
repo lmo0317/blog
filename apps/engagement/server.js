@@ -17,6 +17,7 @@ import { EmbeddedLlamaServer } from './lib/embedded-llama.js';
 import { EngagementAutomationManager } from './lib/engagement-automation.js';
 import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
+import { CommentReplyStore } from './lib/comment-replies.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
@@ -49,6 +50,7 @@ const automationManager = new NeighborAutomationManager({ browserSession, histor
 
 const engagementHistoryStore = new EngagementHistoryStore(path.join(__dirname, '.data', 'engagement-history.json'));
 const engagementManager = new EngagementAutomationManager({ browserSession, embeddedLlama, historyStore: engagementHistoryStore });
+const commentReplyStore = new CommentReplyStore(path.join(__dirname, '.data', 'comment-replies.json'));
 
 async function resolveActiveLlmEndpoint() {
   const activeModel = await modelManager.getActiveModel();
@@ -459,10 +461,6 @@ app.get('/api/engagement/status', (_req, res) => {
   res.json(engagementManager.getStatus());
 });
 
-app.get('/api/engagement/keyword-recommendations', async (_req, res, next) => {
-  try { const source = await browserSession.analyzeMyBlogKeywords(); const analysis = await embeddedLlama.analyzeBlogTargetKeywords({ texts: source.texts, fallbackKeywords: source.keywords }); res.json({ ...analysis, analyzedTextCount: source.analyzedTextCount, blogUrl: source.blogUrl }); } catch (error) { next(error); }
-});
-
 app.get('/api/engagement/events', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -568,6 +566,117 @@ app.delete('/api/engagement/history', async (_req, res, next) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// My-post comment management: scan -> AI reply -> mutual-neighbor request
+// ---------------------------------------------------------------------------
+app.get('/api/comment-management/scan', async (req, res, next) => {
+  try {
+    const result = await browserSession.scanMyBlogComments({
+      postLimit: Math.min(Math.max(Number(req.query.postLimit) || 10, 1), 30),
+      commentLimit: 100
+    });
+    const pending = [];
+    for (const comment of result.comments) {
+      if (!await commentReplyStore.has(comment.postUrl, comment.commentId)) pending.push(comment);
+    }
+    res.json({ ...result, comments: pending, pendingCount: pending.length });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/comment-management/history', async (_req, res, next) => {
+  try { res.json({ records: await commentReplyStore.list() }); } catch (error) { next(error); }
+});
+
+app.post('/api/comment-management/process', async (req, res, next) => {
+  try {
+    const rawList = Array.isArray(req.body?.comments) ? req.body.comments : (req.body?.comment ? [req.body.comment] : []);
+    const comments = rawList.slice(0, 20);
+    if (!comments.length) return res.status(400).json({ error: '처리할 댓글을 선택해주세요.' });
+    const requestNeighbor = req.body?.requestNeighbor !== false;
+    const results = [];
+
+    for (let i = 0; i < comments.length; i++) {
+      const comment = comments[i];
+      const authorTag = comment.authorName || comment.authorId || '작성자';
+      console.log(`[CommentManagement] [${i + 1}/${comments.length}] @${authorTag} 댓글 처리 시작...`);
+
+      if (await commentReplyStore.has(comment.postUrl, comment.commentId)) {
+        console.log(`[CommentManagement] 이미 처리된 댓글 건너뜀 (${comment.commentId})`);
+        results.push({ commentId: comment.commentId, status: 'skipped', message: '이미 처리한 댓글입니다.' });
+        continue;
+      }
+
+      let replyText = '';
+      let replyResult = { replied: false };
+      let neighborResult = { status: 'not_requested', message: '서로이웃 신청 안 함' };
+
+      try {
+        console.log(`[CommentManagement] AI 대댓글 생성 중... (게시글: ${comment.postTitle || '무제'})`);
+        replyText = await embeddedLlama.generateCommentReply({
+          postTitle: comment.postTitle,
+          commentText: comment.text,
+          commenterName: comment.authorName
+        });
+        console.log(`[CommentManagement] 생성된 대댓글: "${replyText}"`);
+
+        console.log(`[CommentManagement] 네이버 블로그에 대댓글 등록 중...`);
+        replyResult = await browserSession.replyToBlogComment({
+          postUrl: comment.postUrl,
+          commentId: comment.commentId,
+          authorName: comment.authorName,
+          commentText: comment.text,
+          replyText
+        });
+        console.log(`[CommentManagement] 대댓글 등록 완료!`);
+
+        if (requestNeighbor && comment.authorId && comment.authorId !== comment.myBlogId) {
+          console.log(`[CommentManagement] @${comment.authorId} 서로이웃 신청 진행 중...`);
+          const message = `${comment.authorName || '이웃'}님, 제 글에 남겨주신 댓글 감사합니다. 서로이웃으로 소통하고 지내요 :)`;
+          try {
+            neighborResult = await Promise.race([
+              browserSession.addNeighbor(comment.authorId, message, comment.authorName),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('서로이웃 신청 시간 초과 (20초)')), 20000))
+            ]);
+            console.log(`[CommentManagement] 서로이웃 신청 결과: ${neighborResult.status} (${neighborResult.message || ''})`);
+          } catch (nErr) {
+            console.warn(`[CommentManagement] 서로이웃 신청 예외 (대댓글은 정상 등록됨): ${nErr.message}`);
+            neighborResult = { status: 'neighbor_failed', message: nErr.message };
+          }
+        }
+
+        const saved = await commentReplyStore.add({
+          ...comment,
+          replyText,
+          replied: true,
+          neighborStatus: neighborResult.status,
+          neighborMessage: neighborResult.message,
+          status: 'completed'
+        });
+        results.push(saved);
+        console.log(`[CommentManagement] ✅ @${authorTag} 처리 완료!`);
+      } catch (error) {
+        console.error(`[CommentManagement] ❌ @${authorTag} 처리 실패: ${error.message}`);
+        const saved = await commentReplyStore.add({
+          ...comment,
+          replyText,
+          replied: Boolean(replyResult.replied),
+          neighborStatus: neighborResult.status,
+          neighborMessage: neighborResult.message,
+          status: 'failed',
+          error: error.message
+        });
+        results.push(saved);
+      }
+
+      if (i < comments.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+    }
+
+    res.json({ results, completed: results.filter((item) => item.status === 'completed').length });
+  } catch (error) { next(error); }
+});
+
 app.post('/api/neighbors/open', async (req, res, next) => {
   try {
     const blogIds = [...new Set((req.body?.blogIds || []).map(String))].slice(0, 5);
@@ -623,10 +732,53 @@ app.post('/api/neighbors/add', async (req, res, next) => {
 app.get('/api/blog/trends', async (_req, res, next) => {
   try {
     const cacheAge = Date.now() - trendCache.loadedAt;
-    if (!trendCache.items.length || cacheAge > 5 * 60 * 1000) {
+    const forceRefresh = String(_req.query?.refresh || '').toLowerCase() === 'true';
+    if (forceRefresh || !trendCache.items.length || cacheAge > 5 * 60 * 1000) {
       trendCache = { loadedAt: Date.now(), items: await fetchKoreanTrends({ limit: 12 }) };
     }
     res.json({ items: trendCache.items, refreshedAt: new Date(trendCache.loadedAt).toISOString() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/blog/my-recommendations', async (req, res, next) => {
+  try {
+    if (!browserSession.connected) {
+      return res.status(400).json({ error: '먼저 네이버 계정을 연결해주세요.' });
+    }
+    const analysis = await browserSession.analyzeMyBlogKeywords();
+    let aiResult = {
+      summary: '내 블로그의 최근 포스팅을 기반으로 분석된 추천 소통 주제입니다.',
+      audience: '해당 관심사를 공유하는 네이버 블로그 이웃',
+      targets: [],
+      method: 'fallback'
+    };
+    try {
+      aiResult = await embeddedLlama.analyzeBlogTargetKeywords({
+        texts: analysis.texts || [],
+        fallbackKeywords: analysis.keywords || []
+      });
+    } catch (err) {
+      console.warn(`[MyBlogAnalysis] LLM analysis fallback: ${err.message}`);
+    }
+    const targets = (aiResult.targets && aiResult.targets.length)
+      ? aiResult.targets
+      : (analysis.keywords || []).map((kw, idx) => ({
+          keyword: kw,
+          reason: '최근 작성한 글에서 반복적으로 확인된 핵심 키워드',
+          score: Math.max(50, 92 - idx * 6)
+        }));
+
+    res.json({
+      success: true,
+      blogUrl: analysis.blogUrl,
+      analyzedCount: analysis.analyzedTextCount,
+      summary: aiResult.summary,
+      audience: aiResult.audience,
+      targets,
+      fallbackKeywords: analysis.keywords || []
+    });
   } catch (error) {
     next(error);
   }

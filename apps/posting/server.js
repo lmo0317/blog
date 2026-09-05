@@ -20,6 +20,7 @@ import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-re
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { ImageModelManager } from './lib/image-model-manager.js';
 import { contentSimilarity, PostHistoryStore } from './lib/post-history.js';
+import { CodexAccountClient } from './lib/codex-account-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
@@ -47,6 +48,10 @@ const imageModelManager = new ImageModelManager({
 });
 await imageModelManager.init();
 const postHistoryStore = new PostHistoryStore(path.join(__dirname, '.data', 'published-post-history.json'));
+const codexAccountClient = new CodexAccountClient({
+  appDir: __dirname,
+  imagesDir: path.join(__dirname, '.images')
+});
 
 const browserSession = new NaverBrowserSession({
   headless: String(process.env.NAVER_HEADLESS).toLowerCase() === 'true',
@@ -97,6 +102,20 @@ setInterval(() => {
 }, 20 * 60 * 1000);
 let publishing = false;
 let trendCache = { loadedAt: 0, items: [] };
+const generationProgress = new Map();
+
+function setGenerationProgress(id, update) {
+  if (!id) return;
+  const previous = generationProgress.get(id) || { startedAt: Date.now() };
+  generationProgress.set(id, { ...previous, ...update, updatedAt: Date.now() });
+}
+
+setInterval(() => {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  for (const [id, progress] of generationProgress) {
+    if ((progress.updatedAt || 0) < cutoff) generationProgress.delete(id);
+  }
+}, 10 * 60 * 1000).unref();
 
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -153,8 +172,19 @@ app.get('/generated-images/thumb/:filename', async (req, res) => {
 
 app.use('/generated-images', express.static(imagesStorageDir, { etag: false, maxAge: 0 }));
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, connected: browserSession.connected });
+app.get('/api/health', async (_req, res) => {
+  const gpt = await codexAccountClient.status();
+  res.json({ ok: true, connected: browserSession.connected, gpt });
+});
+
+app.get('/api/gpt/status', async (_req, res) => {
+  res.json(await codexAccountClient.status());
+});
+
+app.get('/api/blog/generation-status/:id', (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[a-zA-Z0-9-]{8,80}$/.test(id)) return res.status(400).json({ error: '잘못된 작업 ID입니다.' });
+  res.json(generationProgress.get(id) || { status: 'waiting', message: '생성 작업 시작을 기다리는 중' });
 });
 
 app.post('/api/naver/login', async (req, res, next) => {
@@ -734,17 +764,12 @@ app.post('/api/blog/deals/draft', async (req, res, next) => {
     const notes = String(req.body?.notes || '').trim();
     if (notes.length > 2000) return res.status(400).json({ error: '간략한 내용과 추가 요청은 합계 2,000자 이하로 입력해주세요.' });
 
-    const activeEndpoint = await resolveActiveLlmEndpoint();
-    const targetModel = activeEndpoint.model;
-    llmClient.baseUrl = activeEndpoint.baseUrl;
-    llmClient.model = targetModel;
-
-    const post = await llmClient.generateDealsBlogPost({
+    const post = await codexAccountClient.generateDealsBlogPost({
       deals: deals.slice(0, 5),
       tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
       length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
       notes,
-      model: targetModel
+      model: codexAccountClient.model
     });
 
     const dealImages = deals.slice(0, 5).map((deal, index) => {
@@ -769,10 +794,10 @@ app.post('/api/blog/deals/draft', async (req, res, next) => {
       deals,
       dealImages,
       sourceUrl: 'https://www.algumon.com/n/deal/rank',
-      model: targetModel,
-      engineType: activeEndpoint.type,
-      engineLabel: activeEndpoint.label,
-      serverUrl: activeEndpoint.baseUrl
+      model: codexAccountClient.model,
+      engineType: 'chatgpt_account',
+      engineLabel: '로그인된 GPT 계정',
+      serverUrl: ''
     });
   } catch (error) {
     next(error);
@@ -784,20 +809,25 @@ app.get('/api/blog/prompt-template', (_req, res) => {
 });
 
 app.post('/api/blog/draft', async (req, res, next) => {
+  const generationId = /^[a-zA-Z0-9-]{8,80}$/.test(String(req.body?.generationId || '')) ? String(req.body.generationId) : '';
   try {
+    setGenerationProgress(generationId, { status: 'running', phase: 'prepare', message: '입력 내용을 확인하는 중' });
     const topic = String(req.body?.topic || '').trim();
     const notes = String(req.body?.notes || '').trim();
-    if (topic.length < 2 || topic.length > 200) return res.status(400).json({ error: '작성 주제를 2~200자로 입력해주세요.' });
-    if (notes.length > 3000) return res.status(400).json({ error: '추가 요청은 3,000자 이하로 입력해주세요.' });
+    if (topic.length < 2 || topic.length > 200) {
+      const message = '작성 주제를 2~200자로 입력해주세요.';
+      setGenerationProgress(generationId, { status: 'error', phase: 'validation', message });
+      return res.status(400).json({ error: message });
+    }
+    if (notes.length > 3000) {
+      const message = '추가 요청은 3,000자 이하로 입력해주세요.';
+      setGenerationProgress(generationId, { status: 'error', phase: 'validation', message });
+      return res.status(400).json({ error: message });
+    }
     let sourceUrl = normalizeHttpUrl(req.body?.sourceUrl);
     const newsTitle = String(req.body?.newsTitle || '').trim().slice(0, 500);
     const source = String(req.body?.source || '').trim().slice(0, 100);
     const promptConfig = normalizePromptConfig(req.body?.promptConfig);
-
-    const activeEndpoint = await resolveActiveLlmEndpoint();
-    const targetModel = activeEndpoint.model;
-    llmClient.baseUrl = activeEndpoint.baseUrl;
-    llmClient.model = targetModel;
 
     const avoidHistory = await postHistoryStore.recent(25);
     const promptUrl = `${topic}\n${notes}`.match(/https?:\/\/[^\s<>()]+/i)?.[0] || '';
@@ -805,10 +835,12 @@ app.post('/api/blog/draft', async (req, res, next) => {
     let post;
     let resolvedSourceTitle = newsTitle || source || '';
     if (sourceUrl) {
+      setGenerationProgress(generationId, { phase: 'source', message: '링크의 원문 내용을 분석하는 중' });
       const extracted = await extractArticleContent(sourceUrl);
       resolvedSourceTitle = extracted.title || resolvedSourceTitle;
       const promptWithoutUrl = notes.replace(promptUrl, '').trim();
-      post = await llmClient.generateArticleRewriteBlogPost({
+      setGenerationProgress(generationId, { phase: 'writing', message: 'GPT가 원문을 재해석해 본문을 작성하는 중' });
+      post = await codexAccountClient.generateArticleRewriteBlogPost({
         sourceTitle: extracted.title || newsTitle || topic,
         sourceContent: extracted.content,
         sourceUrl,
@@ -816,12 +848,13 @@ app.post('/api/blog/draft', async (req, res, next) => {
         length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
         notes: promptWithoutUrl,
         customFocus: topic,
-        model: targetModel,
+        model: codexAccountClient.model,
         avoidHistory,
         promptConfig
       });
     } else {
-      post = await llmClient.generateBlogPost({
+      setGenerationProgress(generationId, { phase: 'writing', message: 'GPT가 제목과 본문을 작성하는 중' });
+      post = await codexAccountClient.generateBlogPost({
         topic,
         newsTitle,
         source,
@@ -829,7 +862,7 @@ app.post('/api/blog/draft', async (req, res, next) => {
         tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
         length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
         notes,
-        model: targetModel,
+        model: codexAccountClient.model,
         avoidHistory,
         promptConfig
       });
@@ -843,26 +876,29 @@ app.post('/api/blog/draft', async (req, res, next) => {
     const imageStyle = String(req.body?.imageStyle || 'photorealistic');
     let autoImages = [];
     try {
-      if (imageModelManager.activeModelId !== 'pollinations') await embeddedLlama.stop();
-      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle, imageModelManager });
+      setGenerationProgress(generationId, { phase: 'image', current: 0, total: 3, message: '본문 작성 완료 · 이미지 생성을 준비하는 중' });
+      autoImages = await codexAccountClient.generateImagesForPost(post, {
+        style: imageStyle,
+        onProgress: (progress) => setGenerationProgress(generationId, progress)
+      });
     } catch (err) {
-      console.error('Failed to generate AI drawings:', err);
-      if (imageModelManager.activeModelId !== 'pollinations') {
-        throw new Error(`로컬 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
-      }
+      console.error('Failed to generate GPT images:', err);
+      throw new Error(`GPT 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
     }
 
+    setGenerationProgress(generationId, { status: 'complete', phase: 'complete', current: 3, total: 3, message: '글과 이미지 3장 생성 완료' });
     res.json({
       ...post,
       autoImages,
       images: autoImages,
-      model: targetModel,
-      engineType: activeEndpoint.type,
-      engineLabel: activeEndpoint.label,
-      serverUrl: activeEndpoint.baseUrl,
+      model: codexAccountClient.model,
+      engineType: 'chatgpt_account',
+      engineLabel: '로그인된 GPT 계정',
+      serverUrl: '',
       sourceUrl
     });
   } catch (error) {
+    setGenerationProgress(generationId, { status: 'error', phase: 'error', message: error.message || '알 수 없는 생성 오류' });
     next(error);
   }
 });
@@ -900,13 +936,8 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
       return res.status(400).json({ error: '참조할 기사 내용이나 텍스트를 충분히 입력해주세요.' });
     }
 
-    const activeEndpoint = await resolveActiveLlmEndpoint();
-    const targetModel = activeEndpoint.model;
-    llmClient.baseUrl = activeEndpoint.baseUrl;
-    llmClient.model = targetModel;
-
     const avoidHistory = await postHistoryStore.recent(25);
-    const post = await llmClient.generateArticleRewriteBlogPost({
+    const post = await codexAccountClient.generateArticleRewriteBlogPost({
       sourceTitle,
       sourceContent,
       sourceUrl,
@@ -914,7 +945,7 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
       length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
       notes,
       customFocus,
-      model: targetModel,
+      model: codexAccountClient.model,
       avoidHistory
     });
     const duplicate = await postHistoryStore.findSimilar({ topic: sourceTitle, title: post.title, content: post.content });
@@ -928,13 +959,10 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
     let autoImages = [];
 
     try {
-      if (imageModelManager.activeModelId !== 'pollinations') await embeddedLlama.stop();
-      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle, imageModelManager });
+      autoImages = await codexAccountClient.generateImagesForPost(post, { style: imageStyle });
     } catch (err) {
-      console.error('Failed to generate AI drawings:', err);
-      if (imageModelManager.activeModelId !== 'pollinations') {
-        throw new Error(`로컬 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
-      }
+      console.error('Failed to generate GPT images:', err);
+      throw new Error(`GPT 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
     }
 
     res.json({
@@ -942,10 +970,10 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
       autoImages,
       images: autoImages,
       sourceUrl,
-      model: targetModel,
-      engineType: activeEndpoint.type,
-      serverUrl: activeEndpoint.baseUrl,
-      engineLabel: activeEndpoint.label
+      model: codexAccountClient.model,
+      engineType: 'chatgpt_account',
+      serverUrl: '',
+      engineLabel: '로그인된 GPT 계정'
     });
   } catch (error) {
     next(error);
@@ -1045,12 +1073,51 @@ app.post('/api/blog/publish', async (req, res, next) => {
       content: appendImageAttributions(req.body?.content, downloadedImages),
       tags: req.body?.tags,
       images: downloadedImages,
-      isDeals: req.body?.isDeals === true
+      isDeals: req.body?.isDeals === true,
+      categoryName: req.body?.categoryName
     });
     if (result?.status === 'published') {
       await postHistoryStore.add({ title: req.body?.title, content: req.body?.content, url: result.url, sourceTopic: req.body?.sourceTopic });
     }
     res.json(result);
+  } catch (error) {
+    next(error);
+  } finally {
+    await cleanupDownloadedImages(downloadedImages);
+    publishing = false;
+  }
+});
+
+app.post('/api/blog/update', async (req, res, next) => {
+  if (publishing) return res.status(409).json({ error: '다른 게시글을 발행 또는 수정 중입니다. 잠시 후 다시 시도해주세요.' });
+  let downloadedImages = [];
+  try {
+    if (req.body?.confirmed !== true || req.body?.confirmationText !== '수정') {
+      return res.status(400).json({ error: '내용을 검토하고 수정 동의를 확인해주세요.' });
+    }
+    publishing = true;
+    const requestedImages = (Array.isArray(req.body?.images) ? req.body.images : []).slice(0, 5);
+    downloadedImages = await downloadCommonsImages(
+      requestedImages,
+      path.join(__dirname, '.playwright', 'publish-uploads')
+    );
+    if (requestedImages.length && downloadedImages.length !== requestedImages.length) {
+      throw new Error(`선택한 이미지 ${requestedImages.length}장 중 ${downloadedImages.length}장만 준비되었습니다.`);
+    }
+    const ready = await browserSession.prepareBlogPostUpdate({
+      blogId: req.body?.blogId,
+      logNo: req.body?.logNo,
+      title: req.body?.title,
+      content: req.body?.content,
+      tags: req.body?.tags,
+      images: downloadedImages,
+      links: req.body?.links
+    });
+    if (ready?.status !== 'ready' || ready?.imageCount !== downloadedImages.length) {
+      throw new Error(`수정 화면 검증에 실패했습니다. 예상 이미지 ${downloadedImages.length}장, 확인 ${ready?.imageCount ?? 0}장`);
+    }
+    const result = await browserSession.confirmPreparedBlogPostUpdate();
+    res.json({ ...result, imageCount: ready.imageCount });
   } catch (error) {
     next(error);
   } finally {

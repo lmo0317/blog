@@ -78,21 +78,15 @@ export class NeighborAutomationManager extends EventEmitter {
       throw new Error('검색 키워드를 입력해주세요.');
     }
 
-    const cleanTarget = Math.min(Math.max(Number(targetCount) || 30, 1), 100);
-    const cleanMinDelay = Math.max(Number(minDelay) || 15, 5);
-    const cleanMaxDelay = Math.max(Number(maxDelay) || 30, cleanMinDelay);
+    const cleanTarget = Math.min(Math.max(Number(targetCount) || 30, 1), 500);
+    const cleanMinDelay = Math.max(Number(minDelay) || 45, 10);
+    const cleanMaxDelay = Math.max(Number(maxDelay) || 90, cleanMinDelay);
     const cleanMessage = String(message || '').trim() || '안녕하세요! 블로그 글 유익하게 보고 갑니다. 서로이웃 맺고 소통해요 :)';
     const cleanActiveDays = Number(activeWithinDays) || 0;
 
-    // Daily limit check (Naver limit: 100 per day)
+    // Daily limit check removed by user request (runs continuously until Naver server itself returns limit_reached)
     const todayCount = await this.historyStore.getTodayCount();
-    if (todayCount >= 100) {
-      this.state = 'limit_reached';
-      this.log(`오늘 이미 100건의 서로이웃을 신청하여 네이버 일일 한도에 도달했습니다. 내일 다시 시도해주세요.`, 'warn');
-      return this.getStatus();
-    }
-
-    const effectiveTarget = Math.min(cleanTarget, 100 - todayCount);
+    const effectiveTarget = cleanTarget;
 
     this.config = {
       keyword: cleanKeyword,
@@ -303,9 +297,24 @@ export class NeighborAutomationManager extends EventEmitter {
           break;
         }
 
-        // Random delay to mimic human behavior
-        const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
-        this.log(`⏳ 다음 신청까지 ${delaySeconds}초간 대기합니다 (계정 보호 랜덤 딜레이)...`, 'delay');
+        // Periodic session break every 15 actions to avoid account protection flag
+        if (this.stats.processedCount > 0 && this.stats.processedCount % 15 === 0) {
+          const sessionBreakSec = Math.floor(Math.random() * 61) + 120; // 120~180s break
+          this.log(`☕ [계정 보호 휴식] ${this.stats.processedCount}건 연속 처리 후 ${sessionBreakSec}초간 숨고르기 휴식을 취합니다...`, 'delay');
+          for (let s = sessionBreakSec; s > 0; s--) {
+            if (this.shouldStop) break;
+            this.stats.delayCountdown = s;
+            this.emit('status', this.getStatus());
+            await new Promise((r) => setTimeout(r, 1000));
+            if (this.isPaused && this.pausePromise) await this.pausePromise;
+          }
+        }
+
+        // Random delay with human-like jitter to mimic human behavior
+        const baseDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+        const jitter = Math.floor(Math.random() * 21) - 5; // -5 to +15s jitter
+        const delaySeconds = Math.max(baseDelay + jitter, 20);
+        this.log(`⏳ 다음 신청까지 ${delaySeconds}초간 대기합니다 (계정 보호 랜덤 딜레이 +${jitter >= 0 ? jitter : 0}s)...`, 'delay');
 
         for (let s = delaySeconds; s > 0; s--) {
           if (this.shouldStop) break;

@@ -67,7 +67,7 @@ export async function ensureComfyUiRunning({ baseUrl = COMFYUI_BASE_URL, maxWait
   return startingPromise;
 }
 
-export function buildZImageTurboPromptWorkflow({ prompt, width = 1024, height = 768, seed, steps = 8 }) {
+export function buildZImageTurboPromptWorkflow({ prompt, width = 1024, height = 768, seed, steps = 10 }) {
   const actualSeed = Number.isInteger(seed) ? seed : Math.floor(Math.random() * 1000000000);
   return {
     "30": {
@@ -106,9 +106,10 @@ export function buildZImageTurboPromptWorkflow({ prompt, width = 1024, height = 
       }
     },
     "33": {
-      class_type: "ConditioningZeroOut",
+      class_type: "CLIPTextEncode",
       inputs: {
-        conditioning: ["27", 0]
+        text: "ugly, deformed, bad anatomy, bad proportions, extra limbs, extra arms, extra legs, mutated hands, missing fingers, fused fingers, distorted face, blurry, low quality, noise, plastic skin, oversaturated, watermark, signature, cartoon, 3d render",
+        clip: ["30", 0]
       }
     },
     "13": {

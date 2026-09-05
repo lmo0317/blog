@@ -261,11 +261,47 @@ draftForm?.addEventListener('submit', async (event) => {
   }
 });
 
-function setAutoPostProgress(message = '') {
+function setAutoPostProgress(message = '', type = 'running') {
   const progress = $('#autoPostProgress');
   if (!progress) return;
   progress.textContent = message;
   progress.classList.toggle('hidden', !message);
+  progress.style.whiteSpace = 'pre-line';
+  progress.style.background = type === 'error' ? '#fff1f2' : type === 'complete' ? '#ecfdf3' : '#edf6ff';
+  progress.style.color = type === 'error' ? '#b42318' : type === 'complete' ? '#167346' : '#24527a';
+  progress.style.border = type === 'error' ? '1px solid #fda29b' : type === 'complete' ? '1px solid #86efac' : '1px solid #bfdbfe';
+}
+
+function startGenerationProgress(generationId) {
+  const startedAt = Date.now();
+  let latest = '생성 작업을 서버에 전달하는 중';
+  let stopped = false;
+  const render = () => {
+    const seconds = Math.floor((Date.now() - startedAt) / 1000);
+    setAutoPostProgress(`${latest}\n경과 시간 ${Math.floor(seconds / 60)}분 ${String(seconds % 60).padStart(2, '0')}초`);
+  };
+  const elapsedTimer = setInterval(render, 1000);
+  const pollTimer = setInterval(async () => {
+    if (stopped) return;
+    try {
+      const progress = await api(`/api/blog/generation-status/${generationId}`);
+      latest = progress.message || latest;
+      if (progress.status === 'error') {
+        stopped = true;
+        clearInterval(elapsedTimer);
+        clearInterval(pollTimer);
+        setAutoPostProgress(`오류 발생 (${progress.phase || '생성'})\n${latest}`, 'error');
+      } else {
+        render();
+      }
+    } catch {}
+  }, 1200);
+  render();
+  return () => {
+    stopped = true;
+    clearInterval(elapsedTimer);
+    clearInterval(pollTimer);
+  };
 }
 
 $('#articleDraftForm')?.addEventListener('submit', async (e) => {
@@ -277,30 +313,24 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
 
   const btn = $('#articleDraftBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="btn-icon">⏳</span> <strong>LLM이 글과 이미지를 만드는 중...</strong>';
+  btn.innerHTML = '<span class="btn-icon">⏳</span> <strong>GPT가 글과 이미지 3장을 만드는 중...</strong>';
   $('#llmStatus').className = 'status';
-  setAutoPostProgress(/https?:\/\//i.test(brief) ? '1/3 내용 속 링크를 분석하고 사용자 요청을 해석하고 있습니다…' : '1/3 주제와 사용자 요청을 바탕으로 글을 구성하고 있습니다…');
+  const generationId = crypto.randomUUID();
+  const stopProgress = startGenerationProgress(generationId);
 
   try {
     state.sourceTopic = topic;
     const tone = $('#articleTone')?.value || 'friendly';
     const length = $('#articleLength')?.value || 'medium';
     const notes = $('#articleNotes')?.value?.trim() || '';
-    const model = $('#articleModelSelect')?.value || '';
     const imageStyle = $('#articleImageStyle')?.value || 'photorealistic';
-    const imageModelId = $('#articleImageModelSelect')?.value || '';
 
-    if (imageModelId && imageModelId !== activeImageModelId) {
-      await api('/api/image-models/select', { method: 'POST', body: JSON.stringify({ modelId: imageModelId }) });
-      activeImageModelId = imageModelId;
-    }
-
-    setAutoPostProgress('2/3 Gemma 4가 제목과 본문을 작성하고 문단별 이미지를 생성하고 있습니다…');
-    const payload = { topic, notes: [brief, notes].filter(Boolean).join('\n\n').slice(0, 3000), tone, length, model, imageStyle, promptConfig };
+    const payload = { generationId, topic, notes: [brief, notes].filter(Boolean).join('\n\n').slice(0, 3000), tone, length, imageStyle, promptConfig };
     const data = await api('/api/blog/draft', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
+    stopProgress();
 
     $('#postTitle').value = data.title;
     $('#postContent').value = data.content;
@@ -313,7 +343,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     state.selectedImages = new Set(state.images.map((_, i) => i));
     renderImages();
 
-    $('#draftModel').textContent = data.engineLabel || data.model || '112 로컬 LLM';
+    $('#draftModel').textContent = data.engineLabel || '로그인된 GPT 계정';
     if (data.sourceUrl) {
       renderPostSource({ sourceUrl: data.sourceUrl, source: '참조 뉴스/포스팅 원문' });
     } else {
@@ -328,19 +358,20 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     if ($('#autoPublishNow')?.checked) {
       setAutoPostProgress('3/3 생성된 글과 이미지를 네이버 블로그에 발행하고 있습니다…');
       const result = await publishCurrentDraft();
-      if (result?.status === 'published') setAutoPostProgress('완료: 네이버 블로그에 자동 포스팅했습니다.');
+      if (result?.status === 'published') setAutoPostProgress('완료: 네이버 블로그에 자동 포스팅했습니다.', 'complete');
       else setAutoPostProgress('네이버 발행 창이 열렸습니다. 화면에서 최종 상태를 확인해주세요.');
     } else {
-      setAutoPostProgress('완료: 글과 이미지가 준비됐습니다. 아래에서 검토 후 발행할 수 있습니다.');
+      setAutoPostProgress('완료: 글과 이미지가 준비됐습니다. 아래에서 검토 후 발행할 수 있습니다.', 'complete');
       toast(`✨ [${data.engineLabel || data.model}] 글과 맞춤 이미지 생성이 완료되었습니다!`);
     }
   } catch (error) {
+    stopProgress();
     $('#llmStatus').className = 'status';
-    setAutoPostProgress(`실패: ${error.message}`);
+    setAutoPostProgress(`오류 발생\n${error.message}`, 'error');
     toast(`AI 자동 포스팅 실패: ${error.message}`, true);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="btn-icon">✨</span> <strong>LLM 글 작성 + 이미지 자동 생성</strong>';
+    btn.innerHTML = '<span class="btn-icon">✨</span> <strong>GPT 글 작성 + 이미지 3장 자동 생성</strong>';
   }
 });
 
@@ -610,7 +641,7 @@ async function refreshDailySummary() {
   try {
     const summary = await api('/api/neighbors/summary');
     if ($('#dailyLimitBadge')) {
-      $('#dailyLimitBadge').innerHTML = `📊 오늘 신청: <strong>${summary.todayCount || 0}</strong> / 100건`;
+      $('#dailyLimitBadge').innerHTML = `📊 오늘 누적 신청: <strong>${summary.todayCount || 0}</strong>건`;
     }
   } catch {}
 }
@@ -787,9 +818,9 @@ $('#startAutoBtn')?.addEventListener('click', async () => {
   const keyword = $('#autoKeyword')?.value?.trim();
   if (!keyword) return toast('타겟 검색 키워드를 입력해주세요.', true);
 
-  const targetCount = Number($('#targetCount')?.value) || 30;
-  const minDelay = Number($('#minDelay')?.value) || 15;
-  const maxDelay = Number($('#maxDelay')?.value) || 30;
+  const targetCount = Number($('#targetCount')?.value) || 50;
+  const minDelay = Number($('#minDelay')?.value) || 45;
+  const maxDelay = Number($('#maxDelay')?.value) || 90;
   const message = $('#autoMessage')?.value?.trim() || '';
   const activeWithinDays = Number($('#activeFilter')?.value) || 0;
 
@@ -1034,7 +1065,6 @@ let activeImageModelId = 'pollinations';
 let imageModelRefreshTimer = null;
 
 function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
-  const globalStatus = $('#globalEngineStatusText');
   const summaryModel = $('#summaryModelName');
   const summaryEndpoint = $('#summaryEndpointUrl');
   const currentBadge = $('#currentEngineBadge');
@@ -1042,42 +1072,21 @@ function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
   if (activeModel) {
     if (summaryModel) summaryModel.textContent = `${activeModel.name} (${activeModel.sizeFormatted || ''})`;
     if (summaryEndpoint) summaryEndpoint.textContent = activeEndpoint?.baseUrl || 'http://127.0.0.1:8089';
-    if (globalStatus) {
-      globalStatus.textContent = `⚡ 내 PC 로컬 GPU (${activeModel.name})`;
-      globalStatus.style.color = '#234e52';
-    }
     if (currentBadge) {
       currentBadge.className = 'pill pill-green';
       currentBadge.textContent = `⚡ ${activeModel.name}`;
     }
-    if ($('#llmStatus')) {
-      $('#llmStatus').className = 'status online';
-      $('#llmStatus').innerHTML = `<i></i> ⚡ 로컬 GPU (${escapeHtml(activeModel.name)})`;
-    }
   } else {
     if (summaryModel) summaryModel.textContent = '미설치 (Gemma 모델 다운로드 필요)';
     if (summaryEndpoint) summaryEndpoint.textContent = '-';
-    if (globalStatus) {
-      globalStatus.textContent = '⚠️ AI 모델 다운로드 필요';
-      globalStatus.style.color = '#c53030';
-    }
     if (currentBadge) {
       currentBadge.className = 'pill pill-gray';
       currentBadge.textContent = '미설치';
-    }
-    if ($('#llmStatus')) {
-      $('#llmStatus').className = 'status offline';
-      $('#llmStatus').innerHTML = `<i></i> ⚠️ 모델 설치 필요`;
     }
   }
 }
 
 function initSettingsController() {
-  // Global Header Status Click
-  $('#globalEngineStatusBox')?.addEventListener('click', () => {
-    setActiveTab('settings', true);
-  });
-
   // 1. Settings Naver Login & Logout
   $('#settingsAccountForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1417,14 +1426,14 @@ function initEngagementAutomation() {
     const keyword = $('#engKeyword')?.value?.trim();
     if (!keyword) return toast('소통 타겟 키워드를 입력해주세요.', true);
 
-    const targetCount = Number($('#engTargetCount')?.value) || 20;
+    const targetCount = Number($('#engTargetCount')?.value) || 50;
     const doLike = $('#engDoLike')?.checked ?? true;
     const doComment = $('#engDoComment')?.checked ?? true;
     const doNeighbor = $('#engDoNeighbor')?.checked ?? true;
     const neighborMessage = $('#engNeighborMessage')?.value?.trim() || '안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊';
     const tone = $('#engTone')?.value || 'friendly';
-    const minDelay = Number($('#engMinDelay')?.value) || 15;
-    const maxDelay = Number($('#engMaxDelay')?.value) || 30;
+    const minDelay = Number($('#engMinDelay')?.value) || 45;
+    const maxDelay = Number($('#engMaxDelay')?.value) || 90;
 
     if (!doLike && !doComment && !doNeighbor) {
       return toast('공감(❤️), AI 댓글(💬), 서로이웃(👥) 중 최소 1개 이상을 선택해주세요.', true);
@@ -1608,6 +1617,10 @@ function appendEngagementLog(entry) {
 
 // Initial health check and session restoration
 api('/api/health').then(async (data) => {
+  if ($('#llmStatus')) {
+    $('#llmStatus').className = `status ${data.gpt?.connected ? 'online' : 'offline'}`;
+    $('#llmStatus').innerHTML = `<i></i> ${data.gpt?.connected ? 'GPT 계정 연결됨' : 'GPT 로그인 필요'}`;
+  }
   initSettingsController();
   initAiHardwareAndModels();
   initModelEvents();

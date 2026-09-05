@@ -13,33 +13,46 @@
 <body>
   <main class="shell">
     <header class="app-header">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <div class="brand"><span class="brand-mark">N</span> 이웃메이트 Engage <span class="pill">LOCAL GPU</span></div>
-        <div class="header-engine-indicator" style="display:flex; align-items:center; gap:8px; background:#e6fffa; border:1px solid #b2f5ea; border-radius:10px; padding:6px 14px; cursor:pointer;" id="globalEngineStatusBox" title="클릭하여 AI 모델 설정을 확인하세요">
-          <span style="font-size:12px; color:#234e52; font-weight:600;">🚀 AI 엔진:</span>
-          <strong id="globalEngineStatusText" style="font-size:13px; color:#285e61;">⚡ 내 PC 로컬 GPU (모델 확인 중)</strong>
-          <span class="pill pill-green small" style="font-size:11px;">설정 ⚙️</span>
+      <div class="header-left">
+        <div class="brand">
+          <span class="brand-mark">N</span>
+          <span class="brand-title">이웃메이트 Engage</span>
+          <span class="pill pill-version">v2.4 Desktop</span>
         </div>
       </div>
-      <p style="margin-top:6px;">네이버 블로그 공감 · AI 댓글 · 서로이웃 전용 프로그램</p>
+      <div class="header-right">
+        <div class="header-account-badge offline" id="topAccountBadge" title="네이버 계정 연결 상태 (클릭 시 설정으로 이동)">
+          <span class="status-dot"></span>
+          <span id="topAccountStatusText">네이버 로그인 필요</span>
+        </div>
+        <div class="header-engine-indicator" id="globalEngineStatusBox" title="클릭하여 AI 모델 설정을 확인하세요">
+          <span style="font-size:13px;">🚀</span>
+          <strong id="globalEngineStatusText">⚡ 내 PC 로컬 GPU (모델 확인 중)</strong>
+          <span class="pill-settings">설정 ⚙️</span>
+        </div>
+      </div>
     </header>
 
     <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
+      <button class="workspace-tab active" id="engagementTab" type="button" role="tab" aria-selected="true" aria-controls="engagementWorkspace" data-tab="engagement">
+        <span class="tab-icon" aria-hidden="true">❤️</span>
+        <span><strong>공감 & AI 맞춤 댓글</strong></span>
+      </button>
+      <button class="workspace-tab" id="commentManagementTab" type="button" role="tab" aria-selected="false" aria-controls="commentManagementWorkspace" data-tab="comment-management" tabindex="-1">
+        <span class="tab-icon" aria-hidden="true">💬</span>
+        <span><strong>이웃 관리</strong></span>
+      </button>
       <button class="workspace-tab" id="settingsTab" type="button" role="tab" aria-selected="false" aria-controls="settingsWorkspace" data-tab="settings" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">⚙️</span>
-        <span><strong>공통 환경 설정</strong><small>네이버 계정 &amp; Gemma AI 모델</small></span>
+        <span><strong>공통 환경 설정</strong></span>
       </button>
-      <button class="workspace-tab active" id="neighborTab" type="button" role="tab" aria-selected="true" aria-controls="neighborWorkspace" data-tab="neighbor">
+      <button class="workspace-tab hidden" id="neighborTab" type="button" role="tab" aria-selected="false" aria-controls="neighborWorkspace" data-tab="neighbor" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">＋</span>
-        <span><strong>서로이웃 추가</strong><small>타겟 탐색 및 자동 신청</small></span>
+        <span><strong>서로이웃 추가</strong></span>
       </button>
-      <button class="workspace-tab" id="engagementTab" type="button" role="tab" aria-selected="false" aria-controls="engagementWorkspace" data-tab="engagement" tabindex="-1">
-        <span class="tab-icon" aria-hidden="true">❤️</span>
-        <span><strong>공감 & AI 맞춤 댓글</strong><small>내 PC 로컬 GPU 자동 소통</small></span>
-      </button>
-      <button class="workspace-tab" id="publishTab" type="button" role="tab" aria-selected="false" aria-controls="publishWorkspace" data-tab="publish" tabindex="-1">
+      <button class="workspace-tab hidden" id="publishTab" type="button" role="tab" aria-selected="false" aria-controls="publishWorkspace" data-tab="publish" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">✍️</span>
-        <span><strong>AI 자동 포스팅</strong><small>핫딜 &amp; 뉴스/기사 재해석</small></span>
+        <span><strong>AI 자동 포스팅</strong></span>
       </button>
     </nav>
 
@@ -114,13 +127,13 @@
       </section>
     </section>
 
-    <section class="workspace-panel" id="neighborWorkspace" role="tabpanel" aria-labelledby="neighborTab" data-tab-panel="neighbor">
+    <section class="workspace-panel hidden" id="neighborWorkspace" role="tabpanel" aria-labelledby="neighborTab" data-tab-panel="neighbor">
       <!-- Top Account & Daily Status Summary -->
       <section class="panel" id="accountPanel">
         <div class="panel-heading">
           <div><span class="eyebrow">STEP 01 · ACCOUNT</span><h2>네이버 계정 연결 현황</h2></div>
           <div class="header-badges">
-            <span class="daily-badge" id="dailyLimitBadge">📊 오늘 신청: <strong>0</strong> / 100건</span>
+            <span class="daily-badge" id="dailyLimitBadge">📊 오늘 누적 신청: <strong>0</strong>건</span>
             <span class="status" id="accountStatus"><i></i> 연결 안 됨</span>
             <button class="button ghost small" id="historyModalBtn" type="button">📋 신청 이력 보기</button>
           </div>
@@ -156,10 +169,15 @@
         <form id="autoConfigForm" class="auto-config-form">
           <div class="form-row-grid">
             <div class="form-group flex-2">
-              <label for="autoKeyword"><strong>관심 타겟 키워드</strong> <small>(해당 주제로 글을 쓴 블로거 자동 검색)</small></label>
-              <div class="input-with-chips">
-                <input id="autoKeyword" required placeholder="예: 맛집, 여행, IT리뷰, 육아일기, 캠핑, 재테크" value="맛집">
-                <div class="chips auto-chips" aria-label="추천 키워드">
+              <div class="label-row">
+                <label for="autoKeyword"><strong>관심 타겟 키워드</strong> <small>(해당 주제로 글을 쓴 블로거 자동 검색)</small></label>
+                <button type="button" class="btn-finder-link" id="openAutoTargetFinderBtn">🎯 소통 타겟 찾기 &amp; AI 추천</button>
+              </div>
+              <div class="keyword-input-row">
+                <input id="autoKeyword" required placeholder="예: 맛집, 여행, IT리뷰, 육아일기, 캠핑, 재테크" value="맛집" class="keyword-main-input">
+                <button type="button" class="button secondary small inline-finder-btn" id="openAutoTargetFinderInlineBtn">🎯 타겟 추천</button>
+              </div>
+              <div class="chips auto-chips" aria-label="추천 키워드">
                   <button type="button">맛집</button>
                   <button type="button">여행</button>
                   <button type="button">일상</button>
@@ -185,23 +203,23 @@
 
           <div class="form-row-grid" style="margin-top:14px;">
             <div class="form-group">
-              <label for="targetCount"><strong>목표 신청 인원</strong> <small>(네이버 1일 최대 100명)</small></label>
+              <label for="targetCount"><strong>목표 신청 인원</strong> <small>(계정 보호 권장 딜레이 적용)</small></label>
               <div class="number-input-wrap">
-                <input type="number" id="targetCount" min="1" max="100" value="30" required>
+                <input type="number" id="targetCount" min="1" max="500" value="50" required>
                 <div class="quick-counts">
-                  <button type="button" data-val="10">10명</button>
                   <button type="button" data-val="30">30명</button>
                   <button type="button" data-val="50">50명</button>
                   <button type="button" data-val="100">100명</button>
+                  <button type="button" data-val="200">200명</button>
                 </div>
               </div>
             </div>
 
             <div class="form-group">
-              <label><strong>신청 간격 (랜덤 딜레이)</strong> <small>(계정보호 무작위 간격)</small></label>
+              <label><strong>신청 간격 (랜덤 딜레이)</strong> <small>(계정보호 무작위 간격 + 가변 지터)</small></label>
               <div class="delay-inputs">
-                <input type="number" id="minDelay" min="5" max="60" value="15" style="width:70px;"> 초 ~ 
-                <input type="number" id="maxDelay" min="10" max="120" value="30" style="width:70px;"> 초 사이 무작위 지연
+                <input type="number" id="minDelay" min="10" max="180" value="45" style="width:70px;"> 초 ~ 
+                <input type="number" id="maxDelay" min="20" max="300" value="90" style="width:70px;"> 초 사이 무작위 지연
               </div>
             </div>
           </div>
@@ -350,265 +368,262 @@
     <!-- ---------------------------------------------------------------------- -->
     <section class="workspace-panel hidden" id="engagementWorkspace" role="tabpanel" aria-labelledby="engagementTab" data-tab-panel="engagement">
       
-      <!-- Hardware & VRAM AI Model Hub Card -->
-      <section class="panel" id="aiHardwarePanel">
-        <div class="panel-heading">
+      <!-- Connection Warning Banner for Engagement -->
+      <div id="engLoginBanner" class="desktop-alert-banner hidden">
+        <div class="desktop-alert-left">
+          <span class="alert-icon">⚠️</span>
           <div>
-            <span class="eyebrow">AI ENGINE & HARDWARE</span>
-            <h2>내 PC 그래픽(VRAM) & AI 모델 관리자</h2>
-          </div>
-          <div class="header-badges">
-            <span class="daily-badge" id="gpuSpecBadge">🎮 그래픽 감지 중...</span>
-            <span class="status online" id="aiEngineStatus"><i></i> AI 엔진 준비됨</span>
+            <strong>네이버 로그인이 필요합니다</strong>
+            <span>공감(❤️) 및 AI 댓글·서로이웃 신청을 진행하려면 네이버 계정 연결이 필요합니다.</span>
           </div>
         </div>
+        <button type="button" class="button small primary" id="engGoLoginBtn">계정 연결하러 가기 →</button>
+      </div>
 
-        <!-- Connection Warning Banner for Engagement -->
-        <div id="engLoginBanner" class="hidden" style="background:#fff3cd; border:1px solid #ffeeba; border-radius:8px; padding:14px 16px; margin: 10px 0 16px; display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <strong style="color:#856404; font-size:14px;">⚠️ 네이버 로그인이 필요합니다</strong>
-            <p style="color:#856404; margin:2px 0 0; font-size:12.5px;">공감(하트) 및 AI 댓글을 등록하려면 네이버 계정 연결이 필요합니다.</p>
-          </div>
-          <button type="button" class="button small primary" id="engGoLoginBtn">계정 연결하러 가기 →</button>
-        </div>
-
-        <div class="model-hub-intro">
-          <p id="hardwareRecommendText">내 컴퓨터의 그래픽카드(VRAM)에 최적화된 로컬 AI 모델을 선택하여 <strong>비용 0원</strong>으로 블로그 사진과 본문을 분석하고 자연스러운 맞춤 댓글을 자동 작성합니다.</p>
-        </div>
-
-        <!-- 3-Tier Model Cards Grid -->
-        <div class="ai-model-cards-grid" id="aiModelCardsGrid">
-          <div class="ai-model-card" data-model="gemma-4-e2b">
-            <div class="model-card-header">
-              <div>
-                <strong>모델 목록 불러오는 중</strong>
-                <span class="model-badge-sub">2.3B Effective · 1.4 GB</span>
+      <div class="desktop-workspace-grid">
+        <!-- ==================== LEFT COLUMN: Setup & Action Controls ==================== -->
+        <div class="desktop-col desktop-col-config">
+          <form id="engagementForm" class="desktop-config-form">
+            
+            <!-- Card 1: Target Keyword & Tone -->
+            <div class="desktop-card">
+              <div class="desktop-card-header">
+                <div class="card-title-group">
+                  <span class="card-badge">STEP 1</span>
+                  <h3>소통 타겟 &amp; AI 말투</h3>
+                </div>
               </div>
-              <span class="model-tier-pill">초고속 경량</span>
-            </div>
-            <p class="model-card-desc">저사양 노트북이나 내장 그래픽에서도 <strong>1초 컷</strong>으로 빠른 칭찬 댓글을 생성합니다. (RAM 2.5GB 소모)</p>
-            <div class="model-card-footer">
-              <span class="model-vram-hint">💡 권장: VRAM 3GB 이상 / CPU</span>
-              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-e2b">사용하기</button>
-            </div>
-          </div>
+              <div class="desktop-card-body">
+                <div class="form-group">
+                  <div class="label-row">
+                    <label for="engKeyword"><strong>소통 타겟 키워드</strong> <small>(쉼표로 여러 개 입력 가능)</small></label>
+                    <button type="button" class="btn-finder-link" id="openTargetFinderBtn">🎯 소통 타겟 찾기 &amp; AI 추천</button>
+                  </div>
+                  <div class="keyword-input-row">
+                    <input id="engKeyword" required placeholder="예: 맛집, 육아, 캠핑, IT리뷰, 여행" value="맛집" class="desktop-input keyword-main-input">
+                    <button type="button" class="button secondary small inline-finder-btn" id="openTargetFinderInlineBtn">🎯 타겟 추천</button>
+                  </div>
+                  <div class="chips eng-chips" id="engTrendChips" aria-label="실시간 추천 키워드"></div>
+                </div>
 
-          <div class="ai-model-card recommended" data-model="gemma-4-e4b">
-            <div class="model-card-header">
-              <div>
-                <strong>모델 목록 불러오는 중</strong>
-                <span class="model-badge-sub">4.5B Effective · 2.8 GB</span>
-              </div>
-              <span class="model-tier-pill pill-gold">밸런스 고품질</span>
-            </div>
-            <p class="model-card-desc">이미지 속 디테일(음식, 인테리어, 소품 등)을 정밀하게 파악하여 <strong>가장 자연스러운 감상평</strong>을 작성합니다.</p>
-            <div class="model-card-footer">
-              <span class="model-vram-hint">💡 권장: VRAM 6GB~8GB (RTX 3060/4060)</span>
-              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-e4b">사용하기</button>
-            </div>
-          </div>
-
-          <div class="ai-model-card" data-model="gemma-4-12b">
-            <div class="model-card-header">
-              <div>
-                <strong>모델 목록 불러오는 중</strong>
-                <span class="model-badge-sub">12B Flagship · 7.8 GB</span>
-              </div>
-              <span class="model-tier-pill pill-purple">최고급 고지능</span>
-            </div>
-            <p class="model-card-desc">최고 수준의 멀티모달 이해력과 장문 포스팅까지 완벽하게 소화하는 플래그십 모델입니다.</p>
-            <div class="model-card-footer">
-              <span class="model-vram-hint">💡 권장: VRAM 12GB~16GB+ (RTX 4070/5080)</span>
-              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-12b">사용하기</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Engagement Automation Form Panel -->
-      <section class="panel" id="engagementConfigPanel" style="margin-top:20px;">
-        <div class="panel-heading">
-          <div>
-            <span class="eyebrow">AUTOMATION SETUP</span>
-            <h2>공감(❤️) & AI 맞춤 댓글 소통 설정</h2>
-          </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button type="button" class="button secondary small" id="engHistoryModalBtn">📋 소통 이력 &amp; 엑셀 다운로드</button>
-            <span class="pill pill-green">답방 유도 극대화</span>
-          </div>
-        </div>
-
-        <form id="engagementForm" class="auto-config-form">
-          <div class="form-row-grid">
-            <div class="form-group flex-2">
-              <label for="engKeyword"><strong>소통 타겟 키워드</strong> <small>(쉼표로 여러 개 입력, 목표 수는 키워드당 적용)</small></label>
-              <div class="input-with-chips">
-                <input id="engKeyword" required placeholder="예: 육아, 쇼핑, 건강" value="맛집">
-                <button type="button" class="button secondary small" id="openEngTargetManagerBtn">🤖 AI 소통 타겟 관리</button>
-                <div class="chips eng-chips" aria-label="추천 키워드">
-                  <button type="button">맛집</button>
-                  <button type="button">카페투어</button>
-                  <button type="button">일상소통</button>
-                  <button type="button">IT리뷰</button>
-                  <button type="button">육아일기</button>
-                  <button type="button">여행</button>
-                  <button type="button">패션</button>
+                <div class="form-group" style="margin-top: 14px;">
+                  <label for="engTone"><strong>AI 댓글 분위기 (말투)</strong></label>
+                  <select id="engTone" class="desktop-select">
+                    <option value="friendly" selected>친근한 이웃체 (~해요! ㅎㅎ, 넘 맛있어보여요)</option>
+                    <option value="polite">정중한 소통체 (~합니다, 유익한 정보 감사합니다)</option>
+                    <option value="enthusiastic">열정 칭찬형 (와 비주얼 대박이네요! 저장해둘게요 👍)</option>
+                  </select>
                 </div>
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="engTone"><strong>AI 댓글 분위기 (말투)</strong></label>
-              <select id="engTone" class="custom-select">
-                <option value="friendly" selected>친근한 이웃체 (~해요! ㅎㅎ, 넘 맛있어보여요)</option>
-                <option value="polite">정중한 소통체 (~합니다, 유익한 정보 감사합니다)</option>
-                <option value="enthusiastic">열정 칭찬형 (와 비주얼 대박이네요! 저장해둘게요 👍)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row-grid" style="margin-top:14px;">
-            <div class="form-group">
-              <label><strong>반응 방식 선택</strong></label>
-              <div class="checkbox-group-row">
-                <label class="custom-checkbox-label">
-                  <input type="checkbox" id="engDoLike" checked>
-                  <span>공감(❤️)</span>
-                </label>
-                <label class="custom-checkbox-label">
-                  <input type="checkbox" id="engDoComment" checked>
-                  <span>AI 맞춤 댓글(💬)</span>
-                </label>
-                <label class="custom-checkbox-label">
-                  <input type="checkbox" id="engDoNeighbor" checked>
-                  <span>서로이웃 신청(👥)</span>
-                </label>
+            <!-- Card 2: Reactions & Quantities -->
+            <div class="desktop-card">
+              <div class="desktop-card-header">
+                <div class="card-title-group">
+                  <span class="card-badge">STEP 2</span>
+                  <h3>반응 방식 &amp; 실행 범위</h3>
+                </div>
               </div>
-            </div>
+              <div class="desktop-card-body">
+                <!-- Action Type Selectors -->
+                <div class="form-group">
+                  <label><strong>반응 방식 선택</strong> <small>(최소 1개 이상 선택)</small></label>
+                  <div class="action-toggle-cards">
+                    <label class="action-toggle-card">
+                      <input type="checkbox" id="engDoLike" checked>
+                      <div class="toggle-card-inner">
+                        <span class="toggle-emoji">❤️</span>
+                        <div class="toggle-texts">
+                          <strong>공감(하트)</strong>
+                          <small>게시글 좋아요</small>
+                        </div>
+                      </div>
+                    </label>
+                    <label class="action-toggle-card">
+                      <input type="checkbox" id="engDoComment" checked>
+                      <div class="toggle-card-inner">
+                        <span class="toggle-emoji">💬</span>
+                        <div class="toggle-texts">
+                          <strong>AI 맞춤 댓글</strong>
+                          <small>본문·사진 분석</small>
+                        </div>
+                      </div>
+                    </label>
+                    <label class="action-toggle-card">
+                      <input type="checkbox" id="engDoNeighbor" checked>
+                      <div class="toggle-card-inner">
+                        <span class="toggle-emoji">👥</span>
+                        <div class="toggle-texts">
+                          <strong>서로이웃 신청</strong>
+                          <small>맞이웃 소통</small>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
 
-            <div class="form-group">
-              <label for="engTargetCount"><strong>키워드당 목표 글 수</strong> <small>(키워드 3개 × 100건 = 총 300건)</small></label>
-              <div class="number-input-wrap">
-                <input type="number" id="engTargetCount" min="1" max="500" value="20" required>
-                <div class="quick-counts eng-quick-counts">
-                  <button type="button" data-val="10">10건</button>
-                  <button type="button" data-val="20">20건</button>
-                  <button type="button" data-val="30">30건</button>
-                  <button type="button" data-val="50">50건</button>
-                  <button type="button" data-val="100">100건</button>
-                  <button type="button" data-val="500">500건</button>
+                <!-- Target Post Count -->
+                <div class="form-group" style="margin-top: 14px;">
+                  <div class="label-row">
+                    <label for="engTargetCount"><strong>키워드당 목표 글 수</strong></label>
+                    <span class="helper-text">(키워드 n개 × 목표 건수)</span>
+                  </div>
+                  <div class="number-input-row">
+                    <input type="number" id="engTargetCount" min="1" max="500" value="100" required class="desktop-input number-field">
+                    <div class="quick-counts eng-quick-counts">
+                      <button type="button" data-val="10">10건</button>
+                      <button type="button" data-val="20">20건</button>
+                      <button type="button" data-val="30">30건</button>
+                      <button type="button" data-val="50">50건</button>
+                      <button type="button" data-val="100">100건</button>
+                      <button type="button" data-val="500">500건</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Random Delay & Protection -->
+                <div class="form-group" style="margin-top: 14px;">
+                  <label><strong>작업 간격 (계정 보호 랜덤 딜레이)</strong></label>
+                  <div class="delay-row">
+                    <div class="delay-inputs-pair">
+                      <input type="number" id="engMinDelay" min="10" max="300" value="45" class="desktop-input delay-field">
+                      <span>초 ~</span>
+                      <input type="number" id="engMaxDelay" min="20" max="300" value="90" class="desktop-input delay-field">
+                      <span>초 사이 무작위</span>
+                    </div>
+                  </div>
+                  <div class="account-protect-banner">
+                    <span class="protect-icon">🛡️</span>
+                    <span>일일 한도 해제 · 가변 지터(-5s~+15s) 및 15회마다 정기 휴식(3~5분) 자동 적용</span>
+                  </div>
+                </div>
+
+                <!-- Neighbor Request Message -->
+                <div class="form-group" id="engNeighborMsgGroup" style="margin-top: 14px;">
+                  <label for="engNeighborMessage"><strong>서로이웃 신청 메시지</strong> <small>(서로이웃 체크 시 전송)</small></label>
+                  <input type="text" id="engNeighborMessage" value="안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊" placeholder="서로이웃 신청 메시지 입력" class="desktop-input">
                 </div>
               </div>
             </div>
 
-            <div class="form-group">
-              <label><strong>작업 간격 (랜덤 딜레이)</strong> <small>(계정 보호 무작위 쉼)</small></label>
-              <div class="delay-inputs">
-                <input type="number" id="engMinDelay" min="5" max="60" value="15" style="width:65px;"> 초 ~ 
-                <input type="number" id="engMaxDelay" min="10" max="120" value="30" style="width:65px;"> 초 사이
+            <!-- Action Command Toolbar -->
+            <div class="action-command-toolbar">
+              <div class="main-buttons-group">
+                <button type="button" class="button primary large full-width" id="startEngBtn">
+                  <span class="btn-icon">🚀</span> <strong>공감 &amp; AI 맞춤 댓글 시작</strong>
+                </button>
+                <button type="button" class="button warning large full-width hidden" id="pauseEngBtn">
+                  <span class="btn-icon">⏸️</span> <strong>일시정지</strong>
+                </button>
+                <button type="button" class="button primary large full-width hidden" id="resumeEngBtn">
+                  <span class="btn-icon">▶️</span> <strong>작업 재개</strong>
+                </button>
+                <button type="button" class="button danger large full-width hidden" id="stopEngBtn">
+                  <span class="btn-icon">⏹️</span> <strong>작업 중단</strong>
+                </button>
+              </div>
+              <div class="sub-buttons-group">
+                <button type="button" class="button secondary small full-width" id="engHistoryModalBtn">
+                  📋 소통 이력 조회 &amp; 엑셀(CSV) 다운로드
+                </button>
               </div>
             </div>
 
-            <div class="form-group flex-2" id="engNeighborMsgGroup" style="grid-column: 1 / -1; margin-top: 4px;">
-              <label for="engNeighborMessage"><strong>서로이웃 신청 메시지</strong> <small>(서로이웃 신청 체크 시 전송할 메시지)</small></label>
-              <input type="text" id="engNeighborMessage" value="안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊" placeholder="서로이웃 신청 메시지 입력">
-            </div>
-          </div>
+          </form>
+        </div>
 
-          <!-- Action Control Bar -->
-          <div class="automation-action-bar" style="margin-top:20px;">
-            <button type="button" class="button primary large" id="startEngBtn">
-              <span class="btn-icon">🚀</span> <strong>공감 & AI 맞춤 댓글 시작</strong>
-            </button>
-            <button type="button" class="button warning large hidden" id="pauseEngBtn">
-              <span class="btn-icon">⏸️</span> 일시정지
-            </button>
-            <button type="button" class="button primary large hidden" id="resumeEngBtn">
-              <span class="btn-icon">▶️</span> 작업 재개
-            </button>
-            <button type="button" class="button danger large hidden" id="stopEngBtn">
-              <span class="btn-icon">⏹️</span> 작업 중단
-            </button>
-          </div>
-        </form>
+        <!-- ==================== RIGHT COLUMN: Realtime Monitor & Console ==================== -->
+        <div class="desktop-col desktop-col-monitor">
+          <div class="desktop-card monitor-card" id="engDashboard">
+            
+            <!-- Realtime Status Header -->
+            <div class="monitor-header">
+              <div class="monitor-status-left">
+                <span class="desktop-status-dot" id="engStatusDot"></span>
+                <div class="monitor-status-titles">
+                  <span class="monitor-eyebrow">REALTIME STATUS</span>
+                  <strong id="engDashboardStatusText">대기 중 · 설정을 완료하고 시작 버튼을 누르세요</strong>
+                </div>
+              </div>
+              <span class="delay-timer-badge hidden" id="engDelayBadge">
+                ⏳ 다음 포스팅까지 <strong id="engDelaySeconds">0</strong>초 대기 중
+              </span>
+            </div>
 
-        <!-- Live Engagement Progress & Terminal Dashboard -->
-        <div class="live-dashboard hidden" id="engDashboard" style="margin-top:20px;">
-          <div class="dashboard-header">
-            <div class="dashboard-title">
-              <span class="live-pulse"></span>
-              <strong id="engDashboardStatusText">AI 공감/댓글 작업 실행 중...</strong>
+            <!-- Progress Track -->
+            <div class="monitor-progress-box">
+              <div class="progress-bar-container">
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="engProgressBarFill" style="width: 0%;"></div>
+                </div>
+                <div class="progress-labels">
+                  <span id="engProgressPercent" class="progress-pct">0%</span>
+                  <span id="engProgressCounts" class="progress-cnt">0 / 100건 완료</span>
+                </div>
+              </div>
+              <div class="eng-topic-progress" id="engTopicProgress"></div>
             </div>
-            <span class="delay-timer-badge hidden" id="engDelayBadge">⏳ 다음 포스팅까지 <strong id="engDelaySeconds">0</strong>초 대기 중</span>
-          </div>
 
-          <div class="progress-bar-container">
-            <div class="progress-bar-track">
-              <div class="progress-bar-fill" id="engProgressBarFill" style="width: 0%;"></div>
+            <!-- 5 Metric Tiles Grid -->
+            <div class="stats-cards-grid">
+              <div class="stat-card">
+                <span class="stat-icon">🎯</span>
+                <div class="stat-info">
+                  <span class="stat-label">목표</span>
+                  <strong class="stat-value" id="engStatTarget">0</strong>
+                </div>
+              </div>
+              <div class="stat-card success">
+                <span class="stat-icon">❤️</span>
+                <div class="stat-info">
+                  <span class="stat-label">공감</span>
+                  <strong class="stat-value" id="engStatLikes">0</strong>
+                </div>
+              </div>
+              <div class="stat-card info">
+                <span class="stat-icon">💬</span>
+                <div class="stat-info">
+                  <span class="stat-label">AI 댓글</span>
+                  <strong class="stat-value" id="engStatComments">0</strong>
+                </div>
+              </div>
+              <div class="stat-card neighbor">
+                <span class="stat-icon">👥</span>
+                <div class="stat-info">
+                  <span class="stat-label">서로이웃</span>
+                  <strong class="stat-value" id="engStatNeighbors">0</strong>
+                </div>
+              </div>
+              <div class="stat-card danger">
+                <span class="stat-icon">⚠️</span>
+                <div class="stat-info">
+                  <span class="stat-label">스킵/실패</span>
+                  <strong class="stat-value" id="engStatFailed">0</strong>
+                </div>
+              </div>
             </div>
-            <div class="progress-labels">
-              <span id="engProgressPercent">0%</span>
-              <span id="engProgressCounts">0 / 20건 완료</span>
-            </div>
-          </div>
 
-          <div class="eng-topic-progress" id="engTopicProgress"></div>
-          <div class="stats-cards-grid">
-            <div class="stat-card">
-              <span class="stat-icon">🎯</span>
-              <div class="stat-info">
-                <span class="stat-label">목표 포스팅</span>
-                <strong class="stat-value" id="engStatTarget">0</strong>
+            <!-- Live Terminal Box -->
+            <div class="live-terminal">
+              <div class="terminal-header">
+                <div class="terminal-title">
+                  <span class="terminal-badge-icon">🖥️</span>
+                  <span>실시간 AI 소통 실행 로그 (Live Console)</span>
+                </div>
+                <div class="terminal-btn-group">
+                  <button type="button" class="terminal-clear-btn" id="copyEngLogsBtn" title="전체 로그 복사">📋 복사</button>
+                  <button type="button" class="terminal-clear-btn" id="clearEngLogsBtn" title="콘솔 지우기">지우기</button>
+                </div>
+              </div>
+              <div class="terminal-body" id="engTerminalLogs">
+                <div class="terminal-line info">[대기 중] 설정을 완료하고 '공감 &amp; AI 맞춤 댓글 시작' 버튼을 눌러주세요.</div>
               </div>
             </div>
-            <div class="stat-card success">
-              <span class="stat-icon">❤️</span>
-              <div class="stat-info">
-                <span class="stat-label">공감(하트) 성공</span>
-                <strong class="stat-value" id="engStatLikes">0</strong>
-              </div>
-            </div>
-            <div class="stat-card info">
-              <span class="stat-icon">💬</span>
-              <div class="stat-info">
-                <span class="stat-label">AI 댓글 성공</span>
-                <strong class="stat-value" id="engStatComments">0</strong>
-              </div>
-            </div>
-            <div class="stat-card" style="border-left: 4px solid #3182ce;">
-              <span class="stat-icon">👥</span>
-              <div class="stat-info">
-                <span class="stat-label">서로이웃 신청</span>
-                <strong class="stat-value" id="engStatNeighbors">0</strong>
-              </div>
-            </div>
-            <div class="stat-card danger">
-              <span class="stat-icon">⚠️</span>
-              <div class="stat-info">
-                <span class="stat-label">스킵 / 실패</span>
-                <strong class="stat-value" id="engStatFailed">0</strong>
-              </div>
-            </div>
-          </div>
 
-          <!-- Real-time Live Log Terminal -->
-          <div class="live-terminal" style="margin-top:16px;">
-            <div class="terminal-header">
-              <span>🖥️ 실시간 AI 소통 로그 (Live Log)</span>
-              <div style="display:flex; gap:6px;">
-                <button type="button" class="terminal-clear-btn" id="copyEngLogsBtn">📋 로그 전체 복사</button>
-                <button type="button" class="terminal-clear-btn" id="clearEngLogsBtn">로그 지우기</button>
-              </div>
-            </div>
-            <div class="terminal-body" id="engTerminalLogs">
-              <div class="terminal-line info">[대기 중] 설정을 완료하고 '공감 & AI 맞춤 댓글 시작' 버튼을 눌러주세요.</div>
-            </div>
           </div>
         </div>
-      </section>
 
-      <div class="modal-overlay hidden" id="engTargetManagerModal">
-        <div class="modal-card" style="max-width:760px;"><div class="modal-header"><div><h3>🤖 AI 소통 타겟 분석·관리</h3><p class="modal-sub">내 블로그 최근 글을 로컬 AI가 분석합니다. 적용 전 추가·삭제·순서를 변경할 수 있습니다.</p></div><button type="button" class="modal-close" id="closeEngTargetManagerBtn">✕</button></div><div class="target-analysis-summary hidden" id="engTargetAnalysisSummary"></div><div class="modal-toolbar"><button type="button" class="button primary" id="analyzeEngTargetsBtn">내 블로그 AI 분석</button><span id="engTargetAnalysisStatus">분석 전</span></div><div class="target-add-row"><input type="text" id="engTargetAddInput" placeholder="직접 키워드 추가"><button type="button" class="button secondary" id="addEngTargetBtn">추가</button></div><div class="target-manager-list" id="engTargetManagerList"></div><div class="modal-toolbar" style="justify-content:flex-end;"><button type="button" class="button ghost" id="cancelEngTargetsBtn">취소</button><button type="button" class="button primary" id="applyEngTargetsBtn">선택 목록 적용</button></div></div>
       </div>
 
       <!-- Engagement History & CSV Export Modal -->
@@ -648,6 +663,234 @@
                 <tr><td colspan="7" style="text-align: center; color: #888; padding: 24px;">소통 이력을 불러오는 중...</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Target Finder & Recommendations Modal (Windows 11 ContentDialog Style) -->
+      <div class="modal-overlay hidden" id="targetFinderModal" role="dialog" aria-modal="true" aria-labelledby="targetFinderModalTitle">
+        <div class="modal-card target-finder-card">
+          <div class="modal-header">
+            <div>
+              <span class="modal-eyebrow">TARGET FINDER &amp; AI RECOMMENDATIONS</span>
+              <h3 id="targetFinderModalTitle">🎯 소통 타겟 키워드 탐색기</h3>
+              <p class="modal-sub">내 블로그 주제 분석, 실시간 트렌드, 인기 카테고리 프리셋에서 소통 타겟을 찾아보세요.</p>
+            </div>
+            <button type="button" class="modal-close" id="closeTargetFinderModal" aria-label="닫기">✕</button>
+          </div>
+
+          <!-- Finder Segmented Tabs -->
+          <div class="finder-tabs" role="tablist">
+            <button type="button" class="finder-tab active" data-finder-tab="myblog">
+              <span>🤖 내 블로그 맞춤 AI 추천</span>
+            </button>
+            <button type="button" class="finder-tab" data-finder-tab="trends">
+              <span>🔥 실시간 검색 트렌드</span>
+            </button>
+            <button type="button" class="finder-tab" data-finder-tab="presets">
+              <span>🏷️ 인기 블로그 테마 프리셋</span>
+            </button>
+          </div>
+
+          <div class="finder-content">
+            <!-- TAB 1: My Blog AI Recommendations -->
+            <div class="finder-panel" id="finderPanelMyBlog" data-panel="myblog">
+              <div class="finder-hero-banner" id="myBlogAnalysisBanner">
+                <div class="hero-text">
+                  <strong>💡 내 블로그 글을 분석하여 꼭 맞는 소통 타겟을 추천합니다</strong>
+                  <p>최근 작성한 포스팅의 핵심 주제와 독자층을 로컬 AI(Gemma 4 12B)가 분석하여 공감대 높은 타겟을 제안합니다.</p>
+                </div>
+                <button type="button" class="button primary small" id="startMyBlogAnalysisBtn">
+                  <span>🚀</span> 내 블로그 분석 시작
+                </button>
+              </div>
+
+              <!-- Loading State -->
+              <div class="finder-loading-box hidden" id="myBlogAnalysisLoading">
+                <div class="finder-spinner"></div>
+                <div class="loading-text">
+                  <strong>내 블로그 최근 포스팅을 읽고 분석 중...</strong>
+                  <small>포스팅 제목과 본문 핵심 키워드를 추출하여 AI 맞춤 타겟을 생성하고 있습니다.</small>
+                </div>
+              </div>
+
+              <!-- Result Container -->
+              <div class="finder-result-container hidden" id="myBlogAnalysisResult">
+                <div class="analysis-summary-card">
+                  <div class="summary-item">
+                    <span class="sum-tag">블로그 성격 요약</span>
+                    <p id="analysisSummaryText">-</p>
+                  </div>
+                  <div class="summary-item">
+                    <span class="sum-tag">추천 타겟 이웃층</span>
+                    <p id="analysisAudienceText">-</p>
+                  </div>
+                </div>
+
+                <div class="recommendations-heading">
+                  <strong>🎯 AI 추천 소통 타겟 키워드</strong>
+                  <button type="button" class="btn-text-link" id="addAllMyBlogKeywordsBtn">+ 추천 키워드 전체 담기</button>
+                </div>
+                <div class="keyword-recommendations-grid" id="myBlogKeywordsGrid"></div>
+              </div>
+            </div>
+
+            <!-- TAB 2: Realtime Trends -->
+            <div class="finder-panel hidden" id="finderPanelTrends" data-panel="trends">
+              <div class="panel-sub-header">
+                <div>
+                  <strong>현재 대한민국 실시간 급상승 트렌드</strong>
+                  <small id="modalTrendStatus">최신 트렌드를 불러오는 중...</small>
+                </div>
+                <button type="button" class="button ghost small" id="refreshModalTrendsBtn">↻ 트렌드 갱신</button>
+              </div>
+              <div class="trends-grid" id="modalTrendsGrid"></div>
+            </div>
+
+            <!-- TAB 3: Category Presets -->
+            <div class="finder-panel hidden" id="finderPanelPresets" data-panel="presets">
+              <div class="presets-intro">
+                <small>네이버 블로그에서 가장 활발하게 서로이웃 소통이 일어나는 8대 대표 주제입니다. 원하는 키워드를 클릭해 선택하세요.</small>
+              </div>
+              <div class="presets-grid" id="categoryPresetsGrid"></div>
+            </div>
+          </div>
+
+          <!-- Bottom Selection & Apply Tray -->
+          <div class="finder-tray">
+            <div class="tray-left">
+              <div class="tray-title-row">
+                <span class="tray-label">선택된 소통 키워드 (<strong id="finderSelectedCount">0</strong>개)</span>
+                <button type="button" class="btn-clear-tray" id="clearFinderSelectionBtn">전체 비우기</button>
+              </div>
+              <div class="tray-chips" id="finderSelectedChips">
+                <span class="tray-empty-hint">위 목록에서 키워드를 클릭하여 소통 타겟을 추가하세요.</span>
+              </div>
+            </div>
+            <div class="tray-actions">
+              <button type="button" class="button ghost" id="cancelTargetFinderBtn">취소</button>
+              <button type="button" class="button primary" id="applyTargetFinderBtn" disabled>
+                <span>🎯</span> <span id="applyTargetBtnText">선택 키워드 적용하기</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace-panel hidden" id="commentManagementWorkspace" role="tabpanel" aria-labelledby="commentManagementTab" data-tab-panel="comment-management">
+      <div class="desktop-workspace-grid comment-workspace-grid">
+        <!-- Left Column: Comment Inbox & Batch Processing -->
+        <div class="desktop-col comment-col-left">
+          <div class="desktop-card comment-inbox-card">
+            <div class="desktop-card-header">
+              <div class="card-title-group">
+                <span class="card-badge">INBOX</span>
+                <h3>내 게시글 댓글 수신함</h3>
+              </div>
+              <span class="status" id="commentManagementStatus"><i></i> 확인 전</span>
+            </div>
+            <div class="desktop-card-body">
+              <!-- Top Controls Toolbar -->
+              <div class="comment-control-bar">
+                <div class="comment-range-group">
+                  <span class="ctrl-label">탐색할 게시글 수:</span>
+                  <div class="post-limit-chips">
+                    <button type="button" class="chip-btn" data-limit="5">5개</button>
+                    <button type="button" class="chip-btn active" data-limit="10">10개</button>
+                    <button type="button" class="chip-btn" data-limit="20">20개</button>
+                    <button type="button" class="chip-btn" data-limit="30">30개</button>
+                  </div>
+                  <div class="ctrl-num-wrap">
+                    <input id="commentPostLimit" type="number" min="1" max="30" value="10" class="desktop-input ctrl-num-input">
+                    <span class="ctrl-unit">개</span>
+                  </div>
+                </div>
+
+                <label class="comment-neighbor-switch-card">
+                  <input id="commentRequestNeighbor" type="checkbox" checked>
+                  <div class="switch-card-text">
+                    <span class="switch-title">🤝 대댓글 후 서로이웃 자동 신청</span>
+                    <span class="switch-desc">미이웃 작성자에게 친근한 기본 메시지로 서로이웃을 함께 신청합니다.</span>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="comment-actions-bar">
+                <button class="button secondary" id="scanMyCommentsBtn" type="button">
+                  <span>🔍</span> 새 댓글 스캔
+                </button>
+                <button class="button primary" id="processMyCommentsBtn" type="button" disabled>
+                  <span>✨</span> 선택 댓글 AI 대댓글 & 이웃 처리
+                </button>
+              </div>
+              <div class="comment-auto-bar">
+                <button class="button ghost" id="toggleCommentAutoBtn" type="button">
+                  <span>⏱️</span> 5분 주기 자동 백그라운드 관리 시작
+                </button>
+              </div>
+
+              <!-- Summary Status Strip -->
+              <div class="comment-summary-strip" id="commentManagementSummaryStrip">
+                <span class="strip-icon">ℹ️</span>
+                <span id="commentManagementSummary">새 댓글 스캔을 눌러 최근 게시글에 달린 댓글을 확인하세요.</span>
+              </div>
+
+              <!-- Inbox DataGrid -->
+              <div class="comment-grid-container">
+                <table class="desktop-datagrid comment-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 38px; text-align: center;"><input type="checkbox" id="selectAllMyComments" title="전체 선택"></th>
+                      <th style="width: 140px;">게시글</th>
+                      <th style="width: 125px;">작성자</th>
+                      <th>수신 댓글</th>
+                      <th style="width: 90px; text-align: right;">작성일</th>
+                    </tr>
+                  </thead>
+                  <tbody id="commentManagementBody">
+                    <tr>
+                      <td colspan="5" class="comment-empty-cell">
+                        <div class="comment-empty-state">
+                          <span class="empty-icon">💬</span>
+                          <div class="empty-text">
+                            <strong>수신된 새 댓글이 없습니다</strong>
+                            <small>'새 댓글 스캔' 버튼을 눌러 최근 게시글의 댓글을 불러오세요.</small>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: AI Reply & Neighbor History Feed -->
+        <div class="desktop-col comment-col-right">
+          <div class="desktop-card comment-history-card">
+            <div class="desktop-card-header">
+              <div class="card-title-group">
+                <span class="card-badge">HISTORY</span>
+                <h3>AI 대댓글 & 이웃 처리 기록</h3>
+              </div>
+              <button class="button ghost small" id="refreshCommentHistoryBtn" type="button">
+                🔄 새로고침
+              </button>
+            </div>
+            <div class="desktop-card-body history-card-body">
+              <div id="commentManagementHistory" class="comment-history-feed">
+                <div class="comment-empty-state">
+                  <span class="empty-icon">📋</span>
+                  <div class="empty-text">
+                    <strong>처리 기록이 없습니다</strong>
+                    <small>댓글 처리가 진행되면 AI 대댓글과 서로이웃 신청 결과가 여기에 기록됩니다.</small>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -808,9 +1051,21 @@
       </section>
     </section>
 
-    <footer>이 도구는 네이버 공식 서비스가 아닙니다. 자동입력 방지·2단계 인증을 우회하지 않습니다.</footer>
+    <footer class="desktop-statusbar">
+      <div class="statusbar-left">
+        <span>🟢 시스템 준비 완료</span>
+        <span class="statusbar-sep">|</span>
+        <span>이웃메이트 Engage Desktop</span>
+      </div>
+      <div class="statusbar-center">
+        <span>⚡ 로컬 GPU Gemma 4 AI 독립 연산 (비용 0원)</span>
+      </div>
+      <div class="statusbar-right">
+        <span>🛡️ 계정 보호 지터 &amp; 정기 휴식 보호 모드 활성</span>
+      </div>
+    </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/app.js?v=8"></script>
+  <script type="module" src="/app.js?v=9"></script>
 </body>
 </html>

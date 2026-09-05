@@ -4,8 +4,24 @@ import { existsSync } from 'node:fs';
 import path, { dirname } from 'node:path';
 
 const BLOG_ID_PATTERN = /^[a-zA-Z0-9_.-]{2,50}$/;
-const KEYWORD_CATEGORIES = [['육아', /육아|아이|아기|유아|어린이|엄마|아빠|키즈|교육|학교|가족/g], ['쇼핑', /쇼핑|구매|제품|상품|리뷰|추천|할인|특가|사용기|언박싱/g], ['건강', /건강|운동|다이어트|영양|병원|의료|식단|헬스|질환|치료/g], ['맛집', /맛집|음식|메뉴|식당|카페|디저트|요리|레시피|먹방/g], ['여행', /여행|관광|숙소|호텔|펜션|캠핑|나들이|해외|국내여행/g], ['뷰티', /뷰티|화장품|피부|메이크업|헤어|네일|스킨케어/g], ['패션', /패션|코디|의류|옷|신발|가방|스타일/g], ['IT', /IT|컴퓨터|스마트폰|앱|소프트웨어|인공지능|AI|전자기기/g], ['재테크', /재테크|주식|부동산|투자|경제|금융|절약|저축/g], ['일상', /일상|하루|주말|생활|기록|소통/g]];
-export function recommendKeywordsFromTexts(texts = [], limit = 7) { const source = texts.join(' ').replace(/\s+/g, ' '); return KEYWORD_CATEGORIES.map(([keyword, pattern]) => ({ keyword, score: (source.match(pattern) || []).length })).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, Math.min(Math.max(Number(limit) || 7, 1), 10)).map((item) => item.keyword); }
+const KEYWORD_CATEGORIES = [
+  ['육아', /육아|아이|아기|유아|어린이|엄마|아빠|키즈|교육|학교|가족/g],
+  ['쇼핑', /쇼핑|구매|제품|상품|리뷰|추천|할인|특가|사용기|언박싱/g],
+  ['건강', /건강|운동|다이어트|영양|병원|의료|식단|헬스|질환|치료/g],
+  ['맛집', /맛집|음식|메뉴|식당|카페|디저트|요리|레시피|먹방/g],
+  ['여행', /여행|관광|숙소|호텔|펜션|캠핑|나들이|해외|국내여행/g],
+  ['뷰티', /뷰티|화장품|피부|메이크업|헤어|네일|스킨케어/g],
+  ['패션', /패션|코디|의류|옷|신발|가방|스타일/g],
+  ['IT', /IT|컴퓨터|스마트폰|앱|소프트웨어|인공지능|AI|전자기기/g],
+  ['재테크', /재테크|주식|부동산|투자|경제|금융|절약|저축/g],
+  ['일상', /일상|하루|주말|생활|기록|소통/g]
+];
+
+export function recommendKeywordsFromTexts(texts = [], limit = 7) {
+  const source = texts.join(' ').replace(/\s+/g, ' ');
+  const scored = KEYWORD_CATEGORIES.map(([keyword, pattern]) => ({ keyword, score: (source.match(pattern) || []).length })).filter((item) => item.score > 0).sort((a, b) => b.score - a.score);
+  return scored.slice(0, Math.min(Math.max(Number(limit) || 7, 1), 10)).map((item) => item.keyword);
+}
 
 export function normalizeBlogItem(item) {
   const link = String(item?.bloggerlink || item?.link || '').trim();
@@ -463,6 +479,13 @@ export class NaverBrowserSession {
 
     this.connectedId = 'saved-session';
     return { connected: true, accountLabel: '네이버 로그인됨', restored: true };
+  }
+
+  async checkConnection() {
+    if (this.connected && await this.hasAuthenticatedSession()) {
+      return { connected: true, accountLabel: '네이버 로그인됨' };
+    }
+    return await this.restoreSession();
   }
 
   async hasAuthenticatedCookies() {
@@ -928,10 +951,18 @@ export class NaverBrowserSession {
       await page.goto(preferredUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
       await page.waitForTimeout(1500);
       const contentFrame = page.frames().find((frame) => frame.name() === 'mainFrame') || page.mainFrame();
-      const texts = await contentFrame.evaluate(() => { const selectors = ['.title__Area', '.title_post', '.se-title-text', '.postlist__title', '.text__Content', '.se-text-paragraph']; const selected = Array.from(document.querySelectorAll(selectors.join(','))).map((node) => (node.innerText || node.textContent || '').trim()).filter((text) => text.length >= 2); if (selected.length) return selected.slice(0, 80); return Array.from(document.querySelectorAll('a[href*="PostView.naver"], a[href*="blog.naver.com/"]')).map((node) => (node.innerText || node.textContent || '').trim()).filter((text) => text.length >= 4 && text.length <= 200).slice(0, 80); });
+      const texts = await contentFrame.evaluate(() => {
+        const selectors = ['.title__Area', '.title_post', '.se-title-text', '.postlist__title', '.text__Content', '.se-text-paragraph'];
+        const selected = Array.from(document.querySelectorAll(selectors.join(','))).map((node) => (node.innerText || node.textContent || '').trim()).filter((text) => text.length >= 2);
+        if (selected.length) return selected.slice(0, 80);
+        return Array.from(document.querySelectorAll('a[href*="PostView.naver"], a[href*="blog.naver.com/"]')).map((node) => (node.innerText || node.textContent || '').trim()).filter((text) => text.length >= 4 && text.length <= 200).slice(0, 80);
+      });
+      const keywords = recommendKeywordsFromTexts(texts, 7);
       if (!texts.length) throw new Error('내 블로그 최근 글을 찾지 못했습니다. 네이버 로그인 계정에 연결된 블로그가 있는지 확인해주세요.');
-      return { keywords: recommendKeywordsFromTexts(texts, 7), texts, analyzedTextCount: texts.length, blogUrl: contentFrame.url() || page.url() };
-    } finally { await page.close().catch(() => {}); }
+      return { keywords, texts, analyzedTextCount: texts.length, blogUrl: contentFrame.url() || page.url() };
+    } finally {
+      await page.close().catch(() => {});
+    }
   }
 
   /**
@@ -1009,8 +1040,8 @@ export class NaverBrowserSession {
           firstImage: images[0] || null,
           alreadyLiked,
           canLike,
-          canComment
-          ,alreadyCommented
+          canComment,
+          alreadyCommented
         };
       });
 
@@ -1172,12 +1203,8 @@ export class NaverBrowserSession {
                 break;
               }
             }
-
             const ownCommentExists = await frame.locator('.u_cbox_comment_my, .u_cbox_mine, [class*="comment_my"], [data-is-mine="true"], .u_cbox_btn_delete, .u_cbox_btn_modify').first().isVisible().catch(() => false);
-            if (ownCommentExists) {
-              result.commentReason = '이미 내가 작성한 댓글이 있는 포스팅';
-              return result;
-            }
+            if (ownCommentExists) { result.commentReason = '이미 내가 작성한 댓글이 있는 포스팅'; return result; }
 
             // Step B: Click placeholder box to activate input mode if needed
             const placeholderSelectors = [
@@ -1228,6 +1255,8 @@ export class NaverBrowserSession {
               await textarea.click({ force: true }).catch(() => {});
               await page.waitForTimeout(300);
 
+              // Fill the exact visible editor found above. A document-level
+              // contenteditable query can target Naver's unrelated editor.
               await textarea.fill(commentText).catch(async () => {
                 await textarea.pressSequentially(commentText, { delay: 5 });
               });
@@ -1256,18 +1285,10 @@ export class NaverBrowserSession {
                   await submitBtn.evaluate((btn) => btn.removeAttribute('disabled')).catch(() => {});
                   await submitBtn.click({ force: true }).catch(() => submitBtn.dispatchEvent('click'));
                   await page.waitForTimeout(2000);
-                  const normalizedExpected = String(commentText).replace(/\s+/g, ' ').trim();
-                  const confirmed = await frame.locator('.u_cbox_contents, .u_cbox_text_wrap, .u_cbox_comment_box, [class*="comment"]')
-                    .filter({ hasText: normalizedExpected.slice(0, Math.min(24, normalizedExpected.length)) })
-                    .first().isVisible().catch(() => false);
-                  if (confirmed) {
-                    result.commented = true;
-                    result.commentText = commentText;
-                    result.commentReason = '댓글 등록 및 화면 확인 성공';
-                    submitted = true;
-                  } else {
-                    result.commentReason = '등록 클릭 후 댓글 표시를 확인하지 못함';
-                  }
+                  const expected = String(commentText).replace(/\s+/g, ' ').trim();
+                  const confirmed = await frame.locator('.u_cbox_contents, .u_cbox_text_wrap, .u_cbox_comment_box, [class*="comment"]').filter({ hasText: expected.slice(0, Math.min(24, expected.length)) }).first().isVisible().catch(() => false);
+                  if (confirmed) { result.commented = true; result.commentText = commentText; result.commentReason = '댓글 등록 및 화면 확인 성공'; submitted = true; }
+                  else result.commentReason = '등록 클릭 후 댓글 표시를 확인하지 못함';
                   break;
                 }
               }
@@ -1297,6 +1318,193 @@ export class NaverBrowserSession {
       return result;
     } finally {
       if (!page.isClosed()) await page.close().catch(() => {});
+    }
+  }
+
+  async scanMyBlogComments({ postLimit = 10, commentLimit = 100 } = {}) {
+    if (!this.connected || !await this.hasAuthenticatedSession()) throw new Error('네이버 로그인 세션이 필요합니다.');
+    const page = await this.context.newPage();
+    try {
+      await page.goto('https://blog.naver.com/MyBlog.naver', { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.waitForTimeout(1200);
+      const candidates = [page.url(), ...page.frames().map((frame) => frame.url())];
+      let myBlogId = candidates.map(extractBlogId).find(Boolean) || '';
+      if (!myBlogId && !['saved-session', 'cookie-session', 'cookie-injected', 'qr-session'].includes(this.connectedId)) myBlogId = this.connectedId;
+      if (!BLOG_ID_PATTERN.test(myBlogId)) throw new Error('내 블로그 ID를 확인하지 못했습니다. 네이버 블로그를 한 번 열어주세요.');
+
+      await page.goto(`https://blog.naver.com/PostList.naver?blogId=${encodeURIComponent(myBlogId)}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.waitForTimeout(1200);
+      const listFrame = page.frames().find((frame) => frame.name() === 'mainFrame') || page.mainFrame();
+      const postUrls = await listFrame.evaluate((blogId) => [...new Set([...document.querySelectorAll('a[href]')]
+        .map((anchor) => anchor.href || '')
+        .filter((href) => new RegExp(`blog\\.naver\\.com\\/(?:PostView\\.naver\\?.*blogId=${blogId}.*logNo=\\d+|${blogId}\\/\\d+)`, 'i').test(href))
+        .map((href) => {
+          const logNo = href.match(/[?&]logNo=(\d+)/i)?.[1] || href.match(/\/(\d{8,20})(?:[/?#]|$)/)?.[1];
+          return logNo ? `https://m.blog.naver.com/${blogId}/${logNo}` : '';
+        }).filter(Boolean))], myBlogId).catch(() => []);
+
+      const comments = [];
+      for (const postUrl of postUrls.slice(0, Math.min(Math.max(Number(postLimit) || 10, 1), 30))) {
+        await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForTimeout(700);
+        const opener = page.locator('button[class*="comment"], a[class*="comment"], [data-click-area="pst.re"]').first();
+        if (await opener.isVisible().catch(() => false)) await opener.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(500);
+        const postTitle = ((await page.locator('meta[property="og:title"]').getAttribute('content').catch(() => '')) || (await page.locator('.se-title-text, .pcol1 .itemSubjectBoldfont, [class*="post_title"]').first().innerText().catch(() => ''))).replace(/\s+/g, ' ').trim();
+        const rows = await page.locator('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]').evaluateAll((elements, ownerId) => elements.map((element, index) => {
+          const authorLink = element.querySelector('.u_cbox_name a, a[href*="blog.naver.com"], a[href*="m.blog.naver.com"]');
+          const authorHref = authorLink?.href || '';
+          let authorId = '';
+          try { authorId = new URL(authorHref).searchParams.get('blogId') || ''; } catch {}
+          authorId ||= authorHref.match(/blog\.naver\.com\/([^/?#]+)/i)?.[1] || authorHref.match(/m\.blog\.naver\.com\/([^/?#]+)/i)?.[1] || '';
+          if (/\.naver$/i.test(authorId)) authorId = '';
+          const authorName = (element.querySelector('.u_cbox_nick, .u_cbox_name, [class*="nickname"], [class*="name"]')?.textContent || '').replace(/\s+/g, ' ').trim();
+          const text = (element.querySelector('.u_cbox_contents, .u_cbox_text_wrap, [class*="comment_text"], [class*="contents"]')?.textContent || '').replace(/차단된 사용자의 댓글입니다\.?/g, '').replace(/\s+/g, ' ').trim();
+          const dateText = (element.querySelector('.u_cbox_date, time, [class*="date"]')?.textContent || '').replace(/\s+/g, ' ').trim();
+          const rawId = element.getAttribute('data-comment-no') || element.dataset?.commentNo || element.id || '';
+          const isReply = /reply|replied/i.test(element.className) || !!element.closest('.u_cbox_reply_area');
+          const isMine = authorId.toLowerCase() === String(ownerId).toLowerCase() || element.matches('.u_cbox_comment_my, .u_cbox_mine, [data-is-mine="true"]');
+          const hasOwnerReply = [...element.querySelectorAll('.u_cbox_reply_area a[href*="blogId="], .u_cbox_reply_area a[href*="blog.naver.com"]')].some((link) => {
+            try { return (new URL(link.href).searchParams.get('blogId') || '').toLowerCase() === String(ownerId).toLowerCase(); } catch { return false; }
+          });
+          const hasReplyButton = !!element.querySelector('.u_cbox_btn_reply, button[class*="reply"], a[class*="reply"]');
+          return { rawId, index, authorId, authorName, text, dateText, isReply, isMine, hasOwnerReply, hasReplyButton };
+        }), myBlogId).catch(() => []);
+        let latestOriginal = null;
+        for (const row of rows) {
+          if (!row.isReply) latestOriginal = row;
+          else if (row.isMine && latestOriginal) latestOriginal.hasOwnerReply = true;
+        }
+        const logNo = postUrl.match(/\/(\d{8,20})(?:[/?#]|$)/)?.[1] || '';
+        for (const row of rows) {
+          if (!row.text || row.isReply || row.isMine || row.hasOwnerReply || !row.hasReplyButton) continue;
+          const safeAuthor = String(row.authorId || row.authorName || '').replace(/[\uD800-\uDFFF]/g, '');
+          const safeText = String(row.text || '').slice(0, 30).replace(/[\uD800-\uDFFF]/g, '');
+          const commentId = row.rawId || `${logNo}-${row.index}-${encodeURIComponent(safeAuthor)}-${encodeURIComponent(safeText)}`;
+          comments.push({ ...row, commentId, postUrl: `https://blog.naver.com/${myBlogId}/${logNo}`, postTitle, myBlogId });
+          if (comments.length >= Math.min(Math.max(Number(commentLimit) || 100, 1), 300)) break;
+        }
+        if (comments.length >= commentLimit) break;
+      }
+      return { myBlogId, scannedPosts: postUrls.length, comments };
+    } finally {
+      await page.close().catch(() => {});
+    }
+  }
+
+  async replyToBlogComment({ postUrl, commentId, authorName = '', commentText = '', replyText = '' }) {
+    if (!this.connected || !await this.hasAuthenticatedSession()) throw new Error('네이버 로그인 세션이 필요합니다.');
+    const cleanReply = String(replyText || '').replace(/\s+/g, ' ').trim();
+    if (cleanReply.length < 2 || cleanReply.length > 300) throw new Error('대댓글은 2~300자로 입력해주세요.');
+    const mobileUrl = String(postUrl).replace('://blog.naver.com/', '://m.blog.naver.com/');
+    const page = await this.context.newPage();
+    try {
+      await page.goto(mobileUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.waitForTimeout(1000);
+
+      // Expand comment section if collapsed
+      const opener = page.locator('button[class*="comment"], a[class*="comment"], [data-click-area="pst.re"], .btn_comment').first();
+      if (await opener.isVisible().catch(() => false)) {
+        await opener.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(800);
+      }
+
+      // Wait briefly for comment list items to attach
+      await page.locator('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]').first().waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
+
+      const items = page.locator('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]');
+      let target = null;
+      const count = await items.count().catch(() => 0);
+      for (let index = 0; index < count; index += 1) {
+        const item = items.nth(index);
+        const rawId = await item.getAttribute('data-comment-no').catch(() => '') || await item.getAttribute('id').catch(() => '');
+        const body = (await item.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+        if ((rawId && String(commentId).includes(rawId)) || (commentText && body.includes(String(commentText).slice(0, 25))) || (authorName && body.includes(authorName))) {
+          target = item;
+          break;
+        }
+      }
+      if (!target) throw new Error('원본 댓글을 현재 페이지에서 찾지 못했습니다.');
+
+      // Find the reply ('답글') button on the comment
+      const replyButton = target.locator('.u_cbox_btn_reply, button[class*="reply"], a[class*="reply"]').first();
+      if (!await replyButton.isVisible().catch(() => false)) throw new Error('대댓글(답글) 버튼을 찾지 못했습니다.');
+      await replyButton.click({ force: true });
+      await page.waitForTimeout(600);
+
+      // Locate the reply input: check target container, target parent, and page-level active write areas
+      const inputCandidates = [
+        target.locator('..').locator('textarea, div[contenteditable="true"], .u_cbox_text_mention, textarea.u_cbox_text').filter({ visible: true }),
+        target.locator('.u_cbox_reply_area textarea, .u_cbox_reply_write textarea, div.u_cbox_text_mention').filter({ visible: true }),
+        page.locator('.u_cbox_reply_area textarea, .u_cbox_write_box textarea, .u_cbox_write_wrap textarea, div.u_cbox_text_mention[contenteditable="true"]').filter({ visible: true }),
+        page.locator('textarea[placeholder*="답글"], textarea[placeholder*="댓글"], textarea.u_cbox_text').filter({ visible: true })
+      ];
+
+      let input = null;
+      for (const candidate of inputCandidates) {
+        if (await candidate.count().catch(() => 0) > 0) {
+          input = candidate.last();
+          break;
+        }
+      }
+
+      if (!input || !await input.isVisible().catch(() => false)) {
+        throw new Error('대댓글 입력창을 찾지 못했습니다.');
+      }
+
+      await input.focus().catch(() => {});
+      await input.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(200);
+
+      // Fill or type reply
+      let filled = false;
+      try {
+        await input.fill(cleanReply, { timeout: 3000 });
+        filled = true;
+      } catch {
+        try {
+          await input.pressSequentially(cleanReply, { delay: 10, timeout: 5000 });
+          filled = true;
+        } catch {}
+      }
+      if (!filled) throw new Error('대댓글 텍스트 입력에 실패했습니다.');
+      await page.waitForTimeout(400);
+
+      // Locate submit button
+      const submitCandidates = [
+        target.locator('..').locator('.u_cbox_btn_upload, button[class*="upload"], button:has-text("등록"), button[class*="submit"]').filter({ visible: true }),
+        page.locator('.u_cbox_btn_upload, button.u_cbox_btn_upload, .u_cbox_write_wrap button[class*="upload"], button:has-text("등록")').filter({ visible: true })
+      ];
+
+      let submit = null;
+      for (const candidate of submitCandidates) {
+        if (await candidate.count().catch(() => 0) > 0) {
+          submit = candidate.last();
+          break;
+        }
+      }
+
+      if (!submit || !await submit.isVisible().catch(() => false)) {
+        throw new Error('대댓글 등록 버튼을 찾지 못했습니다.');
+      }
+
+      await submit.evaluate((btn) => btn.removeAttribute('disabled')).catch(() => {});
+      await submit.click({ force: true, timeout: 4000 }).catch(() => submit.dispatchEvent('click'));
+      await page.waitForTimeout(2000);
+
+      // Confirmation: either comment appears on page or input area was submitted/cleared
+      const confirmed = await page.locator('.u_cbox_contents, .u_cbox_text_wrap, [class*="comment"]').filter({ hasText: cleanReply.slice(0, Math.min(20, cleanReply.length)) }).first().isVisible().catch(() => false);
+      if (!confirmed) {
+        // Fallback: check if the input value was cleared
+        const remainingText = (await input.inputValue().catch(() => '') || await input.innerText().catch(() => '')).trim();
+        if (remainingText && remainingText.includes(cleanReply.slice(0, 10))) {
+          throw new Error('대댓글 등록 후 확인되지 않았습니다 (작성 제한 여부 확인 필요).');
+        }
+      }
+
+      return { replied: true, replyText: cleanReply };
+    } finally {
+      await page.close().catch(() => {});
     }
   }
 

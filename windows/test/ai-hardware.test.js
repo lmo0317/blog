@@ -5,7 +5,7 @@ import { rm } from 'node:fs/promises';
 import { detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG } from '../lib/hardware.js';
 import { ModelManager } from '../lib/model-manager.js';
 import { EmbeddedLlamaServer, normalizeCommentText, validateBlogComment } from '../lib/embedded-llama.js';
-import { EngagementAutomationManager } from '../lib/engagement-automation.js';
+import { EngagementAutomationManager, ENGAGEMENT_LIMITS, buildNeighborMessage, selectPostActions } from '../lib/engagement-automation.js';
 import { recommendKeywordsFromTexts } from '../lib/naver.js';
 
 test('detectGpuSpecs and getSystemHardwareSummary return valid system metrics and model recommendations', async () => {
@@ -110,6 +110,7 @@ test('blog-style keyword analyzer ranks recurring categories', () => {
 
 test('EngagementAutomationManager counts completed posts once, not likes and comments separately', async () => {
   const calls = { reactions: 0, neighbors: 0, searchDisplay: 0 };
+  const daily = { likes: 0, comments: 0, neighbors: 0 };
   const posts = Array.from({ length: 5 }, (_value, index) => ({
     blogId: `blog${index}`,
     title: `테스트 글 ${index}`,
@@ -119,13 +120,18 @@ test('EngagementAutomationManager counts completed posts once, not likes and com
     connected: true,
     async searchBlogs({ display }) { calls.searchDisplay = display; return posts; },
     async inspectPostForEngagement() { return { title: '테스트 글', snippet: '', images: [] }; },
-    async likeAndCommentPost() { calls.reactions += 1; return { liked: true, commented: true, message: '완료' }; },
+    async likeAndCommentPost({ doLike, doComment }) { calls.reactions += 1; return { liked: doLike, commented: doComment, message: '완료' }; },
     async addNeighbor() { calls.neighbors += 1; return { status: 'requested', message: '완료' }; }
   };
   const mockHistory = {
     async getEngagedBlogIds() { return []; },
     async hasEngagedPost() { return false; },
-    async addRecord() {}
+    async getSummary() { return { todayLikes: daily.likes, todayComments: daily.comments, todayNeighbors: daily.neighbors }; },
+    async addRecord(record) {
+      if (record.liked) daily.likes += 1;
+      if (record.commented) daily.comments += 1;
+      if (record.neighborRequested) daily.neighbors += 1;
+    }
   };
   const mockLlm = { async generateBlogComment() { return '좋은 글 감사합니다.'; } };
   const manager = new EngagementAutomationManager({ browserSession: mockSession, embeddedLlama: mockLlm, historyStore: mockHistory });
@@ -136,12 +142,23 @@ test('EngagementAutomationManager counts completed posts once, not likes and com
 
   assert.equal(calls.searchDisplay, 100);
   assert.equal(manager.stats.processedCount, 3);
-  assert.equal(manager.stats.likeSuccessCount, 3);
-  assert.equal(manager.stats.commentSuccessCount, 3);
-  assert.equal(manager.stats.neighborSuccessCount, 3);
+  assert.equal(manager.stats.likeSuccessCount + manager.stats.commentSuccessCount + manager.stats.neighborSuccessCount, 6);
   assert.equal(calls.reactions, 3);
-  assert.equal(calls.neighbors, 3);
+  assert.ok(calls.neighbors < 3);
   assert.equal(manager.stats.targetReached, true);
+});
+
+test('engagement safety policy enforces daily limits and at most two actions per post', () => {
+  const actions = selectPostActions({ requested: { like: true, comment: true, neighbor: true }, todayCounts: { likes: ENGAGEMENT_LIMITS.likesPerDay, comments: 12, neighbors: 4 }, postIndex: 1 });
+  assert.deepEqual(actions.sort(), ['comment', 'neighbor']);
+  assert.equal(actions.length, 2);
+  assert.deepEqual(selectPostActions({ requested: { like: true, comment: true, neighbor: true }, todayCounts: { likes: 200, comments: 100, neighbors: 80 } }), []);
+});
+
+test('neighbor messages vary while retaining the configured message', () => {
+  const messages = Array.from({ length: 4 }, (_, index) => buildNeighborMessage('좋은 이웃으로 소통해요.', '봄이', '육아', index));
+  assert.equal(new Set(messages).size, 4);
+  assert.ok(messages.every((message) => message.includes('좋은 이웃으로 소통해요.')));
 });
 
 test('EngagementAutomationManager skips a post when Naver already shows my comment', async () => {

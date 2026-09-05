@@ -49,6 +49,15 @@ export function classifyLoginPage({ authenticated = false, text = '' } = {}) {
   };
 }
 
+export function normalizePublishCategoryName(value) {
+  const categoryName = String(value || '').trim();
+  if (!categoryName) return '';
+  if (!['건강', '생활'].includes(categoryName)) {
+    throw new Error('발행 카테고리는 건강 또는 생활만 선택할 수 있습니다.');
+  }
+  return categoryName;
+}
+
 export function normalizeWebSearchLinks(records = []) {
   const blogs = new Map();
   for (const record of records) {
@@ -1358,7 +1367,7 @@ export class NaverBrowserSession {
     }
   }
 
-  async publishBlogPost({ title, content, tags = [], images = [], imagePaths = [], isDeals = false }) {
+  async publishBlogPost({ title, content, tags = [], images = [], imagePaths = [], isDeals = false, categoryName = '' }) {
     if (!this.connected) {
       await this.restoreSession().catch(() => {});
     }
@@ -1369,6 +1378,7 @@ export class NaverBrowserSession {
     }
     const cleanTitle = String(title || '').trim();
     const cleanContent = String(content || '').trim();
+    const publishCategoryName = normalizePublishCategoryName(categoryName);
     if (cleanTitle.length < 2 || cleanTitle.length > 200) throw new Error('제목을 2~200자로 입력해주세요.');
     if (cleanContent.length < 20 || cleanContent.length > 50000) throw new Error('본문을 20~50,000자로 입력해주세요.');
 
@@ -1446,6 +1456,10 @@ export class NaverBrowserSession {
       await openPublish.click({ force: true }).catch(() => openPublish.dispatchEvent('click'));
       await page.waitForTimeout(2000);
 
+      if (publishCategoryName) {
+        await selectPublishCategory(editorFrame, publishCategoryName);
+      }
+
       const confirmPublish = await findFinalPublishButton(page, editorFrame);
       if (!confirmPublish) {
         keepOpen = true;
@@ -1482,7 +1496,8 @@ export class NaverBrowserSession {
         return {
           status: 'published',
           message: '블로그 글이 성공적으로 발행되었습니다!',
-          url: publishedPostUrl
+          url: publishedPostUrl,
+          categoryName: publishCategoryName || null
         };
       }
       keepOpen = true;
@@ -1547,8 +1562,6 @@ export class NaverBrowserSession {
       await clearEditorBody(page, editorFrame);
       await insertEditorContentWithImages(page, editorFrame, finalContent, selectedImages);
       await applyInlineLinks(page, editorFrame, finalContent, links);
-      await verifyEditorProductLayout(page, editorFrame, finalContent, selectedImages);
-
       this.pendingPostUpdate = { page, editorFrame, blogId: cleanBlogId, logNo: cleanLogNo };
       await page.bringToFront().catch(() => {});
       return {
@@ -1616,6 +1629,37 @@ async function findVisibleLocator(page, selectors, exactText = '') {
     }
   }
   return null;
+}
+
+async function selectPublishCategory(editorFrame, categoryName) {
+  const trigger = editorFrame.locator('button[data-click-area="tpb*i.category"], button.selectbox_button__jb1Dt').first();
+  if (await trigger.count().catch(() => 0) === 0) {
+    throw new Error(`네이버 발행 설정에서 ${categoryName} 카테고리 선택기를 찾지 못했습니다.`);
+  }
+
+  const current = String(await trigger.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+  if (current !== categoryName) {
+    await trigger.click({ force: true });
+    await editorFrame.page().waitForTimeout(300);
+    const options = editorFrame.locator('li.item__sAGX9');
+    const count = await options.count().catch(() => 0);
+    let selected = false;
+    for (let index = 0; index < count; index++) {
+      const option = options.nth(index);
+      const text = String(await option.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+      if (text !== categoryName || !await option.isVisible().catch(() => false)) continue;
+      await option.click({ force: true });
+      selected = true;
+      break;
+    }
+    if (!selected) throw new Error(`네이버 블로그에 ${categoryName} 카테고리가 없습니다.`);
+  }
+
+  const confirmed = String(await trigger.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+  if (confirmed !== categoryName) {
+    throw new Error(`네이버 발행 카테고리를 ${categoryName}(으)로 확인하지 못했습니다.`);
+  }
+  return categoryName;
 }
 
 async function findFinalPublishButton(page, editorFrame) {

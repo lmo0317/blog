@@ -16,8 +16,8 @@ export class EngagementAutomationManager extends EventEmitter {
       doNeighbor: true,
       neighborMessage: '안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊',
       tone: 'friendly',
-      minDelay: 15,
-      maxDelay: 30,
+      minDelay: 45,
+      maxDelay: 90,
       activeWithinDays: 14
     };
 
@@ -95,9 +95,9 @@ export class EngagementAutomationManager extends EventEmitter {
       throw new Error('검색 키워드를 입력해주세요.');
     }
 
-    const cleanTarget = Math.min(Math.max(Number(targetCount) || 20, 1), 100);
-    const cleanMinDelay = Math.max(Number(minDelay) || 15, 5);
-    const cleanMaxDelay = Math.max(Number(maxDelay) || 30, cleanMinDelay);
+    const cleanTarget = Math.min(Math.max(Number(targetCount) || 20, 1), 500);
+    const cleanMinDelay = Math.max(Number(minDelay) || 45, 10);
+    const cleanMaxDelay = Math.max(Number(maxDelay) || 90, cleanMinDelay);
 
     this.config = {
       keyword: cleanKeyword,
@@ -317,8 +317,17 @@ export class EngagementAutomationManager extends EventEmitter {
 
         // Random Delay between actions
         if (i < items.length - 1 && !this.shouldStop) {
-          const delaySec = Math.floor(Math.random() * (this.config.maxDelay - this.config.minDelay + 1)) + this.config.minDelay;
-          this.log(`⏳ 다음 포스팅까지 ${delaySec}초간 대기합니다 (계정 보호 랜덤 딜레이)...`, 'delay');
+          // Periodic session break every 12 posts to protect account
+          if (this.stats.processedCount > 0 && this.stats.processedCount % 12 === 0) {
+            const sessionBreakSec = Math.floor(Math.random() * 61) + 120; // 120~180s break
+            this.log(`☕ [계정 보호 휴식] ${this.stats.processedCount}개 연속 소통 완료 후 ${sessionBreakSec}초간 안전 숨고르기 휴식을 취합니다...`, 'delay');
+            await this.countdownDelay(sessionBreakSec);
+          }
+
+          const baseDelay = Math.floor(Math.random() * (this.config.maxDelay - this.config.minDelay + 1)) + this.config.minDelay;
+          const jitter = Math.floor(Math.random() * 21) - 5; // -5 to +15s jitter
+          const delaySec = Math.max(baseDelay + jitter, 25);
+          this.log(`⏳ 다음 포스팅까지 ${delaySec}초간 대기합니다 (계정 보호 랜덤 딜레이 +${jitter >= 0 ? jitter : 0}s)...`, 'delay');
           await this.countdownDelay(delaySec);
         }
       }

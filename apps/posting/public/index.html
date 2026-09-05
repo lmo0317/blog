@@ -14,11 +14,10 @@
   <main class="shell">
     <header class="app-header">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <div class="brand"><span class="brand-mark">N</span> 이웃메이트 Post <span class="pill">LOCAL GPU</span></div>
-        <div class="header-engine-indicator" style="display:flex; align-items:center; gap:8px; background:#e6fffa; border:1px solid #b2f5ea; border-radius:10px; padding:6px 14px; cursor:pointer;" id="globalEngineStatusBox" title="클릭하여 AI 모델 설정을 확인하세요">
+        <div class="brand"><span class="brand-mark">N</span> 이웃메이트 Post <span class="pill">GPT</span></div>
+        <div class="header-engine-indicator" style="display:flex; align-items:center; gap:8px; background:#e6fffa; border:1px solid #b2f5ea; border-radius:10px; padding:6px 14px;" id="globalEngineStatusBox">
           <span style="font-size:12px; color:#234e52; font-weight:600;">🚀 AI 엔진:</span>
-          <strong id="globalEngineStatusText" style="font-size:13px; color:#285e61;">⚡ 내 PC 로컬 GPU (모델 확인 중)</strong>
-          <span class="pill pill-green small" style="font-size:11px;">설정 ⚙️</span>
+          <strong id="globalEngineStatusText" style="font-size:13px; color:#285e61;">로그인된 GPT 계정</strong>
         </div>
       </div>
       <p style="margin-top:6px;">네이버 블로그 AI 자동 포스팅 전용 프로그램</p>
@@ -130,7 +129,7 @@
         <div class="panel-heading">
           <div><span class="eyebrow">STEP 01 · ACCOUNT</span><h2>네이버 계정 연결 현황</h2></div>
           <div class="header-badges">
-            <span class="daily-badge" id="dailyLimitBadge">📊 오늘 신청: <strong>0</strong> / 100건</span>
+            <span class="daily-badge" id="dailyLimitBadge">📊 오늘 누적 신청: <strong>0</strong>건</span>
             <span class="status" id="accountStatus"><i></i> 연결 안 됨</span>
             <button class="button ghost small" id="historyModalBtn" type="button">📋 신청 이력 보기</button>
           </div>
@@ -195,23 +194,23 @@
 
           <div class="form-row-grid" style="margin-top:14px;">
             <div class="form-group">
-              <label for="targetCount"><strong>목표 신청 인원</strong> <small>(네이버 1일 최대 100명)</small></label>
+              <label for="targetCount"><strong>목표 신청 인원</strong> <small>(계정 보호 권장 딜레이 적용)</small></label>
               <div class="number-input-wrap">
-                <input type="number" id="targetCount" min="1" max="100" value="30" required>
+                <input type="number" id="targetCount" min="1" max="500" value="50" required>
                 <div class="quick-counts">
-                  <button type="button" data-val="10">10명</button>
                   <button type="button" data-val="30">30명</button>
                   <button type="button" data-val="50">50명</button>
                   <button type="button" data-val="100">100명</button>
+                  <button type="button" data-val="200">200명</button>
                 </div>
               </div>
             </div>
 
             <div class="form-group">
-              <label><strong>신청 간격 (랜덤 딜레이)</strong> <small>(계정보호 무작위 간격)</small></label>
+              <label><strong>신청 간격 (랜덤 딜레이)</strong> <small>(계정보호 무작위 간격 + 가변 지터)</small></label>
               <div class="delay-inputs">
-                <input type="number" id="minDelay" min="5" max="60" value="15" style="width:70px;"> 초 ~ 
-                <input type="number" id="maxDelay" min="10" max="120" value="30" style="width:70px;"> 초 사이 무작위 지연
+                <input type="number" id="minDelay" min="10" max="180" value="45" style="width:70px;"> 초 ~ 
+                <input type="number" id="maxDelay" min="20" max="300" value="90" style="width:70px;"> 초 사이 무작위 지연
               </div>
             </div>
           </div>
@@ -496,23 +495,23 @@
             </div>
 
             <div class="form-group">
-              <label for="engTargetCount"><strong>목표 소통 글 수</strong> <small>(1일 권장 20~50건)</small></label>
+              <label for="engTargetCount"><strong>목표 소통 글 수</strong> <small>(안전 권장 30~100건)</small></label>
               <div class="number-input-wrap">
-                <input type="number" id="engTargetCount" min="1" max="100" value="20" required>
+                <input type="number" id="engTargetCount" min="1" max="500" value="50" required>
                 <div class="quick-counts eng-quick-counts">
-                  <button type="button" data-val="10">10건</button>
                   <button type="button" data-val="20">20건</button>
-                  <button type="button" data-val="30">30건</button>
                   <button type="button" data-val="50">50건</button>
+                  <button type="button" data-val="100">100건</button>
+                  <button type="button" data-val="200">200건</button>
                 </div>
               </div>
             </div>
 
             <div class="form-group">
-              <label><strong>작업 간격 (랜덤 딜레이)</strong> <small>(계정 보호 무작위 쉼)</small></label>
+              <label><strong>작업 간격 (랜덤 딜레이)</strong> <small>(계정 보호 무작위 쉼 + 가변 지터)</small></label>
               <div class="delay-inputs">
-                <input type="number" id="engMinDelay" min="5" max="60" value="15" style="width:65px;"> 초 ~ 
-                <input type="number" id="engMaxDelay" min="10" max="120" value="30" style="width:65px;"> 초 사이
+                <input type="number" id="engMinDelay" min="10" max="180" value="45" style="width:65px;"> 초 ~ 
+                <input type="number" id="engMaxDelay" min="20" max="300" value="90" style="width:65px;"> 초 사이
               </div>
             </div>
 
@@ -660,7 +659,7 @@
         <div class="panel-heading publish-heading">
           <div><span class="eyebrow">AI AUTO POSTING</span><h2>네이버 블로그 AI 자동 포스팅 (자동 게시)</h2></div>
           <div class="publish-statuses" style="display:flex; align-items:center; gap:8px;">
-            <span class="status" id="llmStatus"><i></i> 112 로컬 LLM</span>
+            <span class="status" id="llmStatus"><i></i> GPT 계정 확인 중</span>
             <span class="status" id="publishAccountStatus"><i></i> 네이버 연결 안 됨</span>
           </div>
         </div>
@@ -692,7 +691,7 @@
             </div>
 
             <div class="publish-step-heading" style="margin-top:20px;">
-              <div><b>2</b><span><strong>AI 글 재해석 스타일 및 그림 화풍 설정</strong><small>원하는 글 분위기와 AI 그림 화풍을 선택하세요.</small></span></div>
+              <div><b>2</b><span><strong>GPT 글 스타일 및 그림 화풍 설정</strong><small>로그인된 GPT 계정으로 글과 문단별 이미지 3장을 만듭니다.</small></span></div>
             </div>
             <div class="publish-options" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:16px; margin-top:12px;">
               <label>글 분위기 (말투)
@@ -718,16 +717,10 @@
                   <option value="digital_art">🖼️ 트렌디 디지털 아트</option>
                 </select>
               </label>
-              <label>적용할 AI 모델
-                <select id="articleModelSelect" class="custom-select ai-model-global-select">
-                  <option value="" selected>현재 활성 로컬 모델</option>
-                </select>
-              </label>
-              <label>이미지 생성 모델
-                <select id="articleImageModelSelect" class="custom-select image-model-global-select">
-                  <option value="pollinations" selected>온라인 FLUX 우선 이미지 (빠름)</option>
-                </select>
-              </label>
+              <div class="model-card" style="grid-column:1 / -1; padding:14px;">
+                <strong>로그인된 GPT 계정 사용</strong>
+                <small style="display:block; margin-top:4px; color:#718096;">Gemma 4와 ComfyUI를 실행하지 않습니다. Codex 앱을 열지 않아도 포스팅 프로그램이 기존 GPT 로그인을 이용합니다.</small>
+              </div>
             </div>
             <label class="publish-notes" style="margin-top:16px;">강조하고 싶은 포인트 / 추가 요청사항 (선택)
               <textarea id="articleNotes" maxlength="1000" placeholder="예: 초보자도 이해하기 쉽게 설명해줘, 결론에 실생활 적용 팁을 더 강조해줘"></textarea>
@@ -746,7 +739,7 @@
             </div>
             <div class="draft-action" style="margin-top:18px;">
               <button class="button primary large" type="submit" id="articleDraftBtn" style="width:100%; height:50px; font-size:16px;">
-                <span class="btn-icon">✨</span> <strong>LLM 글 작성 + 이미지 자동 생성</strong>
+                <span class="btn-icon">✨</span> <strong>GPT 글 작성 + 이미지 3장 자동 생성</strong>
               </button>
             </div>
           </form>

@@ -1,11 +1,22 @@
 const TRENDS_RSS_URL = 'https://trends.google.com/trending/rss?geo=KR';
 
+export function toTrendKeyword(topic = '') {
+  const clean = String(topic).replace(/["'“”‘’()[\]{}<>]/g, ' ').replace(/[^0-9A-Za-z가-힣\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const useful = clean.split(' ').filter((word) => !/^(대한민국|한국|민생회복|관련|논란|소식|국가대표팀)$/.test(word));
+  if (useful.length !== clean.split(' ').length) return useful.slice(-2).join('').slice(0, 10);
+  if (clean.replace(/\s/g, '').length <= 10) return clean.replace(/\s+/g, '');
+  const compact = useful.slice(-2).join('').slice(0, 10);
+  return compact || clean.replace(/\s/g, '').slice(0, 10);
+}
+
 export function parseTrendRss(xml = '') {
   const items = String(xml).match(/<item>[\s\S]*?<\/item>/gi) || [];
   return items.map((item) => {
     const newsBlock = item.match(/<ht:news_item>[\s\S]*?<\/ht:news_item>/i)?.[0] || '';
     return {
       topic: readTag(item, 'title'),
+      keyword: toTrendKeyword(readTag(item, 'title')),
       traffic: readTag(item, 'ht:approx_traffic'),
       publishedAt: readTag(item, 'pubDate'),
       newsTitle: readTag(newsBlock, 'ht:news_item_title'),
@@ -49,4 +60,3 @@ function safeHttpUrl(value) {
     return '';
   }
 }
-

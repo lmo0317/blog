@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLlmJson, normalizeGeneratedPost, LocalLlmClient } from '../lib/llm.js';
-import { parseTrendRss } from '../lib/trends.js';
+import { parseTrendRss, toTrendKeyword } from '../lib/trends.js';
 import { classifyPublishResult, isNaverLoginUrl } from '../lib/naver.js';
 import { appendImageAttributions, searchCommonsImages } from '../lib/images.js';
 import { extractAlgumonDestination, isDirectProductUrl, resolveAlgumonOutboundUrl, unwrapKnownRedirectUrl } from '../lib/algumon.js';
@@ -17,6 +17,12 @@ test('trend RSS parser extracts Korean topic and source safely', () => {
   assert.equal(items[0].topic, '여름 휴가');
   assert.equal(items[0].newsTitle, '휴가 준비 & 체크리스트');
   assert.equal(items[0].sourceUrl, 'https://example.com/news?id=1&from=rss');
+});
+
+test('trend topics become short search keywords', () => {
+  assert.equal(toTrendKeyword('민생회복 소비쿠폰'), '소비쿠폰');
+  assert.equal(toTrendKeyword('대한민국 여자 배구 국가대표팀'), '여자배구');
+  assert.equal(toTrendKeyword('명예훼손'), '명예훼손');
 });
 
 test('LLM JSON parser accepts fenced JSON and normalizes tags', () => {

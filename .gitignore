@@ -18,4 +18,4 @@ npm-debug.log*
 **/.electron/
 apps/posting/.image-engine/
 **/.image-engine/
-
+output/

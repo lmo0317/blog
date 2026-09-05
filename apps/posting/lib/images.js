@@ -206,18 +206,18 @@ export async function cleanupDownloadedImages(images = []) {
 export function appendImageAttributions(content, images = []) {
   if (!images.length) return content;
   if (images.every((image) => image.isAiGenerated || image.license?.includes('Gemma'))) {
-    return `${String(content).trim()}\n\n⚡ 본문의 이미지는 현재 선택한 로컬 AI가 본문 문맥에 맞춰 생성한 맞춤형 그림/사진입니다.`;
+    return String(content).trim();
   }
   if (images.every((image) => image.license === '핫딜 상품 이미지')) {
     return `${String(content).trim()}\n\n이미지 출처 | 각 상품 및 판매 페이지`;
   }
-  const lines = images.map((image, index) => {
-    if (image.isAiGenerated || image.license?.includes('Gemma')) {
-      return `${index + 1}. ${image.title} — 로컬 AI 생성 그림`;
-    }
+  const lines = images
+    .filter((image) => !image.isAiGenerated && !image.license?.includes('Gemma'))
+    .map((image, index) => {
     const author = image.author || '상품/출처 페이지 참조';
     return `${index + 1}. ${image.title} — ${author} / ${image.license}\n출처: ${image.pageUrl}`;
   });
+  if (!lines.length) return String(content).trim();
   return `${String(content).trim()}\n\n이미지 출처 및 안내\n${lines.join('\n\n')}`;
 }
 

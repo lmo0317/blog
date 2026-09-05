@@ -192,6 +192,26 @@ export class EmbeddedLlamaServer extends EventEmitter {
     return { summary: '최근 글에서 반복해서 나타난 주제를 기준으로 분석했습니다.', audience: '해당 주제에 관심 있는 네이버 블로그 독자', targets: fallbackKeywords.map((keyword, index) => ({ keyword, reason: '최근 글에서 반복적으로 확인된 주제', score: Math.max(55, 85 - index * 5) })), method: 'fallback' };
   }
 
+  async generateCommentReply({ postTitle = '', commentText = '', commenterName = '' }) {
+    const source = normalizeCommentText(commentText);
+    if (!source) throw new Error('답글을 만들 댓글 내용이 없습니다.');
+    const fallback = `${commenterName ? `${commenterName}님, ` : ''}따뜻한 댓글 감사합니다. 남겨주신 말씀 덕분에 힘이 나네요!`;
+    if (this.status !== 'running') return fallback;
+    try {
+      const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(12000),
+        body: JSON.stringify({ temperature: 0.55, max_tokens: 120, messages: [
+          { role: 'system', content: '당신은 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 정중하고 자연스러운 한국어 대댓글 1~2문장을 작성하세요. 상대 댓글의 구체적인 표현에 답하고, 과장하거나 방문·구매 경험을 지어내지 마세요. 이모지는 최대 1개, 해시태그·URL·따옴표·자기소개는 금지합니다. 답글만 출력하세요.' },
+          { role: 'user', content: `[내 글 제목]\n${postTitle}\n[댓글 작성자]\n${commenterName}\n[받은 댓글]\n${source}` }
+        ] })
+      });
+      if (!response.ok) return fallback;
+      const text = normalizeCommentText((await response.json()).choices?.[0]?.message?.content || '');
+      if (text.length < 10 || text.length > 120 || /https?:\/\/|www\.|[#<>\[\]{}]/i.test(text)) return fallback;
+      return text;
+    } catch { return fallback; }
+  }
+
   async generateBlogComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
     const systemPrompt = `당신은 네이버 블로그를 즐겨보는 따뜻하고 진정성 있는 20~30대 한국인 이웃 블로거입니다.
 상대방의 블로그 포스팅 제목, 본문 내용, 사진(이미지) 정보를 바탕으로 상대방이 기분 좋아할 만한 '자연스럽고 정중한 1~2줄 칭찬/공감 댓글'을 작성하세요.
@@ -275,5 +295,82 @@ ${toneDescriptions[tone] || toneDescriptions.friendly}
     ];
     const grounded = [`${topic}에 관해 직접 정리해 주신 부분이 특히 눈에 들어왔어요. 차분하게 잘 읽었습니다.`, `${topic} 이야기를 구체적으로 풀어주셔서 흐름을 이해하기 좋았어요. 정성스러운 글 잘 봤습니다.`, `${topic} 부분이 궁금했는데 글에서 짚어주신 내용이 인상적이네요. 공유해 주셔서 감사합니다.`];
     return grounded.find((candidate) => !recentComments.some((previous) => similarity(candidate, previous) >= 0.72)) || '';
+  }
+
+  async analyzeBlogTargetKeywords({ texts = [], fallbackKeywords = [] }) {
+    const defaultResponse = {
+      summary: texts.length
+        ? `최근 포스팅 ${texts.length}개를 기반으로 작성된 맞춤 소통 추천입니다.`
+        : '내 블로그의 최근 포스팅을 기반으로 분석된 추천 소통 주제입니다.',
+      audience: fallbackKeywords.length
+        ? `${fallbackKeywords.slice(0, 3).join(', ')} 관련 공통 관심사를 가진 블로거`
+        : '해당 관심사를 공유하는 네이버 블로그 이웃',
+      targets: fallbackKeywords.map((kw, idx) => ({
+        keyword: kw,
+        reason: '내 블로그 글에서 반복 추출된 핵심 관심사',
+        score: Math.max(60, 95 - idx * 5)
+      })),
+      method: 'rule-fallback'
+    };
+
+    if (this.status !== 'running' || !texts.length) {
+      return defaultResponse;
+    }
+
+    const prompt = `당신은 네이버 블로그 마케팅 및 이웃 소통 전문 AI입니다.
+아래는 사용자가 최근 자신의 네이버 블로그에 작성한 글들의 제목과 본문 요약입니다:
+
+${texts.slice(0, 8).map((t, idx) => `[글 ${idx + 1}] ${t.slice(0, 200)}`).join('\n\n')}
+
+위 글들을 정밀하게 분석하여, 이 블로거가 서로이웃을 맺고 활발하게 소통(공감, 댓글)하면 가장 반응이 좋고 공감대가 형성될 만한 "소통 타겟 키워드 5~8개"를 선정하고 JSON 형식으로 응답하세요.
+
+JSON 출력 형식 예시 (오직 유효한 JSON만 반환):
+{
+  "summary": "블로그 글 주제 요약 (1~2문장)",
+  "audience": "가장 소통이 잘 통할 추천 타겟 이웃층 (1문장)",
+  "targets": [
+    { "keyword": "추천키워드", "reason": "이 키워드를 추천하는 이유 (간략히 1문장)", "score": 95 }
+  ]
+}`;
+
+    try {
+      const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          temperature: 0.3,
+          max_tokens: 600,
+          messages: [
+            { role: 'system', content: 'You are a Korean blog analytics assistant. Output ONLY valid JSON matching the requested schema.' },
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
+
+      if (!response.ok) return defaultResponse;
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content?.trim() || '';
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return defaultResponse;
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!parsed.targets || !Array.isArray(parsed.targets) || parsed.targets.length === 0) {
+        return defaultResponse;
+      }
+
+      return {
+        summary: parsed.summary || defaultResponse.summary,
+        audience: parsed.audience || defaultResponse.audience,
+        targets: parsed.targets.filter((t) => t && t.keyword).map((t) => ({
+          keyword: String(t.keyword).trim(),
+          reason: String(t.reason || '블로그 포스팅 연관 소통 타겟').trim(),
+          score: Number(t.score) || 90
+        })),
+        method: 'llama'
+      };
+    } catch (err) {
+      return defaultResponse;
+    }
   }
 }
