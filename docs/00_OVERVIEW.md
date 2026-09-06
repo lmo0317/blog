@@ -25,6 +25,7 @@
 
 | 번호 | 문서명 | 주요 내용 | 링크 |
 | :---: | :--- | :--- | :---: |
+| **EXEC**| **통합 실행 Task 계획서** | **전체 5단계 순차 업무 Task, 파일 단위 구현 방법, 완료 정의(DoD)** | [TASK_MASTER_PLAN.md](file:///D:/work/dev/blog/docs/TASK_MASTER_PLAN.md) |
 | **00** | **마스터 종합 개요** (현재 문서) | 프로젝트 비전, 3계층 아키텍처, 4주 출시 로드맵 | [00_OVERVIEW.md](file:///D:/work/dev/blog/docs/00_OVERVIEW.md) |
 | **01** | **비즈니스 & PRD 기획서** | 크몽 95782 벤치마킹, 요금제(월 9,900원/14,900원), 마케팅 전략 | [01_BUSINESS_AND_PRD.md](file:///D:/work/dev/blog/docs/01_BUSINESS_AND_PRD.md) |
 | **02** | **AI 모델 파인튜닝 명세서** | Gemma 4 E2B 학습, 10만건 데이터셋, DPO 보상 모델, GGUF 양자화 | [02_AI_MODEL_FINETUNING.md](file:///D:/work/dev/blog/docs/02_AI_MODEL_FINETUNING.md) |
