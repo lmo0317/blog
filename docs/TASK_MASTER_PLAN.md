@@ -3,6 +3,7 @@
 > **문서 코드**: TASK-MASTER-PLAN  
 > **기반 문서**: [00_OVERVIEW.md](file:///D:/work/dev/blog/docs/00_OVERVIEW.md) ~ [05_KMONG_95782_COMPETITOR_ANALYSIS.md](file:///D:/work/dev/blog/docs/05_KMONG_95782_COMPETITOR_ANALYSIS.md)  
 > **우선순위 조정**: **중앙 인증 & 라이선스 결제 서버를 AI 파인튜닝보다 먼저 구축**하여 상용 과금 인프라를 최우선 확보  
+> 🎨 **최우선 개발 지침**: **모든 기능 개발 시 "사용자 편의, 깔끔함, 쓰기 좋고 보기 좋은 직관적 UX/UI"를 절대 타협 없이 고려**  
 > **최종 수정일**: 2026년 9월 6일
 
 ---
