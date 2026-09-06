@@ -30,6 +30,7 @@
 | **02** | **AI 모델 파인튜닝 명세서** | Gemma 4 E2B 학습, 10만건 데이터셋, DPO 보상 모델, GGUF 양자화 | [02_AI_MODEL_FINETUNING.md](file:///D:/work/dev/blog/docs/02_AI_MODEL_FINETUNING.md) |
 | **03** | **라이선스 & 보안 서버 설계서** | 중앙 인증 서버, 1인 1PC HWID 바인딩, 결제 웹훅 연동, Bytenode DRM | [03_AUTH_LICENSE_SERVER.md](file:///D:/work/dev/blog/docs/03_AUTH_LICENSE_SERVER.md) |
 | **04** | **클라이언트 핵심 기능 명세서** | 이웃 새글 자동 댓글, 받은 신청 AI 수락, 장기 미수락 신청 회수 | [04_CLIENT_FEATURE_SPEC.md](file:///D:/work/dev/blog/docs/04_CLIENT_FEATURE_SPEC.md) |
+| **05** | **크몽 95782 기능 심층 비교 보고서** | 원본 상세 기능 매트릭스, 크몽 솔루션 기능 전수 조사 및 세부 분석 | [05_KMONG_95782_COMPETITOR_ANALYSIS.md](file:///D:/work/dev/blog/docs/05_KMONG_95782_COMPETITOR_ANALYSIS.md) |
 
 ---
 
