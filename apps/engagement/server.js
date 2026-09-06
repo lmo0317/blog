@@ -43,7 +43,8 @@ const llmClient = new LocalLlmClient({
 const browserSession = new NaverBrowserSession({
   headless: String(process.env.NAVER_HEADLESS).toLowerCase() === 'true',
   profileDir: path.join(__dirname, '.playwright', 'naver-profile'),
-  sessionStatePath: path.join(__dirname, '.playwright', 'naver-session.json')
+  sessionStatePath: path.join(__dirname, '.playwright', 'naver-session.json'),
+  groupStorePath: path.join(__dirname, '.data', 'neighbor-group-state.json')
 });
 const historyStore = new NeighborHistoryStore(path.join(__dirname, '.data', 'neighbor-history.json'));
 const automationManager = new NeighborAutomationManager({ browserSession, historyStore });
@@ -191,8 +192,23 @@ app.get('/api/neighbors/summary', async (_req, res, next) => {
     res.json({
       ...summary,
       connected: browserSession.connected,
-      autoState: automationManager.state
+      autoState: automationManager.state,
+      neighborGroupState: browserSession.getNeighborGroupState(),
+      activeNeighborGroup: browserSession.getActiveNeighborGroupName()
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/neighbors/group', async (req, res, next) => {
+  try {
+    const groupName = String(req.body?.groupName || '').trim();
+    if (!groupName) {
+      return res.status(400).json({ error: '그룹 이름을 입력해주세요.' });
+    }
+    const updated = browserSession.setActiveNeighborGroupName(groupName);
+    res.json({ ok: true, activeNeighborGroup: updated, neighborGroupState: browserSession.getNeighborGroupState() });
   } catch (error) {
     next(error);
   }
@@ -416,7 +432,9 @@ app.get('/api/settings', async (_req, res, next) => {
       engineMode: 'local_gpu',
       activeModel,
       installedCount: installedModels.filter((m) => m.isInstalled).length,
-      activeEndpoint
+      activeEndpoint,
+      neighborGroupState: browserSession.getNeighborGroupState(),
+      activeNeighborGroup: browserSession.getActiveNeighborGroupName()
     });
   } catch (error) {
     next(error);

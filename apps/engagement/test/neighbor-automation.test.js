@@ -4,7 +4,8 @@ import path from 'node:path';
 import { rm } from 'node:fs/promises';
 import { NeighborHistoryStore } from '../lib/history.js';
 import { NeighborAutomationManager } from '../lib/automation.js';
-import { parseRelativePostDate, isPostActiveWithinDays, classifyNeighborResult } from '../lib/naver.js';
+import { NeighborGroupStore } from '../lib/neighbor-groups.js';
+import { buildAutoNeighborGroupName, parseRelativePostDate, isPostActiveWithinDays, classifyNeighborResult, isNeighborGroupFullResponse } from '../lib/naver.js';
 
 test('NeighborHistoryStore saves records, prevents duplicates, and tracks daily count', async (t) => {
   const testDbPath = path.join(process.cwd(), '.data', 'test-history.json');
@@ -74,6 +75,10 @@ test('parseRelativePostDate and isPostActiveWithinDays correctly parse relative 
 
 test('classifyNeighborResult distinguishes daily limit, mutual, and pending states', () => {
   assert.equal(
+    classifyNeighborResult('해당 그룹에 더 이상 이웃을 추가할 수 없습니다. 다른 그룹을 선택해주세요.').status,
+    'group_full'
+  );
+  assert.equal(
     classifyNeighborResult('하루에 신청할 수 있는 서로이웃 신청 수를 초과하였습니다.').status,
     'limit_reached'
   );
@@ -89,6 +94,55 @@ test('classifyNeighborResult distinguishes daily limit, mutual, and pending stat
     classifyNeighborResult('자동입력 방지 문자를 입력하세요').status,
     'verification_required'
   );
+  assert.equal(
+    classifyNeighborResult('이웃수 5000명 초과로 서로이웃을 더 맺을 수 없습니다.').rawMessage,
+    '이웃수 5000명 초과로 서로이웃을 더 맺을 수 없습니다.'
+  );
+});
+
+test('full neighbor groups are detected and automatic group names are bounded', () => {
+  assert.equal(isNeighborGroupFullResponse('해당 그룹에 더 이상 이웃을 추가할 수 없습니다. 다른 그룹을 선택해주세요.'), true);
+  assert.equal(isNeighborGroupFullResponse('서로이웃 신청이 완료되었습니다.'), false);
+  const name = buildAutoNeighborGroupName(new Date('2026-09-06T12:34:56Z'));
+  assert.match(name, /^소통이웃-\d+$/);
+  assert.ok(name.length <= 20);
+});
+
+test('NeighborGroupStore persists active group and sequentially generates next group when marked full', async () => {
+  const testStorePath = path.join(process.cwd(), '.data', 'test-group-state.json');
+  await rm(testStorePath, { force: true }).catch(() => {});
+
+  const store = new NeighborGroupStore(testStorePath);
+  assert.equal(store.getActiveGroupName(), '');
+
+  store.setActiveGroupName('새그룹');
+  assert.equal(store.getActiveGroupName(), '새그룹');
+
+  // Mark '새그룹' full -> next group is '소통이웃-1'
+  const nextGroup1 = store.markGroupFull('새그룹');
+  assert.equal(nextGroup1, '소통이웃-1');
+  assert.equal(store.getActiveGroupName(), '소통이웃-1');
+  assert.ok(store.isGroupFull('새그룹'));
+  assert.equal(store.isGroupFull('소통이웃-1'), false);
+
+  // Mark '소통이웃-1' full -> next group is '소통이웃-2'
+  const nextGroup2 = store.markGroupFull('소통이웃-1');
+  assert.equal(nextGroup2, '소통이웃-2');
+  assert.equal(store.getActiveGroupName(), '소통이웃-2');
+  assert.ok(store.isGroupFull('소통이웃-1'));
+
+  // Reload from disk to verify persistence
+  const reloadedStore = new NeighborGroupStore(testStorePath);
+  assert.equal(reloadedStore.getActiveGroupName(), '소통이웃-2');
+  assert.ok(reloadedStore.isGroupFull('새그룹'));
+  assert.ok(reloadedStore.isGroupFull('소통이웃-1'));
+  assert.equal(reloadedStore.isGroupFull('소통이웃-2'), false);
+
+  const state = reloadedStore.getState();
+  assert.equal(state.activeGroupName, '소통이웃-2');
+  assert.deepEqual(state.fullGroupNames, ['새그룹', '소통이웃-1']);
+
+  await rm(testStorePath, { force: true }).catch(() => {});
 });
 
 test('NeighborAutomationManager validates config and checks daily limit', async () => {

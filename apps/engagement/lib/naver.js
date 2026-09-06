@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { chmod, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path, { dirname } from 'node:path';
+import { NeighborGroupStore } from './neighbor-groups.js';
 
 const BLOG_ID_PATTERN = /^[a-zA-Z0-9_.-]{2,50}$/;
 const KEYWORD_CATEGORIES = [
@@ -170,34 +171,49 @@ export function isPostActiveWithinDays(dateStr = '', days = 0) {
   return diffDays <= Number(days);
 }
 
+export function isNeighborGroupFullResponse(text = '') {
+  return /해당 그룹에 더 이상 이웃을 추가할 수 없습니다|다른 그룹을 선택해\s*주세요|이웃그룹.*(?:가득|초과|한도)/i.test(String(text));
+}
+
 export function classifyNeighborResult(text = '', pageClosed = false) {
   if (pageClosed) return { status: 'added', message: '이웃 추가가 완료되었습니다.' };
   const normalized = String(text).replace(/\s+/g, ' ').trim();
+  const withRaw = (status, message) => ({ status, message, rawMessage: normalized.slice(0, 500) });
+  if (isNeighborGroupFullResponse(normalized)) {
+    return withRaw('group_full', '해당 이웃 그룹이 가득 찼습니다. 새 그룹 생성이 필요합니다.');
+  }
   if (/하루에 신청할 수 있는|1일.*(초과|제한|한도)|신청 가능 횟수.*초과|더 이상.*신청할 수 없.*(하루|일일)|오늘.*신청/i.test(normalized)) {
-    return { status: 'limit_reached', message: '네이버 일일 서로이웃 신청 한도(100명)에 도달했습니다.' };
+    return withRaw('limit_reached', '네이버 일일 서로이웃 신청 한도(100명)에 도달했습니다.');
   }
   if (/현재 서로이웃입니다|이미 서로이웃/i.test(normalized)) {
-    return { status: 'already_mutual', message: '이미 서로이웃인 블로그입니다.' };
+    return withRaw('already_mutual', '이미 서로이웃인 블로그입니다.');
   }
   if (/서로이웃 신청\s*(중|진행중)|서로이웃 신청.*(완료|보냈|했습니다)|신청한 서로이웃/i.test(normalized)) {
-    return { status: 'requested', message: '서로이웃 신청이 완료되었습니다.' };
+    return withRaw('requested', '서로이웃 신청이 완료되었습니다.');
   }
   if (/이미 (서로)?이웃|이미 추가된 이웃|이미 추가한 이웃|이미 이웃으로|현재 (서로)?이웃입니다/i.test(normalized)) {
-    return { status: 'already_added', message: '이미 이웃인 블로그입니다.' };
+    return withRaw('already_added', '이미 이웃인 블로그입니다.');
   }
   if (/자신의 블로그|내 블로그는 이웃/i.test(normalized)) {
-    return { status: 'self', message: '내 블로그는 추가할 수 없습니다.' };
+    return withRaw('self', '내 블로그는 추가할 수 없습니다.');
   }
   if (/이웃으로 추가되었습니다|이웃 추가가 완료|이웃으로 추가했/i.test(normalized)) {
-    return { status: 'added', message: '이웃 추가가 완료되었습니다.' };
+    return withRaw('added', '이웃 추가가 완료되었습니다.');
   }
   if (/자동입력 방지|보안 확인|추가 인증|로그인이 필요/i.test(normalized)) {
-    return { status: 'verification_required', message: '네이버 보안 확인이 필요합니다.' };
+    return withRaw('verification_required', '네이버 보안 확인이 필요합니다.');
   }
-  if (/이웃 추가를 허용하지|더 이상 이웃|이웃\s*수.*초과|서로이웃을 더 맺을 수 없|존재하지 않거나 잘못 설치된 이웃커넥트|서로이웃을 받지 않는/i.test(normalized)) {
-    return { status: 'unavailable', message: '이 블로그는 현재 이웃으로 추가할 수 없습니다.' };
+  if (/이웃 추가를 허용하지|더 이상 이웃|이웃\s*수.*초과|서로이웃을 더 맺을 수 없|서로이웃.*(?:한계|한도).*(?:넘|초과).*받을 수 없|존재하지 않거나 잘못 설치된 이웃커넥트|서로이웃을 받지 않는/i.test(normalized)) {
+    return withRaw('unavailable', '이 블로그는 현재 이웃으로 추가할 수 없습니다.');
   }
-  return { status: 'unknown', message: '네이버 응답을 확인하지 못했습니다.' };
+  return withRaw('unknown', '네이버 응답을 확인하지 못했습니다.');
+}
+
+export function buildAutoNeighborGroupName(now = new Date()) {
+  const stamp = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  }).format(now).replace(/\D/g, '');
+  return `소통이웃-${stamp}`.slice(0, 20);
 }
 
 
@@ -288,16 +304,30 @@ async function cleanProfileLocks(profileDir) {
 }
 
 export class NaverBrowserSession {
-  constructor({ headless = false, browserFactory = chromium, profileDir = '', sessionStatePath = '' }) {
+  constructor({ headless = false, browserFactory = chromium, profileDir = '', sessionStatePath = '', groupStore = null, groupStorePath = '' }) {
     this.headless = headless;
     this.browserFactory = browserFactory;
     this.profileDir = profileDir;
     this.sessionStatePath = sessionStatePath;
+    this.groupStore = groupStore || new NeighborGroupStore(groupStorePath || path.resolve(process.cwd(), '.data', 'neighbor-group-state.json'));
     this.browser = null;
     this.context = null;
     this.page = null;
     this.connectedId = '';
     this.pendingPostUpdate = null;
+  }
+
+  getActiveNeighborGroupName() {
+    return this.groupStore?.getActiveGroupName?.() || '';
+  }
+
+  setActiveNeighborGroupName(name) {
+    this.groupStore?.setActiveGroupName?.(name);
+    return this.getActiveNeighborGroupName();
+  }
+
+  getNeighborGroupState() {
+    return this.groupStore?.getState?.() || { activeGroupName: '', fullGroupNames: [], groupHistory: [], lastUpdated: null };
   }
 
   get connected() {
@@ -807,7 +837,179 @@ export class NaverBrowserSession {
     return { blogId, url: page.url(), status: 'awaiting_user_confirmation' };
   }
 
-  async addNeighbor(blogId, mutualMessage = '안녕하세요! 블로그 글 유익하게 보고 갑니다. 서로이웃 맺고 소통해요 :)', bloggerName = '') {
+  async inspectNeighborRelationship(blogId) {
+    if (!this.connected) throw new Error('먼저 네이버 계정을 연결해주세요.');
+    if (!BLOG_ID_PATTERN.test(blogId)) throw new Error('올바른 블로그 ID가 아닙니다.');
+
+    const page = await this.context.newPage();
+    let popup = null;
+    try {
+      // The connect form is the most reliable place to detect an existing
+      // pending request; the profile popup can still look eligible in that state.
+      const pendingCheckPage = await this.context.newPage();
+      try {
+        await pendingCheckPage.goto(`https://section.blog.naver.com/connect/PopConnectBuddyAddForm.naver?blogId=${encodeURIComponent(blogId)}`, { waitUntil: 'domcontentloaded' });
+        const pendingText = await pendingCheckPage.locator('body').innerText().catch(() => '');
+        const pendingState = classifyNeighborResult(pendingText);
+        if (['requested', 'already_mutual', 'already_added', 'self', 'verification_required', 'limit_reached', 'unavailable'].includes(pendingState.status)) {
+          return pendingState;
+        }
+      } finally {
+        await pendingCheckPage.close().catch(() => {});
+      }
+
+      await page.goto(`https://blog.naver.com/${encodeURIComponent(blogId)}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(900);
+      if (/nidlogin\.login/i.test(page.url())) {
+        return { status: 'verification_required', message: '로그인 또는 보안 확인이 필요합니다.', rawMessage: '로그인 페이지로 이동됨' };
+      }
+
+      const profileFrame = page.frames().find((frame) => /\/(prologue\/PrologueList|PostView|PostList)\.naver/i.test(frame.url()));
+      const trigger = profileFrame?.locator('a._addBuddyPop, a._buddy_popup_btn').first();
+      if (!trigger || await trigger.count() !== 1 || !await trigger.isVisible().catch(() => false)) {
+        const checkPage = await this.context.newPage();
+        try {
+          await checkPage.goto(`https://section.blog.naver.com/connect/PopConnectBuddyAddForm.naver?blogId=${encodeURIComponent(blogId)}`, { waitUntil: 'domcontentloaded' });
+          const rawText = await checkPage.locator('body').innerText().catch(() => '');
+          const known = classifyNeighborResult(rawText);
+          if (known.status !== 'unknown' && known.status !== 'group_full') return known;
+          if (/추가할 이웃그룹|이웃그룹을 선택/i.test(rawText)) {
+            return { status: 'mutual_unavailable', message: '일반 이웃만 추가할 수 있는 블로그입니다.', rawMessage: rawText.replace(/\s+/g, ' ').trim().slice(0, 500) };
+          }
+          return { status: 'unknown', message: '이웃 상태를 사전 확인하지 못했습니다.', rawMessage: rawText.replace(/\s+/g, ' ').trim().slice(0, 500) };
+        } finally {
+          await checkPage.close().catch(() => {});
+        }
+      }
+
+      const popupPromise = page.waitForEvent('popup', { timeout: 7000 }).catch(() => null);
+      await trigger.click();
+      popup = await popupPromise;
+      if (!popup) return { status: 'unknown', message: '이웃추가 팝업을 열지 못했습니다.', rawMessage: '' };
+      await popup.waitForLoadState('domcontentloaded', { timeout: 7000 }).catch(() => {});
+      await popup.waitForTimeout(500);
+      const rawText = await popup.locator('body').innerText().catch(() => '');
+      const known = classifyNeighborResult(rawText);
+      if (known.status !== 'unknown' && known.status !== 'group_full') return known;
+      const mutualVisible = await popup.locator('#each_buddy_add').isVisible().catch(() => false);
+      const changeVisible = await popup.locator('#buddy_change').isVisible().catch(() => false);
+      if (mutualVisible || changeVisible) {
+        return { status: 'eligible', message: '서로이웃 신청 가능 상태입니다.', rawMessage: rawText.replace(/\s+/g, ' ').trim().slice(0, 500) };
+      }
+      return { status: 'unknown', message: '이웃 상태를 사전 확인하지 못했습니다.', rawMessage: rawText.replace(/\s+/g, ' ').trim().slice(0, 500) };
+    } finally {
+      if (popup && !popup.isClosed()) await popup.close().catch(() => {});
+      if (!page.isClosed()) await page.close().catch(() => {});
+    }
+  }
+
+  async setupNewGroupInPopup(popup, groupName) {
+    const trimmed = String(groupName || '').trim();
+    if (!trimmed) throw new Error('생성할 이웃 그룹 이름이 비어 있습니다.');
+
+    const isVisible = await popup.evaluate(() => {
+      const el = document.querySelector('._newGroup');
+      return el && window.getComputedStyle(el).display !== 'none';
+    }).catch(() => false);
+
+    if (!isVisible) {
+      const addBtn = popup.locator('a._addNewGroupForm');
+      if (await addBtn.count().catch(() => 0) > 0) {
+        await addBtn.click({ force: true }).catch(() => {});
+      }
+    }
+
+    await popup.evaluate((name) => {
+      const newGroup = document.querySelector('._newGroup');
+      if (newGroup) newGroup.style.display = 'block';
+
+      const check = document.querySelector('#newGroupCheck');
+      if (check) {
+        check.checked = true;
+        if (check.parentElement) check.parentElement.classList.add('checked');
+      }
+
+      const input = document.querySelector('#newGroupName');
+      if (input) {
+        input.value = name;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      const groupId = document.querySelector('#groupId');
+      if (groupId) groupId.value = '0';
+
+      const groupNameInput = document.querySelector('#groupName');
+      if (groupNameInput) groupNameInput.value = name;
+    }, trimmed);
+
+    const nameInput = popup.locator('#newGroupName');
+    if (await nameInput.isVisible().catch(() => false)) {
+      await nameInput.fill(trimmed).catch(() => {});
+    }
+
+    return trimmed;
+  }
+
+  async selectOrSetupNeighborGroup(popup, preferredGroupName = '') {
+    const groupData = await popup.evaluate(() => {
+      const selected = (document.querySelector('a._selectedGroup')?.innerText || '').replace(/\s+/g, ' ').trim();
+      const options = Array.from(document.querySelectorAll('a._selectGroup')).map(el => ({
+        name: (el.innerText || '').replace(/\s+/g, ' ').trim(),
+        groupId: el.getAttribute('groupId') || ''
+      }));
+      return { selected, options };
+    }).catch(() => ({ selected: '', options: [] }));
+
+    let targetGroupName = preferredGroupName || this.groupStore.getActiveGroupName();
+
+    if (!targetGroupName || this.groupStore.isGroupFull(targetGroupName)) {
+      const nonFullOption = groupData.options.find(opt => opt.name && !this.groupStore.isGroupFull(opt.name));
+      if (nonFullOption) {
+        targetGroupName = nonFullOption.name;
+      } else {
+        targetGroupName = this.groupStore.generateNextGroupName();
+      }
+      this.groupStore.setActiveGroupName(targetGroupName);
+    }
+
+    const existingOption = groupData.options.find(opt => opt.name === targetGroupName);
+    if (existingOption) {
+      await popup.evaluate((targetName) => {
+        const match = Array.from(document.querySelectorAll('a._selectGroup')).find(el => (el.innerText || '').replace(/\s+/g, ' ').trim() === targetName);
+        if (match) {
+          match.click();
+          return true;
+        }
+        return false;
+      }, targetGroupName).catch(() => {});
+
+      await popup.evaluate(() => {
+        const check = document.querySelector('#newGroupCheck');
+        if (check) check.checked = false;
+        const newGroup = document.querySelector('._newGroup');
+        if (newGroup) newGroup.style.display = 'none';
+      }).catch(() => {});
+
+      return { action: 'selected', groupName: targetGroupName };
+    }
+
+    const createdName = await this.setupNewGroupInPopup(popup, targetGroupName);
+    return { action: 'created', groupName: createdName };
+  }
+
+  async selectReusableNeighborGroup(popup) {
+    const res = await this.selectOrSetupNeighborGroup(popup);
+    return res.groupName;
+  }
+
+  async createNeighborGroupForRetry(popup) {
+    const nextGroup = this.groupStore.generateNextGroupName();
+    this.groupStore.setActiveGroupName(nextGroup);
+    return await this.setupNewGroupInPopup(popup, nextGroup);
+  }
+
+  async addNeighbor(blogId, mutualMessage = '안녕하세요! 블로그 글 유익하게 보고 갑니다. 서로이웃 맺고 소통해요 :)', bloggerName = '', options = {}) {
     if (!this.connected) throw new Error('먼저 네이버 계정을 연결해주세요.');
     if (!BLOG_ID_PATTERN.test(blogId)) throw new Error('올바른 블로그 ID가 아닙니다.');
 
@@ -894,13 +1096,24 @@ export class NaverBrowserSession {
       const messageInput = popup.locator('#message');
       await messageInput.waitFor({ state: 'visible', timeout: 7000 });
       await messageInput.fill(finalMessage);
+
+      let groupResult;
+      if (options.forceNewGroup && options.targetGroupName) {
+        await this.setupNewGroupInPopup(popup, options.targetGroupName);
+        groupResult = { action: 'created', groupName: options.targetGroupName };
+      } else {
+        groupResult = await this.selectOrSetupNeighborGroup(popup, options.targetGroupName);
+      }
+      const appliedGroupName = groupResult.groupName || '';
+      const createdGroupName = groupResult.action === 'created' ? groupResult.groupName : '';
+
       const submitMutual = popup.locator('a._addBothBuddy');
       await submitMutual.waitFor({ state: 'visible', timeout: 7000 });
       await submitMutual.click().catch((error) => {
         if (!popup.isClosed()) throw error;
       });
       await popup.waitForTimeout(900).catch(() => {});
-      const result = popup.isClosed()
+      let result = popup.isClosed()
         ? (() => {
             const closedResult = classifyNeighborResult(dialogMessages.join(' '));
             return closedResult.status === 'unknown'
@@ -908,6 +1121,35 @@ export class NaverBrowserSession {
               : closedResult;
           })()
         : classifyNeighborResult(`${dialogMessages.join(' ')} ${await popup.locator('body').innerText().catch(() => '')}`);
+      const groupFullText = `${dialogMessages.join(' ')} ${result.rawMessage || ''}`;
+      if ((result.status === 'group_full' || isNeighborGroupFullResponse(groupFullText)) && !options.groupRetryAttempted) {
+        const fullGroupName = appliedGroupName || this.groupStore.getActiveGroupName() || '새그룹';
+        const nextGroup = this.groupStore.markGroupFull(fullGroupName);
+        if (!popup.isClosed()) await popup.close().catch(() => {});
+        popup = null;
+        const retryResult = await this.addNeighbor(blogId, mutualMessage, bloggerName, {
+          forceNewGroup: true,
+          targetGroupName: nextGroup,
+          groupRetryAttempted: true
+        });
+        return { ...retryResult, retriedAfterGroupFull: true, previousFullGroup: fullGroupName };
+      }
+      if (createdGroupName) {
+        result = {
+          ...result,
+          message: result.status === 'requested' || result.status === 'added'
+            ? `새 그룹 '${createdGroupName}' 생성 후 서로이웃 신청이 완료되었습니다.`
+            : result.message,
+          createdGroupName,
+          appliedGroupName
+        };
+      } else if (appliedGroupName) {
+        result = {
+          ...result,
+          appliedGroupName,
+          selectedGroupName: appliedGroupName
+        };
+      }
       if (result.status === 'unknown') {
         if (!popup.isClosed()) await popup.close().catch(() => {});
         popup = null;

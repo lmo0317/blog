@@ -531,6 +531,18 @@
                   <label for="engNeighborMessage"><strong>서로이웃 신청 메시지</strong> <small>(서로이웃 체크 시 전송)</small></label>
                   <input type="text" id="engNeighborMessage" value="안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊" placeholder="서로이웃 신청 메시지 입력" class="desktop-input">
                 </div>
+
+                <!-- Neighbor Target Group -->
+                <div class="form-group" id="engNeighborGroupSetting" style="margin-top: 14px;">
+                  <label for="engActiveNeighborGroup"><strong>📁 적용 이웃 그룹</strong> <small>(가득 차면 자동으로 다음 새 그룹 생성)</small></label>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" id="engActiveNeighborGroup" value="소통이웃-1" placeholder="예: 소통이웃-1" class="desktop-input" style="flex:1;">
+                    <button type="button" class="button secondary small" id="saveEngGroupBtn" style="white-space:nowrap; padding: 7px 16px;">그룹 저장</button>
+                  </div>
+                  <p class="field-hint" style="margin-top:4px; font-size:12px; color:var(--text-muted, #666);">
+                    💡 네이버 그룹 한도(500명)에 도달하면 프로그램이 자동으로 다음 그룹(예: <strong>소통이웃-2</strong>)을 생성해 끊김 없이 이어서 추가합니다.
+                  </p>
+                </div>
               </div>
             </div>
 

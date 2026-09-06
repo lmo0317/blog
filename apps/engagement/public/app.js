@@ -58,6 +58,36 @@ function initEngagementNeighborQuota() {
   $('#engDailyNeighborLimit')?.addEventListener('input', refreshEngagementNeighborQuota);
 }
 
+async function initNeighborGroupSetting() {
+  try {
+    const summary = await api('/api/neighbors/summary').catch(() => null);
+    if (summary?.activeNeighborGroup && $('#engActiveNeighborGroup')) {
+      $('#engActiveNeighborGroup').value = summary.activeNeighborGroup;
+    }
+  } catch {}
+
+  $('#saveEngGroupBtn')?.addEventListener('click', async () => {
+    const name = ($('#engActiveNeighborGroup')?.value || '').trim();
+    if (!name) {
+      toast('그룹 이름을 입력해주세요.', 'warn');
+      return;
+    }
+    try {
+      const res = await api('/api/neighbors/group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupName: name })
+      });
+      if (res?.activeNeighborGroup) {
+        if ($('#engActiveNeighborGroup')) $('#engActiveNeighborGroup').value = res.activeNeighborGroup;
+        toast(`적용 이웃 그룹이 '${res.activeNeighborGroup}'(으)로 저장되었습니다.`, 'success');
+      }
+    } catch (e) {
+      toast(`그룹 설정 저장 실패: ${e.message}`, 'error');
+    }
+  });
+}
+
 function setConnected(connected, label = '') {
   state.connected = Boolean(connected);
   const statusBadge = $('#accountStatus');
@@ -1543,6 +1573,7 @@ function initEngagementAutomation() {
   $('#engKeyword')?.addEventListener('input', syncEngKeywordChips);
   syncEngKeywordChips();
   initEngagementNeighborQuota();
+  initNeighborGroupSetting();
 
   // 2. Quick Counts
   $$('.eng-quick-counts button').forEach((btn) => {

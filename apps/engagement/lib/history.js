@@ -243,6 +243,15 @@ export class EngagementHistoryStore {
     await this.load();
     return [...new Set(this.data.records.map((r) => String(r.blogId).trim().toLowerCase()).filter(Boolean))];
   }
+  async getNeighborRelationship(blogId) {
+    await this.load();
+    const cleanId = String(blogId || '').trim().toLowerCase();
+    if (!cleanId) return null;
+    return this.data.records.find((record) =>
+      String(record.blogId || '').trim().toLowerCase() === cleanId &&
+      ['requested', 'added', 'already_mutual', 'already_added'].includes(String(record.neighborStatus || ''))
+    ) || null;
+  }
   async getRecentComments(limit = 30) { await this.load(); return this.data.records.filter((record) => record.commented && record.commentText).slice(0, limit).map((record) => record.commentText); }
 
   async addRecord({

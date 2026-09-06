@@ -285,6 +285,13 @@ export class EngagementAutomationManager extends EventEmitter {
         if (keywordProcessedCounts[currentKeyword] >= this.config.targetPerKeyword) continue;
         const targetUrl = post.url || post.link || `https://blog.naver.com/${post.blogId}`;
 
+        // Skip previously processed posts before opening any additional Naver pages.
+        if (this.historyStore && await this.historyStore.hasEngagedPost(targetUrl, post.blogId)) {
+          this.stats.skippedCount += 1;
+          this.log(`⏩ [중복 제외] @${post.blogId} (${post.title.slice(0, 20)}...) 이미 소통한 기록이 있어 건너뜁니다.`, 'info');
+          continue;
+        }
+
         const todaySummary = this.historyStore?.getSummary ? await this.historyStore.getSummary() : {};
         const todayKey = koreaDateKey();
         if (neighborBlockedDate && neighborBlockedDate !== todayKey) {
@@ -298,11 +305,49 @@ export class EngagementAutomationManager extends EventEmitter {
           neighborBlockedDate = todayKey;
           this.log(`🛡️ 설정한 하루 서로이웃 상한(${this.config.dailyNeighborLimit}명)에 도달해 오늘의 이웃 신청을 중단합니다.`, 'warn');
         }
+        let neighborPreflight = null;
+        let neighborEligible = this.config.doNeighbor && !blockedActions.has('neighbor') && !neighborDailyLimitReached;
+        if (neighborEligible && post.blogId && typeof this.historyStore?.getNeighborRelationship === 'function') {
+          const knownRelationship = await this.historyStore.getNeighborRelationship(post.blogId);
+          if (knownRelationship) {
+            neighborPreflight = {
+              status: knownRelationship.neighborStatus,
+              message: ['requested', 'added'].includes(knownRelationship.neighborStatus)
+                ? '프로그램 이력에 이미 이웃 신청을 보낸 기록이 있습니다.'
+                : '프로그램 이력에 이미 이웃인 기록이 있습니다.',
+              rawMessage: knownRelationship.statusMessage || ''
+            };
+            neighborEligible = false;
+            this.log(`⏩ [이웃 이력 제외] @${post.blogId} ${neighborPreflight.message}`, 'info');
+          }
+        }
+        if (neighborEligible && post.blogId && typeof this.browserSession.inspectNeighborRelationship === 'function') {
+          this.log(`🔎 @${post.blogId} 이웃·신청 상태를 먼저 확인합니다...`, 'info');
+          try {
+            neighborPreflight = await this.browserSession.inspectNeighborRelationship(post.blogId);
+            const preflightSkipStatuses = new Set(['requested', 'already_mutual', 'already_added', 'self', 'mutual_unavailable', 'unavailable']);
+            if (preflightSkipStatuses.has(neighborPreflight.status)) {
+              neighborEligible = false;
+              const rawDetail = neighborPreflight.rawMessage ? ` · 네이버 원문: ${neighborPreflight.rawMessage}` : '';
+              this.log(`⏩ [이웃 사전 제외] @${post.blogId} ${neighborPreflight.message}${rawDetail}`, 'info');
+            } else if (neighborPreflight.status === 'verification_required') {
+              neighborEligible = false;
+              blockedActions.add('neighbor');
+              this.shouldStop = true;
+              this.state = 'stopped';
+              this.stats.protectionTriggered = true;
+              this.log(`🛑 네이버 보호조치 신호를 감지해 모든 자동 작업을 즉시 중단합니다. 네이버 원문: ${neighborPreflight.rawMessage || neighborPreflight.message}`, 'error');
+            }
+          } catch (preflightError) {
+            this.log(`⚠️ @${post.blogId} 이웃 상태 사전 확인 실패: ${preflightError.message} · 실제 신청 단계에서 다시 확인합니다.`, 'warn');
+          }
+        }
+        if (this.shouldStop) break;
         const selectedActions = selectPostActions({
           requested: {
             like: this.config.doLike && !blockedActions.has('like'),
             comment: this.config.doComment && !blockedActions.has('comment'),
-            neighbor: this.config.doNeighbor && !blockedActions.has('neighbor') && !neighborDailyLimitReached
+            neighbor: neighborEligible
           },
           todayCounts: {
             likes: todaySummary.todayLikes,
@@ -319,13 +364,6 @@ export class EngagementAutomationManager extends EventEmitter {
         const doLikeForPost = selectedActions.includes('like');
         const doCommentForPost = selectedActions.includes('comment');
         const doNeighborForPost = selectedActions.includes('neighbor');
-
-        // Check deduplication
-        if (this.historyStore && await this.historyStore.hasEngagedPost(targetUrl, post.blogId)) {
-          this.stats.skippedCount += 1;
-          this.log(`⏩ [중복 제외] @${post.blogId} (${post.title.slice(0, 20)}...) 이미 소통한 기록이 있어 건너뜁니다.`, 'info');
-          continue;
-        }
 
         this.stats.currentPost = {
           title: post.title,
@@ -399,8 +437,9 @@ export class EngagementAutomationManager extends EventEmitter {
 
           // 4. Send Neighbor Request if requested
           let neighborRequested = false;
-          let neighborStatus = '';
-          let neighborResultMsg = '';
+          let neighborStatus = neighborPreflight && !doNeighborForPost ? neighborPreflight.status : '';
+          let neighborResultMsg = neighborPreflight && !doNeighborForPost ? neighborPreflight.message : '';
+          let neighborRawMessage = neighborPreflight && !doNeighborForPost ? neighborPreflight.rawMessage || '' : '';
           let sentNeighborMessage = '';
           if (doNeighborForPost && post.blogId) {
             this.log(`👥 @${post.blogId} 님에게 서로이웃 신청을 함께 보냅니다...`, 'info');
@@ -413,17 +452,21 @@ export class EngagementAutomationManager extends EventEmitter {
               );
               neighborStatus = nRes.status;
               neighborResultMsg = nRes.message;
+              neighborRawMessage = nRes.rawMessage || '';
 
               if (nRes.status === 'requested' || nRes.status === 'added') {
                 neighborRequested = true;
                 this.stats.neighborSuccessCount += 1;
-                this.log(`✅ [서로이웃 성공] @${post.blogId} 님에게 서로이웃 신청 완료! (누적 성공: ${this.stats.neighborSuccessCount})`, 'success');
+                const groupInfo = nRes.createdGroupName
+                  ? ` (새 그룹 '${nRes.createdGroupName}' 생성)`
+                  : (nRes.appliedGroupName ? ` [${nRes.appliedGroupName}]` : '');
+                this.log(`✅ [서로이웃 성공] @${post.blogId} 님에게 서로이웃 신청 완료!${groupInfo} (누적 성공: ${this.stats.neighborSuccessCount})`, 'success');
               } else if (nRes.status === 'already_mutual' || nRes.status === 'already_added') {
                 this.log(`ℹ️ [이웃 확인] @${post.blogId} 님과는 이미 서로이웃입니다.`, 'info');
               } else if (nRes.status === 'mutual_unavailable') {
                 this.log(`⏩ [이웃 스킵] @${post.blogId} 님은 서로이웃 신청을 받지 않는 계정입니다.`, 'info');
               } else if (nRes.status === 'limit_reached') {
-                this.log(`⚠️ 네이버 서로이웃 일일 한도(100명)에 도달했습니다.`, 'warn');
+                this.log(`⚠️ 네이버 서로이웃 일일 한도(100명)에 도달했습니다.${neighborRawMessage ? ` 네이버 원문: ${neighborRawMessage}` : ''}`, 'warn');
                 blockedActions.add('neighbor');
                 neighborBlockedDate = koreaDateKey();
               } else if (nRes.status === 'verification_required') {
@@ -433,7 +476,7 @@ export class EngagementAutomationManager extends EventEmitter {
                 this.stats.protectionTriggered = true;
                 this.log('🛑 네이버 보호조치 신호를 감지해 모든 자동 작업을 즉시 중단합니다. 브라우저에서 계정 상태를 확인해주세요.', 'error');
               } else {
-                this.log(`ℹ️ @${post.blogId} 서로이웃: ${nRes.message}`, 'info');
+                this.log(`ℹ️ @${post.blogId} 서로이웃: ${nRes.message}${neighborRawMessage ? ` · 네이버 원문: ${neighborRawMessage}` : ''}`, 'info');
               }
             } catch (nErr) {
               neighborStatus = 'failed';
@@ -443,7 +486,7 @@ export class EngagementAutomationManager extends EventEmitter {
 
           // Save record in history store for deduplication & Excel export
           if (this.historyStore) {
-            const finalStatusMsg = `${result.message}${neighborRequested ? ' | 서로이웃 신청 완료' : (neighborStatus && neighborStatus !== 'requested' ? ` | 서로이웃: ${neighborResultMsg || neighborStatus}` : '')}`;
+            const finalStatusMsg = `${result.message}${neighborRequested ? ' | 서로이웃 신청 완료' : (neighborStatus && neighborStatus !== 'requested' ? ` | 서로이웃: ${neighborResultMsg || neighborStatus}${neighborRawMessage ? ` | 네이버 원문: ${neighborRawMessage}` : ''}` : '')}`;
             await this.historyStore.addRecord({
               blogId: post.blogId,
               bloggerName: post.bloggerName || post.blogId,

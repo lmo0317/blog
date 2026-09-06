@@ -220,18 +220,38 @@ export class NeighborAutomationManager extends EventEmitter {
         this.log(`[${i + 1}/${candidates.length}] @${candidate.blogId} (${candidate.bloggerName || '블로거'}) 님에게 서로이웃 신청 시도 중...`, 'info');
 
         try {
+          if (typeof this.browserSession.inspectNeighborRelationship === 'function') {
+            const preflight = await this.browserSession.inspectNeighborRelationship(candidate.blogId);
+            if (['requested', 'already_mutual', 'already_added', 'self', 'mutual_unavailable', 'unavailable'].includes(preflight.status)) {
+              this.stats.skippedCount += 1;
+              const rawDetail = preflight.rawMessage ? ` · 네이버 원문: ${preflight.rawMessage}` : '';
+              this.log(`⏩ [사전 제외] @${candidate.blogId} (${preflight.message}${rawDetail})`, 'info');
+              await this.historyStore.addRecord({
+                blogId: candidate.blogId, bloggerName: candidate.bloggerName, keyword, message,
+                status: preflight.status,
+                statusText: `${preflight.message}${rawDetail}`
+              });
+              continue;
+            }
+            if (preflight.status === 'verification_required') {
+              this.state = 'verification_required';
+              this.log(`🚨 네이버 보안 확인이 발생하여 작업을 중단합니다. 네이버 원문: ${preflight.rawMessage || preflight.message}`, 'error');
+              break;
+            }
+          }
           const result = await this.browserSession.addNeighbor(candidate.blogId, message, candidate.bloggerName);
+          const rawDetail = result.rawMessage ? ` · 네이버 원문: ${result.rawMessage}` : '';
 
           if (result.status === 'limit_reached') {
             this.state = 'limit_reached';
-            this.log(`⚠️ 네이버 일일 서로이웃 신청 한도(100명)에 도달하여 작업을 안전하게 중단합니다.`, 'warn');
+            this.log(`⚠️ 네이버 일일 서로이웃 신청 한도(100명)에 도달하여 작업을 안전하게 중단합니다.${rawDetail}`, 'warn');
             await this.historyStore.addRecord({
               blogId: candidate.blogId,
               bloggerName: candidate.bloggerName,
               keyword,
               message,
               status: 'limit_reached',
-              statusText: result.message
+              statusText: `${result.message}${rawDetail}`
             });
             break;
           }
@@ -244,7 +264,10 @@ export class NeighborAutomationManager extends EventEmitter {
 
           if (result.status === 'requested' || result.status === 'added') {
             this.stats.successCount += 1;
-            this.log(`✅ [성공] @${candidate.blogId} 님에게 서로이웃 신청 완료! (누적 성공: ${this.stats.successCount}/${targetCount})`, 'success');
+            const groupInfo = result.createdGroupName
+              ? ` (새 그룹 '${result.createdGroupName}' 생성)`
+              : (result.appliedGroupName ? ` [${result.appliedGroupName}]` : '');
+            this.log(`✅ [성공] @${candidate.blogId} 님에게 서로이웃 신청 완료!${groupInfo} (누적 성공: ${this.stats.successCount}/${targetCount})`, 'success');
             await this.historyStore.addRecord({
               blogId: candidate.blogId,
               bloggerName: candidate.bloggerName,
@@ -255,36 +278,36 @@ export class NeighborAutomationManager extends EventEmitter {
             });
           } else if (result.status === 'already_mutual' || result.status === 'already_added' || result.status === 'self') {
             this.stats.skippedCount += 1;
-            this.log(`⏩ [스킵] @${candidate.blogId} (${result.message})`, 'info');
+            this.log(`⏩ [스킵] @${candidate.blogId} (${result.message}${rawDetail})`, 'info');
             await this.historyStore.addRecord({
               blogId: candidate.blogId,
               bloggerName: candidate.bloggerName,
               keyword,
               message,
               status: result.status,
-              statusText: result.message
+              statusText: `${result.message}${rawDetail}`
             });
           } else if (result.status === 'unavailable' || result.status === 'mutual_unavailable') {
             this.stats.skippedCount += 1;
-            this.log(`⏩ [신청 불가] @${candidate.blogId} (${result.message})`, 'warn');
+            this.log(`⏩ [신청 불가] @${candidate.blogId} (${result.message}${rawDetail})`, 'warn');
             await this.historyStore.addRecord({
               blogId: candidate.blogId,
               bloggerName: candidate.bloggerName,
               keyword,
               message,
               status: 'unavailable',
-              statusText: result.message
+              statusText: `${result.message}${rawDetail}`
             });
           } else {
             this.stats.failedCount += 1;
-            this.log(`❌ [확인 필요] @${candidate.blogId} (${result.message})`, 'warn');
+            this.log(`❌ [확인 필요] @${candidate.blogId} (${result.message}${rawDetail})`, 'warn');
             await this.historyStore.addRecord({
               blogId: candidate.blogId,
               bloggerName: candidate.bloggerName,
               keyword,
               message,
               status: 'failed',
-              statusText: result.message
+              statusText: `${result.message}${rawDetail}`
             });
           }
         } catch (err) {

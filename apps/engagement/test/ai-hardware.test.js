@@ -184,6 +184,49 @@ test('EngagementAutomationManager counts completed posts once, not likes and com
   assert.equal(manager.stats.targetReached, true);
 });
 
+test('EngagementAutomationManager preflights and skips pending neighbor requests', async () => {
+  let addCalls = 0;
+  const session = {
+    connected: true,
+    async searchBlogs() { return [{ blogId: 'pending-blog', title: '대기 중인 블로그', url: 'https://blog.naver.com/pending-blog/12345678' }]; },
+    async inspectNeighborRelationship() { return { status: 'requested', message: '이미 서로이웃 신청 중입니다.', rawMessage: '서로이웃 신청 진행 중입니다.' }; },
+    async addNeighbor() { addCalls += 1; return { status: 'requested', message: '완료' }; }
+  };
+  const history = {
+    async hasEngagedPost() { return false; },
+    async getNeighborRelationship() { return null; },
+    async getSummary() { return { todayLikes: 0, todayComments: 0, todayNeighbors: 0 }; }
+  };
+  const manager = new EngagementAutomationManager({ browserSession: session, embeddedLlama: null, historyStore: history });
+  await manager.start({ keyword: '육아', targetCount: 1, doLike: false, doComment: false, doNeighbor: true });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(addCalls, 0);
+  assert.equal(manager.stats.processedCount, 0);
+  assert.ok(manager.logs.some((entry) => entry.message.includes('[이웃 사전 제외]')));
+});
+
+test('EngagementAutomationManager excludes a blog with a prior neighbor-request record', async () => {
+  let inspectCalls = 0;
+  let addCalls = 0;
+  const session = {
+    connected: true,
+    async searchBlogs() { return [{ blogId: 'known-blog', title: '기존 이웃 신청', url: 'https://blog.naver.com/known-blog/12345678' }]; },
+    async inspectNeighborRelationship() { inspectCalls += 1; return { status: 'eligible' }; },
+    async addNeighbor() { addCalls += 1; return { status: 'requested' }; }
+  };
+  const history = {
+    async hasEngagedPost() { return false; },
+    async getNeighborRelationship() { return { neighborStatus: 'requested', statusMessage: '서로이웃 신청 완료' }; },
+    async getSummary() { return { todayLikes: 0, todayComments: 0, todayNeighbors: 1 }; }
+  };
+  const manager = new EngagementAutomationManager({ browserSession: session, embeddedLlama: null, historyStore: history });
+  await manager.start({ keyword: '육아', targetCount: 1, doLike: false, doComment: false, doNeighbor: true });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(inspectCalls, 0);
+  assert.equal(addCalls, 0);
+  assert.ok(manager.logs.some((entry) => entry.message.includes('[이웃 이력 제외]')));
+});
+
 test('engagement safety policy enforces daily limits and at most two actions per post', () => {
   const actions = selectPostActions({
     requested: { like: true, comment: true, neighbor: true },
@@ -234,6 +277,7 @@ test('EngagementHistoryStore stores records, prevents duplicates, and exports CS
   assert.equal(await store.hasEngagedPost('https://blog.naver.com/testuser/87654321', 'testuser'), false);
   assert.equal(await store.hasEngagedPost('https://blog.naver.com/PostView.naver?blogId=testuser&logNo=12345678', ''), true);
   assert.equal(await store.hasEngagedPost('https://m.blog.naver.com/otheruser/99999999', 'otheruser'), false);
+  assert.equal((await store.getNeighborRelationship('testuser'))?.neighborStatus, 'requested');
 
   const engagedIds = await store.getEngagedBlogIds();
   assert.ok(engagedIds.includes('testuser'));
