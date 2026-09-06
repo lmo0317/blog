@@ -1,6 +1,6 @@
 ---
 name: naver-auto-posting
-description: Research a useful and timely topic, write a source-grounded Korean article, generate section-matched Gemini images (Google Imagen), route it to the correct Naver category, and publish through Naver SmartEditor or the authenticated publishing helper. Use when the user asks to choose a topic or content and complete Naver Blog posting. Do not use when the user wants only a draft, prompt, or engagement automation.
+description: Research a useful and timely topic or analyze real-time Creator Advisor trends (https://creator-advisor.naver.com/naver_blog/<blogId>/trends#trend-by-categories), write a source-grounded Korean article, generate section-matched Gemini images (Google Imagen), route it to the correct Naver category, and publish through Naver SmartEditor or the authenticated publishing helper. Use when the user asks to choose a topic, requests a trend-based post ('트렌드글 포스팅 해줘'), or complete Naver Blog posting. Do not use when the user wants only a draft, prompt, or engagement automation.
 ---
 
 # Naver Auto Posting
@@ -17,14 +17,38 @@ Choose, research, create, and publish one complete Naver Blog post. Optimize for
 - Use an existing authenticated Naver browser session (`.data/auth/naver_user_data` or `.playwright/naver-session.json`). Never retrieve, infer, store, log, or ask the user to paste a Naver password, cookie, token, or one-time authentication code into chat.
 - If Naver requires login, CAPTCHA, two-step verification, or new-device approval, pause and ask the user to complete that step directly in the browser. Resume only after confirming the signed-in account is the intended blog owner.
 
-## Topic selection
+## Topic selection & Trend analysis
 
+### Standard Topic Selection
 1. Before choosing or drafting any topic, read [references/published-posts/INDEX.md](references/published-posts/INDEX.md). Compare the candidate against every stored title, topic key, core claim, and practical action. When similarity is unclear, read the linked full post file.
 2. Treat a candidate as overlapping when it repeats the same reader problem, central recommendation, or substantially the same action list, even if the title or wording differs. Reject it and choose a meaningfully different subject or angle. A narrower rewrite of an existing post is not sufficiently different unless the user explicitly requests a follow-up.
 3. If the user supplies a topic that overlaps, preserve the user's intent but briefly disclose the overlap and propose a distinct angle before publishing. Never silently republish near-duplicate material.
 4. Otherwise research current, broadly useful subjects and select one with clear practical value. Prefer evergreen household tips, digital-life guidance, seasonal living information, consumer know-how, parenting ideas, simple food knowledge, low-risk wellness habits, or dev/automation tech tips.
 5. Avoid topics that require personal diagnosis, individualized legal or financial advice, unverified breaking rumors, copyrighted article reproduction, or claims that cannot be supported by authoritative sources.
 6. Search current authoritative or primary sources using `search_web`. Record the source URLs for the completion report. Reinterpret and synthesize; never closely copy a source article.
+
+### Trend-Driven Topic Selection (네이버 크리에이터 어드바이저 트렌드 연동)
+When the user asks "트렌드글 포스팅 해줘", "트렌드 분석해서 글 써줘", or requests a post based on current Naver trends:
+
+1. **Fetch Live Trends from Creator Advisor**:
+   Run the trend helper script to fetch real-time category search inflow and rising topics from `https://creator-advisor.naver.com/naver_blog/lmo0317/trends#trend-by-categories`:
+   ```powershell
+   node .agents/skills/naver-auto-posting/scripts/fetch-creator-trends.js
+   ```
+   Read [references/creator-advisor-trends.md](references/creator-advisor-trends.md) for endpoint details and options.
+
+2. **Automated Zero-Overlap & Prioritization**:
+   The script automatically cross-references `references/published-posts/INDEX.md` and filters out already published topics (e.g. marking `[기발행]`), while highlighting candidates with `🔥 NEW` surge, high positive `rankChange`, and strong practical value.
+
+3. **Select High-Value Actionable Trend Topic**:
+   Pick the top non-overlapping trend query with strong informational and practical value for readers:
+   - Seasonal health/nutrition (e.g., 가을 제철 "무화과 효능 & 올바른 세척·보관법");
+   - Seasonal cooking & food handling (e.g., 가을 제철 "꽃게 손질법 & 비린내 없이 찌는 법");
+   - Practical living & recycling tips (e.g., "이불 버리는 방법 - 대형폐기물 스티커 vs 종량제 봉투");
+   - Trending life hacks & organizer items (e.g., "다이소 품절대란 정리 꿀템 실사용 팁").
+
+4. **Proceed to Standard Quality, Images, and Publishing**:
+   Search authoritative sources using `search_web`, draft the 1,500–2,500 character article, generate 3 section-matched Gemini Imagen images, publish to the correct category (`건강`, `생활`, etc.), verify the live URL, and archive in `references/published-posts/`.
 
 ## Article quality
 
