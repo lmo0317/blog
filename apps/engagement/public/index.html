@@ -205,7 +205,7 @@
             <div class="form-group">
               <label for="targetCount"><strong>목표 신청 인원</strong> <small>(계정 보호 권장 딜레이 적용)</small></label>
               <div class="number-input-wrap">
-                <input type="number" id="targetCount" min="1" max="500" value="50" required>
+                <input type="number" id="targetCount" min="1" max="100" value="100" required>
                 <div class="quick-counts">
                   <button type="button" data-val="30">30명</button>
                   <button type="button" data-val="50">50명</button>
@@ -466,18 +466,17 @@
                 <!-- Target Post Count -->
                 <div class="form-group" style="margin-top: 14px;">
                   <div class="label-row">
-                    <label for="engTargetCount"><strong>키워드당 목표 글 수</strong></label>
-                    <span class="helper-text">(키워드 n개 × 목표 건수)</span>
+                    <label for="engTargetCount"><strong>전체 목표 글 수</strong></label>
+                    <span class="helper-text">여러 키워드를 입력해도 전체 합계 기준</span>
                   </div>
                   <div class="number-input-row">
-                    <input type="number" id="engTargetCount" min="1" max="500" value="100" required class="desktop-input number-field">
+                    <input type="number" id="engTargetCount" min="1" max="100" value="100" required class="desktop-input number-field">
                     <div class="quick-counts eng-quick-counts">
                       <button type="button" data-val="10">10건</button>
                       <button type="button" data-val="20">20건</button>
                       <button type="button" data-val="30">30건</button>
                       <button type="button" data-val="50">50건</button>
                       <button type="button" data-val="100">100건</button>
-                      <button type="button" data-val="500">500건</button>
                     </div>
                   </div>
                 </div>
@@ -487,15 +486,43 @@
                   <label><strong>작업 간격 (계정 보호 랜덤 딜레이)</strong></label>
                   <div class="delay-row">
                     <div class="delay-inputs-pair">
-                      <input type="number" id="engMinDelay" min="10" max="300" value="45" class="desktop-input delay-field">
+                      <input type="number" id="engMinDelay" min="30" max="900" value="120" class="desktop-input delay-field">
                       <span>초 ~</span>
-                      <input type="number" id="engMaxDelay" min="20" max="300" value="90" class="desktop-input delay-field">
+                      <input type="number" id="engMaxDelay" min="30" max="900" value="180" class="desktop-input delay-field">
                       <span>초 사이 무작위</span>
                     </div>
                   </div>
                   <div class="account-protect-banner">
                     <span class="protect-icon">🛡️</span>
-                    <span>일일 한도 해제 · 가변 지터(-5s~+15s) 및 15회마다 정기 휴식(3~5분) 자동 적용</span>
+                    <span>기본 120~180초 랜덤 간격 · 보호조치 신호가 감지되면 전체 작업 즉시 중단</span>
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                  <label><strong>일일 상한 및 묶음 휴식 설정</strong></label>
+                  <div class="delay-row" style="flex-wrap:wrap; gap:10px;">
+                    <label>하루 서로이웃 상한
+                      <input type="number" id="engDailyNeighborLimit" min="1" max="100" value="100" class="desktop-input delay-field"> 명
+                    </label>
+                    <label>연속 처리
+                      <input type="number" id="engSessionPosts" min="5" max="30" value="10" class="desktop-input delay-field"> 건
+                    </label>
+                    <label>휴식
+                      <input type="number" id="engBreakMinMinutes" min="1" max="60" value="10" class="desktop-input delay-field"> ~
+                      <input type="number" id="engBreakMaxMinutes" min="1" max="60" value="20" class="desktop-input delay-field"> 분
+                    </label>
+                  </div>
+                  <div id="engNeighborQuotaStatus" class="account-protect-banner" style="background:#eefbf4; border-color:#9be3ba; color:#155c35; align-items:flex-start;">
+                    <span class="protect-icon">📊</span>
+                    <span>
+                      <strong>오늘 서로이웃 신청 현황</strong> <small>(프로그램 성공 기록 기준)</small><br>
+                      신청 <strong id="engNeighborUsed">-</strong>명 · 남음 <strong id="engNeighborRemaining">-</strong>명<br>
+                      <small id="engNeighborResetAt">내역을 불러오는 중...</small>
+                    </span>
+                  </div>
+                  <div class="account-protect-banner" style="background:#fff3cd; border-color:#f6c453; color:#7a4b00;">
+                    <span class="protect-icon">⚠️</span>
+                    <span><strong>보호조치 경고:</strong> 이 계정에서 네이버의 하루 100명 한도 응답이 확인됐습니다. 보호조치가 감지되면 모든 자동 작업을 즉시 중단합니다.</span>
                   </div>
                 </div>
 
@@ -690,6 +717,9 @@
             <button type="button" class="finder-tab" data-finder-tab="presets">
               <span>🏷️ 인기 블로그 테마 프리셋</span>
             </button>
+            <button type="button" class="finder-tab" data-finder-tab="related">
+              <span>🔎 내 키워드 연관 검색</span>
+            </button>
           </div>
 
           <div class="finder-content">
@@ -753,6 +783,25 @@
                 <small>네이버 블로그에서 가장 활발하게 서로이웃 소통이 일어나는 8대 대표 주제입니다. 원하는 키워드를 클릭해 선택하세요.</small>
               </div>
               <div class="presets-grid" id="categoryPresetsGrid"></div>
+            </div>
+
+            <!-- TAB 4: Related Keyword Search -->
+            <div class="finder-panel hidden" id="finderPanelRelated" data-panel="related">
+              <div class="finder-hero-banner">
+                <div class="hero-text">
+                  <strong>🔎 내가 생각한 키워드의 연관 검색어 찾기</strong>
+                  <p>키워드를 입력하면 네이버 검색 제안을 기준으로 관련 키워드 목록을 보여줍니다.</p>
+                </div>
+              </div>
+              <div class="keyword-input-row" style="margin-top:14px;">
+                <input id="relatedKeywordInput" maxlength="50" placeholder="예: 캠핑, 아이간식, 재테크" class="desktop-input keyword-main-input">
+                <button type="button" class="button primary small" id="searchRelatedKeywordsBtn">연관 키워드 찾기</button>
+              </div>
+              <div class="panel-sub-header" style="margin-top:14px;">
+                <div><strong id="relatedKeywordHeading">검색할 키워드를 입력해주세요</strong><small id="relatedKeywordStatus">결과를 클릭하면 아래 선택 목록에 담깁니다.</small></div>
+                <button type="button" class="btn-text-link hidden" id="addAllRelatedKeywordsBtn">+ 결과 전체 담기</button>
+              </div>
+              <div class="presets-grid" id="relatedKeywordsGrid"></div>
             </div>
           </div>
 

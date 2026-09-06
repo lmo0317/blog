@@ -3,12 +3,18 @@ import { EventEmitter } from 'node:events';
 export const ENGAGEMENT_LIMITS = Object.freeze({
   likesPerDay: 200,
   commentsPerDay: 100,
-  neighborsPerDay: 80,
+  neighborsPerDay: 100,
   maxActionsPerPost: 2,
   sessionPosts: 15, // Safe breath every 15 posts to avoid account protection flags
   sessionBreakMinSeconds: 180, // 3~5 min session break
   sessionBreakMaxSeconds: 300
 });
+
+function koreaDateKey(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(now);
+}
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -71,6 +77,10 @@ export class EngagementAutomationManager extends EventEmitter {
       tone: 'friendly',
       minDelay: 30,
       maxDelay: 90,
+      dailyNeighborLimit: 100,
+      sessionPosts: 10,
+      sessionBreakMinSeconds: 600,
+      sessionBreakMaxSeconds: 1200,
       activeWithinDays: 14
     };
 
@@ -135,7 +145,11 @@ export class EngagementAutomationManager extends EventEmitter {
     neighborMessage = '안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊',
     tone = 'friendly',
     minDelay = 30,
-    maxDelay = 90,
+    maxDelay = 180,
+    dailyNeighborLimit = 100,
+    sessionPosts = 10,
+    sessionBreakMinSeconds = 600,
+    sessionBreakMaxSeconds = 1200,
     activeWithinDays = 14 
   }) {
     if (this.state === 'running' || this.state === 'paused') {
@@ -151,10 +165,14 @@ export class EngagementAutomationManager extends EventEmitter {
       throw new Error('검색 키워드를 입력해주세요.');
     }
 
-    const targetPerKeyword = Math.min(Math.max(Number(targetCount) || 20, 1), 500);
-    const cleanTarget = targetPerKeyword * keywords.length;
-    const cleanMinDelay = Math.max(Number(minDelay) || 30, 30);
-    const cleanMaxDelay = Math.min(Math.max(Number(maxDelay) || 90, cleanMinDelay), 300);
+    const cleanTarget = Math.min(Math.max(Number(targetCount) || 100, 1), 100);
+    const targetPerKeyword = Math.ceil(cleanTarget / keywords.length);
+    const cleanMinDelay = Math.min(Math.max(Number(minDelay) || 120, 30), 900);
+    const cleanMaxDelay = Math.min(Math.max(Number(maxDelay) || 180, cleanMinDelay), 900);
+    const cleanDailyNeighborLimit = Math.min(Math.max(Number(dailyNeighborLimit) || 100, 1), 100);
+    const cleanSessionPosts = Math.min(Math.max(Number(sessionPosts) || 10, 5), 30);
+    const cleanBreakMin = Math.min(Math.max(Number(sessionBreakMinSeconds) || 600, 60), 3600);
+    const cleanBreakMax = Math.min(Math.max(Number(sessionBreakMaxSeconds) || 1200, cleanBreakMin), 3600);
 
     this.config = {
       keyword: keywords.join(', '),
@@ -168,6 +186,10 @@ export class EngagementAutomationManager extends EventEmitter {
       tone,
       minDelay: cleanMinDelay,
       maxDelay: cleanMaxDelay,
+      dailyNeighborLimit: cleanDailyNeighborLimit,
+      sessionPosts: cleanSessionPosts,
+      sessionBreakMinSeconds: cleanBreakMin,
+      sessionBreakMaxSeconds: cleanBreakMax,
       activeWithinDays: Number(activeWithinDays) || 0
     };
 
@@ -192,7 +214,8 @@ export class EngagementAutomationManager extends EventEmitter {
     this.shouldStop = false;
     this.isPaused = false;
     this.state = 'running';
-    this.log(`🚀 ${keywords.length}개 키워드(${keywords.join(', ')})를 순차 실행합니다. (키워드당 ${targetPerKeyword}건, 총 ${cleanTarget}건)`, 'info');
+    this.log(`🚀 ${keywords.length}개 키워드(${keywords.join(', ')})를 순차 실행합니다. (전체 목표 ${cleanTarget}건, 키워드별 최대 ${targetPerKeyword}건, 하루 서로이웃 최대 ${cleanDailyNeighborLimit}명)`, 'info');
+    this.log(`🛡️ 보호 설정: 작업 간 ${cleanMinDelay}~${cleanMaxDelay}초, ${cleanSessionPosts}건마다 ${Math.ceil(cleanBreakMin / 60)}~${Math.ceil(cleanBreakMax / 60)}분 휴식`, 'info');
     this.emit('status', this.getStatus());
 
     // Run in background
@@ -208,6 +231,7 @@ export class EngagementAutomationManager extends EventEmitter {
   async runLoop() {
     try {
       const blockedActions = new Set();
+      let neighborBlockedDate = '';
       let sessionProcessed = 0;
       const items = [];
       for (const keyword of this.config.keywords) {
@@ -262,11 +286,23 @@ export class EngagementAutomationManager extends EventEmitter {
         const targetUrl = post.url || post.link || `https://blog.naver.com/${post.blogId}`;
 
         const todaySummary = this.historyStore?.getSummary ? await this.historyStore.getSummary() : {};
+        const todayKey = koreaDateKey();
+        if (neighborBlockedDate && neighborBlockedDate !== todayKey) {
+          neighborBlockedDate = '';
+          blockedActions.delete('neighbor');
+          this.log('🌅 날짜가 바뀌어 서로이웃 일일 차단 상태를 초기화했습니다.', 'info');
+        }
+        const neighborDailyLimitReached = Number(todaySummary.todayNeighbors || 0) >= this.config.dailyNeighborLimit;
+        if (neighborDailyLimitReached && !blockedActions.has('neighbor')) {
+          blockedActions.add('neighbor');
+          neighborBlockedDate = todayKey;
+          this.log(`🛡️ 설정한 하루 서로이웃 상한(${this.config.dailyNeighborLimit}명)에 도달해 오늘의 이웃 신청을 중단합니다.`, 'warn');
+        }
         const selectedActions = selectPostActions({
           requested: {
             like: this.config.doLike && !blockedActions.has('like'),
             comment: this.config.doComment && !blockedActions.has('comment'),
-            neighbor: this.config.doNeighbor && !blockedActions.has('neighbor')
+            neighbor: this.config.doNeighbor && !blockedActions.has('neighbor') && !neighborDailyLimitReached
           },
           todayCounts: {
             likes: todaySummary.todayLikes,
@@ -274,7 +310,7 @@ export class EngagementAutomationManager extends EventEmitter {
             neighbors: todaySummary.todayNeighbors
           },
           postIndex: this.stats.processedCount,
-          enforceDailyLimits: false // User requested continuous operation without artificial daily limit
+          enforceDailyLimits: true
         });
         if (!selectedActions.length) {
           this.log(`선택된 작업이 없어 다음 포스팅으로 넘어갑니다.`, 'info');
@@ -337,7 +373,10 @@ export class EngagementAutomationManager extends EventEmitter {
           if (/자동입력 방지|캡차|보안 문자|보호조치|추가 인증|로그인이 필요/i.test(restrictionText)) {
             if (doLikeForPost) blockedActions.add('like');
             if (doCommentForPost) blockedActions.add('comment');
-            this.log('🛡️ 네이버 보안 확인 신호를 감지해 공감·댓글 기능을 이번 실행에서 중단합니다.', 'warn');
+            this.shouldStop = true;
+            this.state = 'stopped';
+            this.stats.protectionTriggered = true;
+            this.log('🛑 네이버 보호조치 신호를 감지해 모든 자동 작업을 즉시 중단합니다. 브라우저에서 계정 상태를 확인해주세요.', 'error');
           }
 
           if (result.liked && result.commented) {
@@ -386,9 +425,13 @@ export class EngagementAutomationManager extends EventEmitter {
               } else if (nRes.status === 'limit_reached') {
                 this.log(`⚠️ 네이버 서로이웃 일일 한도(100명)에 도달했습니다.`, 'warn');
                 blockedActions.add('neighbor');
+                neighborBlockedDate = koreaDateKey();
               } else if (nRes.status === 'verification_required') {
                 blockedActions.add('neighbor');
-                this.log('🛡️ 네이버 보안 확인 신호를 감지해 서로이웃 기능을 이번 실행에서 중단합니다.', 'warn');
+                this.shouldStop = true;
+                this.state = 'stopped';
+                this.stats.protectionTriggered = true;
+                this.log('🛑 네이버 보호조치 신호를 감지해 모든 자동 작업을 즉시 중단합니다. 브라우저에서 계정 상태를 확인해주세요.', 'error');
               } else {
                 this.log(`ℹ️ @${post.blogId} 서로이웃: ${nRes.message}`, 'info');
               }
@@ -423,9 +466,9 @@ export class EngagementAutomationManager extends EventEmitter {
         }
 
         sessionProcessed += 1;
-        if (sessionProcessed >= ENGAGEMENT_LIMITS.sessionPosts && i < items.length - 1 && !this.shouldStop) {
-          const breakSeconds = randomInt(ENGAGEMENT_LIMITS.sessionBreakMinSeconds, ENGAGEMENT_LIMITS.sessionBreakMaxSeconds);
-          this.log(`☕ ${ENGAGEMENT_LIMITS.sessionPosts}개 연속 처리를 마쳐 ${Math.ceil(breakSeconds / 60)}분간 세션 휴식합니다.`, 'delay');
+        if (sessionProcessed >= this.config.sessionPosts && i < items.length - 1 && !this.shouldStop) {
+          const breakSeconds = randomInt(this.config.sessionBreakMinSeconds, this.config.sessionBreakMaxSeconds);
+          this.log(`☕ ${this.config.sessionPosts}개 연속 처리를 마쳐 ${Math.ceil(breakSeconds / 60)}분간 세션 휴식합니다.`, 'delay');
           await this.countdownDelay(breakSeconds);
           sessionProcessed = 0;
         }

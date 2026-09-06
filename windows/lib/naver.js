@@ -1735,7 +1735,7 @@ export class NaverBrowserSession {
     }
   }
 
-  async prepareBlogPostUpdate({ blogId, logNo, title, content, tags = [], images = [], links = [] }) {
+  async prepareBlogPostUpdate({ blogId, logNo, title, content, tags = [], images = [], links = [], isDeals = false }) {
     if (!this.connected || !await this.hasAuthenticatedSession()) {
       const error = new Error('네이버 로그인 세션이 만료되었습니다. 계정을 다시 연결해주세요.');
       error.code = 'NAVER_SESSION_EXPIRED';
@@ -1778,7 +1778,9 @@ export class NaverBrowserSession {
       await clearEditorBody(page, editorFrame);
       await insertEditorContentWithImages(page, editorFrame, finalContent, selectedImages);
       await applyInlineLinks(page, editorFrame, finalContent, links);
-      await verifyEditorProductLayout(page, editorFrame, finalContent, selectedImages);
+      if (isDeals) {
+        await verifyEditorProductLayout(page, editorFrame, finalContent, selectedImages);
+      }
 
       this.pendingPostUpdate = { page, editorFrame, blogId: cleanBlogId, logNo: cleanLogNo };
       await page.bringToFront().catch(() => {});
@@ -1794,18 +1796,25 @@ export class NaverBrowserSession {
     }
   }
 
-  async confirmPreparedBlogPostUpdate() {
+  async confirmPreparedBlogPostUpdate(categoryName = '') {
     const pending = this.pendingPostUpdate;
     if (!pending?.page || pending.page.isClosed()) throw new Error('저장 대기 중인 블로그 수정 내용이 없습니다.');
     const { page, editorFrame, blogId, logNo } = pending;
     const openPublish = editorFrame.locator('[data-click-area="tpb.publish"], button[class*="publish_btn__"], button[class*="publish_btn"]').first();
     if (await openPublish.count().catch(() => 0) === 0) throw new Error('네이버 수정 버튼을 찾지 못했습니다.');
     await openPublish.click({ force: true }).catch(() => openPublish.dispatchEvent('click'));
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1500);
+
+    if (categoryName) {
+      await selectPublishCategory(editorFrame, categoryName).catch((err) => {
+        console.warn('Category selection during update warning:', err.message);
+      });
+    }
+
     const confirmPublish = editorFrame.locator('[data-click-area="ptp.publish"], button.btn_publish, button[class*="confirm_btn"], [class*="publish_layer"] button:has-text("발행"), button:has-text("수정"), button:has-text("발행하기")').first();
     if (await confirmPublish.count().catch(() => 0) === 0) throw new Error('네이버 최종 수정 저장 버튼을 찾지 못했습니다.');
     await confirmPublish.click({ force: true }).catch(() => confirmPublish.dispatchEvent('click'));
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(3000);
     this.pendingPostUpdate = null;
     if (!page.isClosed()) await page.close().catch(() => {});
     return {

@@ -78,7 +78,7 @@ export class NeighborAutomationManager extends EventEmitter {
       throw new Error('검색 키워드를 입력해주세요.');
     }
 
-    const cleanTarget = Math.min(Math.max(Number(targetCount) || 30, 1), 500);
+    const cleanTarget = Math.min(Math.max(Number(targetCount) || 30, 1), 100);
     const cleanMinDelay = Math.max(Number(minDelay) || 45, 10);
     const cleanMaxDelay = Math.max(Number(maxDelay) || 90, cleanMinDelay);
     const cleanMessage = String(message || '').trim() || '안녕하세요! 블로그 글 유익하게 보고 갑니다. 서로이웃 맺고 소통해요 :)';

@@ -23,6 +23,22 @@ export function recommendKeywordsFromTexts(texts = [], limit = 7) {
   return scored.slice(0, Math.min(Math.max(Number(limit) || 7, 1), 10)).map((item) => item.keyword);
 }
 
+export function normalizeAutocompleteKeywords(payload, seed = '', limit = 20) {
+  const cleanSeed = String(seed || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const rows = Array.isArray(payload?.items?.[0]) ? payload.items[0] : [];
+  const seen = new Set();
+  const keywords = [];
+  for (const row of rows) {
+    const value = String(Array.isArray(row) ? row[0] : row || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    const key = value.toLowerCase();
+    if (!value || key === cleanSeed || seen.has(key)) continue;
+    seen.add(key);
+    keywords.push(value);
+    if (keywords.length >= Math.min(Math.max(Number(limit) || 20, 1), 30)) break;
+  }
+  return keywords;
+}
+
 export function normalizeBlogItem(item) {
   const link = String(item?.bloggerlink || item?.link || '').trim();
   const blogId = extractBlogId(link);

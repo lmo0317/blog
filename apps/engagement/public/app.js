@@ -13,6 +13,50 @@ const state = {
 };
 
 let commentAutoTimer = null;
+let engagementNeighborQuotaTimer = null;
+
+function getNextKoreaMidnight(nowMs = Date.now()) {
+  const koreaOffsetMs = 9 * 60 * 60 * 1000;
+  const koreaNow = new Date(nowMs + koreaOffsetMs);
+  return Date.UTC(
+    koreaNow.getUTCFullYear(),
+    koreaNow.getUTCMonth(),
+    koreaNow.getUTCDate() + 1
+  ) - koreaOffsetMs;
+}
+
+function renderEngagementNeighborQuota(summary = {}) {
+  const limitInput = $('#engDailyNeighborLimit');
+  const limit = Math.min(Math.max(Number(limitInput?.value) || 100, 1), 100);
+  const used = Math.max(Number(summary.todayNeighbors) || 0, 0);
+  const remaining = Math.max(limit - used, 0);
+  const resetAt = getNextKoreaMidnight();
+  const remainingMs = Math.max(resetAt - Date.now(), 0);
+  const remainingHours = Math.floor(remainingMs / 3600000);
+  const remainingMinutes = Math.floor((remainingMs % 3600000) / 60000);
+  const resetLabel = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).format(new Date(resetAt));
+
+  if ($('#engNeighborUsed')) $('#engNeighborUsed').textContent = String(used);
+  if ($('#engNeighborRemaining')) $('#engNeighborRemaining').textContent = String(remaining);
+  if ($('#engNeighborResetAt')) $('#engNeighborResetAt').textContent = `리셋: ${resetLabel} (약 ${remainingHours}시간 ${remainingMinutes}분 후)`;
+}
+
+async function refreshEngagementNeighborQuota() {
+  try {
+    renderEngagementNeighborQuota(await api('/api/engagement/neighbor-quota'));
+  } catch {
+    if ($('#engNeighborResetAt')) $('#engNeighborResetAt').textContent = '신청 내역을 불러오지 못했습니다.';
+  }
+}
+
+function initEngagementNeighborQuota() {
+  if (engagementNeighborQuotaTimer) clearInterval(engagementNeighborQuotaTimer);
+  refreshEngagementNeighborQuota();
+  engagementNeighborQuotaTimer = setInterval(refreshEngagementNeighborQuota, 60 * 1000);
+  $('#engDailyNeighborLimit')?.addEventListener('input', refreshEngagementNeighborQuota);
+}
 
 function setConnected(connected, label = '') {
   state.connected = Boolean(connected);
@@ -1498,6 +1542,7 @@ function initEngagementAutomation() {
   loadEngagementTrends();
   $('#engKeyword')?.addEventListener('input', syncEngKeywordChips);
   syncEngKeywordChips();
+  initEngagementNeighborQuota();
 
   // 2. Quick Counts
   $$('.eng-quick-counts button').forEach((btn) => {
@@ -1530,14 +1575,18 @@ function initEngagementAutomation() {
     const keyword = $('#engKeyword')?.value?.trim();
     if (!keyword) return toast('소통 타겟 키워드를 입력해주세요.', true);
 
-    const targetCount = Number($('#engTargetCount')?.value) || 50;
+    const targetCount = Number($('#engTargetCount')?.value) || 100;
     const doLike = $('#engDoLike')?.checked ?? true;
     const doComment = $('#engDoComment')?.checked ?? true;
     const doNeighbor = $('#engDoNeighbor')?.checked ?? true;
     const neighborMessage = $('#engNeighborMessage')?.value?.trim() || '안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊';
     const tone = $('#engTone')?.value || 'friendly';
-    const minDelay = Number($('#engMinDelay')?.value) || 45;
-    const maxDelay = Number($('#engMaxDelay')?.value) || 90;
+    const minDelay = Number($('#engMinDelay')?.value) || 120;
+    const maxDelay = Number($('#engMaxDelay')?.value) || 180;
+    const dailyNeighborLimit = Number($('#engDailyNeighborLimit')?.value) || 100;
+    const sessionPosts = Number($('#engSessionPosts')?.value) || 10;
+    const breakMinMinutes = Number($('#engBreakMinMinutes')?.value) || 10;
+    const breakMaxMinutes = Number($('#engBreakMaxMinutes')?.value) || 20;
 
     if (!doLike && !doComment && !doNeighbor) {
       return toast('공감(❤️), AI 댓글(💬), 서로이웃(👥) 중 최소 1개 이상을 선택해주세요.', true);
@@ -1554,10 +1603,15 @@ function initEngagementAutomation() {
 
       await api('/api/engagement/start', {
         method: 'POST',
-        body: JSON.stringify({ keyword, targetCount, doLike, doComment, doNeighbor, neighborMessage, tone, minDelay, maxDelay })
+        body: JSON.stringify({
+          keyword, targetCount, doLike, doComment, doNeighbor, neighborMessage, tone,
+          minDelay, maxDelay, dailyNeighborLimit, sessionPosts,
+          sessionBreakMinSeconds: breakMinMinutes * 60,
+          sessionBreakMaxSeconds: breakMaxMinutes * 60
+        })
       });
       const keywordCount = keyword.split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean).length;
-      toast(`${keywordCount}개 키워드를 순차 실행합니다. 키워드당 ${targetCount}건`);
+      toast(`${keywordCount}개 키워드를 순차 실행합니다. 전체 목표 ${Math.min(targetCount, 100)}건 · 하루 서로이웃 최대 ${Math.min(dailyNeighborLimit, 100)}명`);
       initEngagementEvents();
     } catch (err) {
       toast(err.message, true);
@@ -1629,6 +1683,9 @@ function initEngagementEvents() {
     try {
       const log = JSON.parse(e.data);
       appendEngagementLog(log);
+      if (/서로이웃 성공|일일 한도/.test(log.message || '')) {
+        setTimeout(refreshEngagementNeighborQuota, 1000);
+      }
     } catch {}
   });
 
@@ -1801,6 +1858,11 @@ function initTargetFinderModal() {
 
     // Update Presets chips
     $$('#categoryPresetsGrid .preset-chip').forEach((chip) => {
+      const kw = chip.dataset.keyword;
+      chip.classList.toggle('selected', selectedFinderKeywords.has(kw));
+    });
+
+    $$('#relatedKeywordsGrid .preset-chip').forEach((chip) => {
       const kw = chip.dataset.keyword;
       chip.classList.toggle('selected', selectedFinderKeywords.has(kw));
     });
@@ -2048,6 +2110,56 @@ function initTargetFinderModal() {
     const card = e.target.closest('.trend-item-card');
     if (!card) return;
     toggleKeyword(card.dataset.keyword);
+  });
+
+  // TAB 4: User-entered related keyword search
+  let relatedKeywordResults = [];
+  async function searchRelatedKeywords() {
+    const input = $('#relatedKeywordInput');
+    const button = $('#searchRelatedKeywordsBtn');
+    const grid = $('#relatedKeywordsGrid');
+    const heading = $('#relatedKeywordHeading');
+    const status = $('#relatedKeywordStatus');
+    const addAllButton = $('#addAllRelatedKeywordsBtn');
+    const keyword = input?.value?.replace(/\s+/g, ' ').trim();
+    if (!keyword) return toast('연관 키워드를 찾을 기준 키워드를 입력해주세요.', true);
+    try {
+      if (button) { button.disabled = true; button.textContent = '찾는 중...'; }
+      if (heading) heading.textContent = `'${keyword}' 연관 키워드 검색 중`;
+      if (status) status.textContent = '네이버 검색 제안을 불러오고 있습니다.';
+      if (grid) grid.innerHTML = '<div class="finder-loading-box"><div class="finder-spinner"></div><strong>연관 키워드를 찾는 중...</strong></div>';
+      const data = await api(`/api/blog/related-keywords?keyword=${encodeURIComponent(keyword)}`);
+      relatedKeywordResults = Array.isArray(data.keywords) ? data.keywords : [];
+      if (heading) heading.textContent = `'${data.keyword || keyword}' 연관 키워드`;
+      if (status) status.textContent = relatedKeywordResults.length ? `${relatedKeywordResults.length}개를 찾았습니다. 원하는 키워드를 클릭하세요.` : '표시할 연관 키워드가 없습니다. 다른 표현으로 다시 검색해보세요.';
+      if (addAllButton) addAllButton.classList.toggle('hidden', relatedKeywordResults.length === 0);
+      if (grid) grid.innerHTML = relatedKeywordResults.length
+        ? `<div class="preset-category-card"><span class="preset-cat-title">검색 제안 ${relatedKeywordResults.length}개</span><div class="preset-chips-wrap">${relatedKeywordResults.map((kw) => `<button type="button" class="preset-chip ${selectedFinderKeywords.has(kw) ? 'selected' : ''}" data-keyword="${escapeHtml(kw)}">${escapeHtml(kw)}</button>`).join('')}</div></div>`
+        : '<div style="grid-column:1/-1; color:#94a3b8; text-align:center; padding:20px;">연관 키워드 결과가 없습니다.</div>';
+      updateSelectedClasses();
+    } catch (err) {
+      relatedKeywordResults = [];
+      if (heading) heading.textContent = `'${keyword}' 검색 실패`;
+      if (status) status.textContent = err.message || '연관 키워드를 불러오지 못했습니다.';
+      if (grid) grid.innerHTML = '<div style="grid-column:1/-1; color:#b33b3b; text-align:center; padding:20px;">연관 키워드를 불러오지 못했습니다.</div>';
+      if (addAllButton) addAllButton.classList.add('hidden');
+    } finally {
+      if (button) { button.disabled = false; button.textContent = '연관 키워드 찾기'; }
+    }
+  }
+
+  $('#searchRelatedKeywordsBtn')?.addEventListener('click', searchRelatedKeywords);
+  $('#relatedKeywordInput')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); searchRelatedKeywords(); }
+  });
+  $('#relatedKeywordsGrid')?.addEventListener('click', (event) => {
+    const chip = event.target.closest('.preset-chip');
+    if (chip) toggleKeyword(chip.dataset.keyword);
+  });
+  $('#addAllRelatedKeywordsBtn')?.addEventListener('click', () => {
+    relatedKeywordResults.forEach((keyword) => selectedFinderKeywords.add(keyword));
+    updateSelectedClasses();
+    toast(`연관 키워드 ${relatedKeywordResults.length}개를 담았습니다.`);
   });
 
   // TAB 3: Category Presets

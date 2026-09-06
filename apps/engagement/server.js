@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
-import { NaverBrowserSession } from './lib/naver.js';
+import { NaverBrowserSession, normalizeAutocompleteKeywords } from './lib/naver.js';
 import { LocalLlmClient } from './lib/llm.js';
 import { fetchKoreanTrends } from './lib/trends.js';
 import { fetchAlgumonRankDeals, isDirectProductUrl, unwrapKnownRedirectUrl } from './lib/algumon.js';
@@ -545,6 +545,24 @@ app.get('/api/engagement/summary', async (_req, res, next) => {
   }
 });
 
+app.get('/api/engagement/neighbor-quota', async (_req, res, next) => {
+  try {
+    const [neighborSummary, engagementSummary] = await Promise.all([
+      historyStore.getSummary(),
+      engagementHistoryStore.getSummary()
+    ]);
+    res.json({
+      todayDate: engagementSummary.todayDate || neighborSummary.todayDate,
+      todayNeighbors: (Number(neighborSummary.todayCount) || 0) + (Number(engagementSummary.todayNeighbors) || 0),
+      neighborOnlyCount: Number(neighborSummary.todayCount) || 0,
+      engagementCount: Number(engagementSummary.todayNeighbors) || 0,
+      dailyLimit: 100
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/engagement/history/csv', async (_req, res, next) => {
   try {
     const csv = await engagementHistoryStore.exportCsv();
@@ -737,6 +755,28 @@ app.get('/api/blog/trends', async (_req, res, next) => {
       trendCache = { loadedAt: Date.now(), items: await fetchKoreanTrends({ limit: 12 }) };
     }
     res.json({ items: trendCache.items, refreshedAt: new Date(trendCache.loadedAt).toISOString() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/blog/related-keywords', async (req, res, next) => {
+  try {
+    const keyword = String(req.query?.keyword || '').replace(/\s+/g, ' ').trim();
+    if (keyword.length < 1 || keyword.length > 50) {
+      return res.status(400).json({ error: '연관 키워드는 1~50자로 입력해주세요.' });
+    }
+    const params = new URLSearchParams({
+      q: keyword, con: '1', frm: 'nv', ans: '2', r_format: 'json', r_enc: 'UTF-8',
+      r_unicode: '0', t_koreng: '1', run: '2', rev: '4', q_enc: 'UTF-8', st: '100'
+    });
+    const response = await fetch(`https://ac.search.naver.com/nx/ac?${params}`, {
+      headers: { Accept: 'application/json', Referer: 'https://search.naver.com/', 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) throw new Error(`네이버 검색 제안 응답 오류 (${response.status})`);
+    const keywords = normalizeAutocompleteKeywords(await response.json(), keyword, 20);
+    res.json({ keyword, keywords, count: keywords.length, source: 'naver-search-suggestions', searchedAt: new Date().toISOString() });
   } catch (error) {
     next(error);
   }

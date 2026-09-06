@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG } from '../lib/hardware.js';
 import { ModelManager } from '../lib/model-manager.js';
 import { EmbeddedLlamaServer, normalizeCommentText, validateBlogComment } from '../lib/embedded-llama.js';
 import { EngagementAutomationManager, ENGAGEMENT_LIMITS, buildNeighborMessage, selectPostActions } from '../lib/engagement-automation.js';
-import { recommendKeywordsFromTexts } from '../lib/naver.js';
+import { normalizeAutocompleteKeywords, recommendKeywordsFromTexts } from '../lib/naver.js';
 
 test('detectGpuSpecs and getSystemHardwareSummary return valid system metrics and model recommendations', async () => {
   const summary = await getSystemHardwareSummary();
@@ -74,7 +74,7 @@ test('EngagementAutomationManager validates configuration', async () => {
   );
 });
 
-test('EngagementAutomationManager preserves a 500-post target and requests extra candidates', async () => {
+test('EngagementAutomationManager caps the overall target at 100 posts', async () => {
   let requestedDisplay = 0;
   const manager = new EngagementAutomationManager({
     browserSession: { connected: true, async searchBlogs({ display }) { requestedDisplay = display; return []; } },
@@ -83,12 +83,43 @@ test('EngagementAutomationManager preserves a 500-post target and requests extra
   });
   await manager.start({ keyword: '육아', targetCount: 500, doLike: true, doComment: false, doNeighbor: false });
   while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
-  assert.equal(manager.config.targetCount, 500);
-  assert.equal(manager.stats.targetCount, 500);
-  assert.equal(requestedDisplay, 1000);
+  assert.equal(manager.config.targetCount, 100);
+  assert.equal(manager.stats.targetCount, 100);
+  assert.equal(requestedDisplay, 200);
 });
 
-test('multi-keyword harness runs the per-keyword target sequentially', async () => {
+test('engagement campaign caps the total target and daily neighbor ceiling at 100', async () => {
+  const manager = new EngagementAutomationManager({
+    browserSession: { connected: true, async searchBlogs() { return []; } },
+    embeddedLlama: null,
+    historyStore: null
+  });
+  await manager.start({
+    keyword: '육아', targetCount: 300, dailyNeighborLimit: 300,
+    minDelay: 120, maxDelay: 180, sessionPosts: 10,
+    sessionBreakMinSeconds: 600, sessionBreakMaxSeconds: 1200
+  });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(manager.config.targetCount, 100);
+  assert.equal(manager.config.dailyNeighborLimit, 100);
+  assert.equal(manager.config.minDelay, 120);
+  assert.equal(manager.config.maxDelay, 180);
+  assert.equal(manager.config.sessionPosts, 10);
+  assert.equal(manager.config.sessionBreakMinSeconds, 600);
+  assert.equal(manager.config.sessionBreakMaxSeconds, 1200);
+
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="engTargetCount"[^>]*max="100"[^>]*value="100"/);
+  assert.match(html, /id="engDailyNeighborLimit"[^>]*max="100"/);
+  assert.match(html, /id="engNeighborUsed"/);
+  assert.match(html, /id="engNeighborRemaining"/);
+  assert.match(html, /id="engNeighborResetAt"/);
+  assert.match(html, /id="engSessionPosts"/);
+  assert.match(html, /id="engBreakMinMinutes"/);
+  assert.match(html, /보호조치 경고/);
+});
+
+test('multi-keyword harness treats the target as an overall total', async () => {
   const searched = [];
   let reactions = 0;
   const session = { connected: true, async searchBlogs({ query }) { searched.push(query); return Array.from({ length: 4 }, (_, i) => ({ blogId: `${query}${i}`, title: `${query} 글 ${i}`, url: `https://blog.naver.com/${query}${i}/${10000000 + i}` })); }, async inspectPostForEngagement(postUrl) { return { title: postUrl, snippet: '본문', images: [] }; }, async likeAndCommentPost() { reactions += 1; return { liked: true, commented: false, message: '완료' }; } };
@@ -98,14 +129,19 @@ test('multi-keyword harness runs the per-keyword target sequentially', async () 
   await manager.start({ keyword: '육아, 쇼핑, 건강', targetCount: 2, doComment: false, doNeighbor: false, minDelay: 5, maxDelay: 5 });
   while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
   assert.deepEqual(searched, ['육아', '쇼핑', '건강']);
-  assert.equal(manager.config.targetPerKeyword, 2);
-  assert.equal(manager.stats.targetCount, 6);
-  assert.equal(reactions, 6);
-  assert.deepEqual(manager.stats.keywordProcessedCounts, { 육아: 2, 쇼핑: 2, 건강: 2 });
+  assert.equal(manager.config.targetPerKeyword, 1);
+  assert.equal(manager.stats.targetCount, 2);
+  assert.equal(reactions, 2);
+  assert.deepEqual(manager.stats.keywordProcessedCounts, { 육아: 1, 쇼핑: 1, 건강: 0 });
 });
 
 test('blog-style keyword analyzer ranks recurring categories', () => {
   assert.deepEqual(recommendKeywordsFromTexts(['아이와 육아 일상 및 키즈 교육', '아기 건강 식단', '육아용품 쇼핑 제품 리뷰'], 3), ['육아', '쇼핑', '건강']);
+});
+
+test('Naver autocomplete payload becomes a clean unique related-keyword list', () => {
+  const payload = { items: [[['캠핑용품', '0'], ['캠핑', '0'], ['캠핑 음식', '0'], ['캠핑용품', '0']]] };
+  assert.deepEqual(normalizeAutocompleteKeywords(payload, '캠핑'), ['캠핑용품', '캠핑 음식']);
 });
 
 test('EngagementAutomationManager counts completed posts once, not likes and comments separately', async () => {
@@ -158,7 +194,7 @@ test('engagement safety policy enforces daily limits and at most two actions per
   assert.equal(actions.length, 2);
   assert.deepEqual(selectPostActions({
     requested: { like: true, comment: true, neighbor: true },
-    todayCounts: { likes: 200, comments: 100, neighbors: 80 }
+    todayCounts: { likes: 200, comments: 100, neighbors: 100 }
   }), []);
 });
 
