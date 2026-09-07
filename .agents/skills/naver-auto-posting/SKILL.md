@@ -47,24 +47,41 @@ When the user asks "트렌드글 포스팅 해줘", "트렌드 분석해서 글 
    - Practical living & recycling tips (e.g., "이불 버리는 방법 - 대형폐기물 스티커 vs 종량제 봉투");
    - Trending life hacks & organizer items (e.g., "다이소 품절대란 정리 꿀템 실사용 팁").
 
-4. **Proceed to Standard Quality, Images, and Publishing**:
-   Search authoritative sources using `search_web`, draft the 1,500–2,500 character article, generate 3 section-matched Gemini Imagen images, publish to the correct category (`건강`, `생활`, etc.), verify the live URL, and archive in `references/published-posts/`.
+4. **Proceed to Premium Quality, Images, and Publishing**:
+   Search authoritative sources using `search_web`, draft the 2,500–3,800 character article (minimum 2,200 characters excluding spaces and tags), generate 3 section-matched Gemini Imagen images, publish to the correct category (`건강`, `생활`, etc.), verify the live URL, and archive in `references/published-posts/`.
 
-## Article quality
+## Article quality (정성스럽고 깊이 있는 프리미엄 포스팅 원칙)
 
-Write a natural Korean post with:
+독자가 글을 읽었을 때 "단순 AI 요약글이나 백과사전이 아니라, 진짜 살림·건강 전문가가 정성을 다해 쓴 글"이라는 신뢰와 감동을 느낄 수 있도록 아래의 고품질 작성 원칙을 반드시 준수합니다.
 
-- a specific, non-clickbait title;
-- a short introduction explaining why the topic matters;
-- 4–6 descriptive headings rather than generic labels;
-- concrete steps, examples, limitations, and a useful closing action;
-- only claims supported by the researched sources;
-- up to 10 relevant tags;
-- no exposed prompts, `imageQuery`, internal metadata, decorative separator spam, or excessive emoji.
+### 1. 글자 수 및 정보 밀도 (Depth & Volume Gate)
+- **분량 기준**: 순수 본문 기준 **2,500 ~ 3,800자 (공백 제외 2,200자 이상 의무화)**를 철저히 지킵니다. (태그, 출처 URL 제외)
+- **무의미한 패딩 금지**: 같은 말을 반복하는 말 늘리기가 아니라, **구체적인 수치(온도, 비율, g/ml 용량, 분/초 단위 시간), 과학적·의학적·조리적 원리, 실제 발생 가능한 돌발 상황별 해결책**으로 정보 밀도를 촘촘하게 채웁니다.
+- **발행 게이트**: 작성 완료 후 공백 제외 글자 수를 계산하여 2,200자 미만일 경우, 심층 팁과 FAQ를 추가 보강하기 전까지는 절대 발행하지 않습니다.
 
-For a normal standalone 생활, 건강, or 자동화 post, require 1,500–2,500 Korean characters of body text excluding tags and source URLs. Treat this as a publish gate, not a target that can be satisfied with repetitive padding. Before publication, count the characters and reject or expand any draft below 1,500 characters.
+### 2. 공감형 스토리텔링 도입부 (Empathy & Reader Hook)
+- 건조하고 딱딱한 백과사전식 도입("~에 대해 알아보겠습니다", "최근 ~가 인기입니다")을 **전면 금지**합니다.
+- 독자가 일상에서 겪었을 법한 **구체적인 곤란한 상황, 당황했던 에피소드, 흔히 겪는 착오**를 생생하게 묘사하여 3초 안에 독자의 깊은 공감을 이끌어냅니다.
+  *(예: "장바구니에 담아올 땐 뿌듯했는데, 막상 싱크대 앞에 서서 손질할 생각에 한숨부터 나오셨던 적 다들 있으시죠?", "아침에 일어났는데 갑자기 핑 돌며 식은땀이 비 오듯 쏟아져 덜컥 겁이 났던 경험...")*
+- 왜 이 글이 지금 독자의 고민을 해결하는 데 반드시 필요한지 명확한 이유를 제시합니다.
 
-For health, legal, financial, product-safety, or other high-stakes topics, use especially authoritative current sources, qualify claims conservatively, and add an appropriate limitation notice.
+### 3. 정성스러운 글의 5대 필수 시그니처 구성요소 (Signature Elements)
+모든 포스팅은 다음 5가지 요소를 본문 속에 유기적으로 반드시 포함해야 합니다:
+
+1. **[💡 바쁜 분들을 위한 3줄 핵심 요약]**: 도입부 끝 또는 글 서두에 바쁜 독자를 위해 전체 핵심 결론과 필수 행동 요령을 3줄로 깔끔하게 정리한 박스/문단 제공.
+2. **[⚠️ 흔히 저지르는 치명적 실수 TOP 3 / 실패 방지 꿀팁]**: 초보자들이 실제로 가장 많이 실패하는 포인트와 그 이유, 그리고 해결책을 구체적으로 짚어줌 (*"대부분 여기서 실패합니다!", "절대 이렇게 하지 마세요!"*).
+3. **[📊 한눈에 쏙 들어오는 비교/체크리스트 요약]**: 상황별 비교(A vs B, 재질별 차이, 전/후 비교)나 단계별 점검 체크리스트를 구조화된 텍스트/표 형태로 제공.
+4. **[❓ 독자들이 가장 많이 묻는 실전 Q&A (FAQ 2~3선)]**: 댓글로 자주 물어볼 법한 실전 궁금증(보관 기한, 대체 재료, 주의 대상, 부작용 등)을 사전에 명쾌하게 해소.
+5. **[🎁 전문가의 한 끗 차이 살림/건강 꿀팁 (Secret Pro-Tip)]**: 일반인은 잘 모르는 1%의 비법(식초 한 방울, 4분의 법칙, 특정 호흡 주기 등)을 짚어주어 글의 소장 가치를 극대화.
+
+### 4. 인간적인 블로거 페르소나와 친절한 톤앤매너 (Authentic Voice)
+- 딱딱한 기사나 매뉴얼 말투를 지양하고, **다정하면서도 전문성 있는 라이프스타일/건강 큐레이터**의 목소리를 유지합니다.
+- 중요한 핵심 수치나 키워드는 시각적으로 강조하고, 문단과 문단 사이의 호흡을 부드럽게 이어주는 자연스러운 구어체 전개(*"여기서 잠깐!", "제가 직접 해보면서 발견한 비법은~", "이것만 기억하시면 절반은 성공입니다"*)를 적절히 활용합니다.
+- **이미지와 본문의 유기적 결합**: 삽입된 3장의 사진 바로 아래에는 해당 사진을 보며 직관적으로 따라 할 수 있는 친절한 관찰 포인트나 캡션형 조언을 곁들입니다.
+
+### 5. 신뢰성과 안전성 (Authoritative Grounding)
+- 건강, 안전, 의약품, 화학 세제 등 전문성이 요구되는 주제는 반드시 질병관리청, 대학병원, 공공 학술자료 등 공신력 있는 출처에 기반하여 작성하고, 개인차에 따른 주의사항 및 의료진 상담 권고 문구를 자연스럽게 포함합니다.
+- 최대 10개의 핵심 타겟 태그를 엄선합니다.
 
 ## Naver category routing
 

@@ -56,5 +56,9 @@ When picking a trend topic from the candidate list:
    - `자동화`: Coding, bot development, productivity workflows, AI tech.
 3. **Source Grounding**:
    - Always run `search_web` to obtain authoritative cooking, agricultural, or nutritional facts before drafting.
-4. **Native Gemini Imagen Visuals**:
+4. **Search Intent & High-Effort Editorial Crafting**:
+   - 단순히 검색어 키워드만 나열하지 않고, 독자가 이 검색어를 입력한 **진짜 심리와 가려운 곳(Search Intent)**을 분석합니다.
+   - 3줄 핵심 요약, 흔히 저지르는 실수 TOP 3, 실전 비교표, 독자 빈출 Q&A(FAQ), 전문가 시크릿 팁을 포함하여 **최소 2,200자(공백 제외) 이상의 정성스럽고 밀도 높은 본문**을 완성합니다.
+5. **Native Gemini Imagen Visuals**:
    - Generate 3 realistic editorial-style photos via Gemini's `generate_image` tool illustrating preparation, detail, and practical outcome.
+
