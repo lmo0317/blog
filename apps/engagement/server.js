@@ -20,6 +20,7 @@ import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from '.
 import { CommentReplyStore } from './lib/comment-replies.js';
 import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManager } from './lib/naver-feed-engage.js';
 import { fetchReceivedBuddyRequests, fetchSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
+import { LicenseClientManager } from './lib/license-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
@@ -61,6 +62,10 @@ const neighborCleanerManager = new NeighborCleanerManager({
   embeddedLlama,
   neighborGroupStore: browserSession.groupStore
 });
+const licenseClient = new LicenseClientManager({
+  cachePath: path.join(__dirname, '.data', 'license-cache.json')
+});
+licenseClient.startHeartbeat();
 
 async function resolveActiveLlmEndpoint() {
   const activeModel = await modelManager.getActiveModel();
@@ -789,6 +794,57 @@ app.post('/api/cleaner/stop', (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// License & Subscription Client: Status, Login, Register, Activate, Logout
+// ---------------------------------------------------------------------------
+app.get('/api/license/status', (_req, res) => {
+  res.json(licenseClient.getStatus());
+});
+
+app.post('/api/license/verify', async (_req, res, next) => {
+  try {
+    const result = await licenseClient.verifyOnline();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/license/login', async (req, res, next) => {
+  try {
+    const { email, password } = req.body || {};
+    const result = await licenseClient.login({ email, password });
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/license/register', async (req, res, next) => {
+  try {
+    const { email, password, name, licenseKey } = req.body || {};
+    const result = await licenseClient.register({ email, password, name, licenseKey });
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/license/activate', async (req, res, next) => {
+  try {
+    const { licenseKey } = req.body || {};
+    const result = await licenseClient.activateKey(licenseKey);
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/license/logout', (_req, res) => {
+  const result = licenseClient.logout();
+  res.json(result);
+});
+
+// ---------------------------------------------------------------------------
 // My-post comment management: scan -> AI reply -> mutual-neighbor request
 // ---------------------------------------------------------------------------
 app.get('/api/comment-management/scan', async (req, res, next) => {
@@ -1385,6 +1441,7 @@ export function startServer(customPort = port) {
 
 export async function shutdown() {
   try {
+    licenseClient.stopHeartbeat();
     await browserSession.close();
     await embeddedLlama.stop();
   } catch {}
@@ -1411,7 +1468,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-export { app, browserSession, modelManager, embeddedLlama, engagementManager, feedManager, feedHistoryStore, neighborCleanerManager };
+export { app, browserSession, modelManager, embeddedLlama, engagementManager, feedManager, feedHistoryStore, neighborCleanerManager, licenseClient };
 
 function normalizeHttpUrl(value) {
   try {

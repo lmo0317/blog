@@ -3033,6 +3033,266 @@ function initTargetFinderModal() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// License & Subscription Client Controller
+// ---------------------------------------------------------------------------
+let licenseState = {
+  status: 'unregistered',
+  daysLeft: 0,
+  expiresAt: null,
+  email: null,
+  planType: null,
+  hwidMasked: null
+};
+
+function updateLicenseBadgeUI(state) {
+  const badge = $('#topLicenseBadge');
+  const icon = $('#topLicenseBadgeIcon');
+  const text = $('#topLicenseBadgeText');
+  const detail = $('#licenseStatusDetailText');
+  const daysBadge = $('#licenseDaysBadge');
+  const hwidEl = $('#licenseHwidText');
+
+  if (hwidEl && state.hwidMasked) {
+    hwidEl.textContent = state.hwidMasked;
+  }
+
+  if (state.status === 'valid') {
+    if (badge) {
+      badge.style.background = '#ecfdf5';
+      badge.style.color = '#065f46';
+      badge.style.border = '1px solid #a7f3d0';
+    }
+    if (icon) icon.textContent = '👑';
+    if (text) text.textContent = `구독: D-${state.daysLeft}일 남음`;
+    if (detail) detail.textContent = `${state.email || '정품 회원'} (${state.planType || '정기구독'})`;
+    if (daysBadge) {
+      daysBadge.textContent = `D-${state.daysLeft}일`;
+      daysBadge.style.background = '#dcfce7';
+      daysBadge.style.color = '#166534';
+    }
+  } else if (state.status === 'offline_grace') {
+    if (badge) {
+      badge.style.background = '#fef3c7';
+      badge.style.color = '#92400e';
+      badge.style.border = '1px solid #fde68a';
+    }
+    if (icon) icon.textContent = '⏳';
+    if (text) text.textContent = `오프라인: D-${state.daysLeft}일`;
+    if (detail) detail.textContent = '오프라인 유예 모드 동작 중 (24시간 보장)';
+    if (daysBadge) {
+      daysBadge.textContent = `D-${state.daysLeft}일`;
+      daysBadge.style.background = '#fef3c7';
+      daysBadge.style.color = '#92400e';
+    }
+  } else if (state.status === 'expired') {
+    if (badge) {
+      badge.style.background = '#fee2e2';
+      badge.style.color = '#991b1b';
+      badge.style.border = '1px solid #fecaca';
+    }
+    if (icon) icon.textContent = '⚠️';
+    if (text) text.textContent = '구독 만료: 연장 필요';
+    if (detail) detail.textContent = '구독 기간이 만료되었습니다. 이용권을 갱신해주세요.';
+    if (daysBadge) {
+      daysBadge.textContent = '만료됨';
+      daysBadge.style.background = '#fee2e2';
+      daysBadge.style.color = '#991b1b';
+    }
+  } else if (state.status === 'unauthorized_device') {
+    if (badge) {
+      badge.style.background = '#fee2e2';
+      badge.style.color = '#991b1b';
+      badge.style.border = '1px solid #fecaca';
+    }
+    if (icon) icon.textContent = '⛔';
+    if (text) text.textContent = '등록 기기 불일치';
+    if (detail) detail.textContent = '다른 PC에서 등록된 계정입니다. (1인 1PC 정책)';
+    if (daysBadge) {
+      daysBadge.textContent = '기기제한';
+      daysBadge.style.background = '#fee2e2';
+      daysBadge.style.color = '#991b1b';
+    }
+  } else {
+    // unregistered
+    if (badge) {
+      badge.style.background = '#f1f5f9';
+      badge.style.color = '#475569';
+      badge.style.border = '1px solid #cbd5e1';
+    }
+    if (icon) icon.textContent = '🔑';
+    if (text) text.textContent = '이용권 등록 필요';
+    if (detail) detail.textContent = '등록된 이용권이 없습니다. 로그인하거나 3일 무료체험을 시작하세요.';
+    if (daysBadge) {
+      daysBadge.textContent = '미등록';
+      daysBadge.style.background = '#e2e8f0';
+      daysBadge.style.color = '#475569';
+    }
+  }
+}
+
+async function refreshLicenseStatus() {
+  try {
+    const data = await api('/api/license/status');
+    if (data) {
+      licenseState = data;
+      updateLicenseBadgeUI(data);
+    }
+  } catch (err) {
+    console.warn('Failed to fetch license status:', err);
+  }
+}
+
+function openLicenseModal() {
+  $('#licenseModal')?.classList.remove('hidden');
+  refreshLicenseStatus();
+}
+
+function closeLicenseModal() {
+  $('#licenseModal')?.classList.add('hidden');
+}
+
+function initLicenseManagement() {
+  $('#topLicenseBadge')?.addEventListener('click', openLicenseModal);
+  $('#closeLicenseModal')?.addEventListener('click', closeLicenseModal);
+  $('#closeLicenseModalBottom')?.addEventListener('click', closeLicenseModal);
+
+  // Tab Switcher between Login & Register
+  $('#tabLicenseLoginBtn')?.addEventListener('click', () => {
+    $('#tabLicenseLoginBtn').style.background = '#fff';
+    $('#tabLicenseLoginBtn').style.color = '#0f172a';
+    $('#tabLicenseLoginBtn').style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+    $('#tabLicenseRegisterBtn').style.background = 'transparent';
+    $('#tabLicenseRegisterBtn').style.color = '#64748b';
+    $('#tabLicenseRegisterBtn').style.boxShadow = 'none';
+
+    $('#licenseLoginForm')?.classList.remove('hidden');
+    $('#licenseKeySection')?.classList.remove('hidden');
+    $('#licenseRegisterForm')?.classList.add('hidden');
+  });
+
+  $('#tabLicenseRegisterBtn')?.addEventListener('click', () => {
+    $('#tabLicenseRegisterBtn').style.background = '#fff';
+    $('#tabLicenseRegisterBtn').style.color = '#0f172a';
+    $('#tabLicenseRegisterBtn').style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+    $('#tabLicenseLoginBtn').style.background = 'transparent';
+    $('#tabLicenseLoginBtn').style.color = '#64748b';
+    $('#tabLicenseLoginBtn').style.boxShadow = 'none';
+
+    $('#licenseLoginForm')?.classList.add('hidden');
+    $('#licenseKeySection')?.classList.add('hidden');
+    $('#licenseRegisterForm')?.classList.remove('hidden');
+  });
+
+  // Login Form Submission
+  $('#licenseLoginForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('#licenseEmailInput')?.value.trim();
+    const password = $('#licensePasswordInput')?.value;
+    const submitBtn = $('#licenseLoginSubmitBtn');
+
+    if (!email || !password) return;
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '인증 확인 중...';
+      }
+      const res = await api('/api/license/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+      toast(`✅ 로그인 완료! (${res.state?.message || '정품 인증 완료'})`);
+      await refreshLicenseStatus();
+      closeLicenseModal();
+    } catch (err) {
+      toast(`❌ 로그인 실패: ${err.message}`, true);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '이 PC에서 정품 로그인';
+      }
+    }
+  });
+
+  // Register Form Submission
+  $('#licenseRegisterForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('#regEmailInput')?.value.trim();
+    const password = $('#regPasswordInput')?.value;
+    const licenseKey = $('#regLicenseKeyInput')?.value.trim() || null;
+    const submitBtn = $('#licenseRegisterSubmitBtn');
+
+    if (!email || !password) return;
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '계정 생성 중...';
+      }
+      const res = await api('/api/license/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, licenseKey })
+      });
+      toast(`🎉 회원가입 완료! 3일 무료체험이 활성화되었습니다.`);
+      await refreshLicenseStatus();
+      closeLicenseModal();
+    } catch (err) {
+      toast(`❌ 회원가입 실패: ${err.message}`, true);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '신규 등록하고 3일 무료체험 시작';
+      }
+    }
+  });
+
+  // Direct License Key Activation
+  $('#licenseActivateKeyBtn')?.addEventListener('click', async () => {
+    const licenseKey = $('#licenseKeyInput')?.value.trim();
+    if (!licenseKey) {
+      toast('라이선스 키를 입력해주세요.', true);
+      return;
+    }
+
+    const btn = $('#licenseActivateKeyBtn');
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '확인 중...';
+      }
+      const res = await api('/api/license/activate', {
+        method: 'POST',
+        body: JSON.stringify({ licenseKey })
+      });
+      toast(`🎉 ${res.message || '라이선스가 성공적으로 활성화되었습니다!'}`);
+      if ($('#licenseKeyInput')) $('#licenseKeyInput').value = '';
+      await refreshLicenseStatus();
+    } catch (err) {
+      toast(`❌ 키 활성화 실패: ${err.message}`, true);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '키 등록';
+      }
+    }
+  });
+
+  // Logout
+  $('#licenseLogoutBtn')?.addEventListener('click', async () => {
+    if (!confirm('정말 이 PC에서 로그아웃하시겠습니까?')) return;
+    try {
+      await api('/api/license/logout', { method: 'POST' });
+      toast('로그아웃되었습니다.');
+      await refreshLicenseStatus();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  // Initial fetch and periodic polling
+  refreshLicenseStatus();
+  setInterval(refreshLicenseStatus, 60 * 1000);
+}
+
 // Initial health check and session restoration
 api('/api/health').then(async (data) => {
   initSettingsController();
@@ -3043,6 +3303,7 @@ api('/api/health').then(async (data) => {
   initNeighborCleaner();
   initCommentManagement();
   initTargetFinderModal();
+  initLicenseManagement();
 
   if (data.connected) {
     setConnected(true);
@@ -3069,4 +3330,5 @@ api('/api/health').then(async (data) => {
   initNeighborCleaner();
   initCommentManagement();
   initTargetFinderModal();
+  initLicenseManagement();
 });

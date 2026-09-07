@@ -19,3 +19,5 @@ npm-debug.log*
 apps/posting/.image-engine/
 **/.image-engine/
 output/
+*.db
+apps/license-server/data/
