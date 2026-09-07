@@ -130,26 +130,36 @@ export async function fetchCreatorAdvisorTrends(options = {}) {
       chunkedCategories.push(categories.slice(i, i + 5));
     }
 
-    const allData = [];
-    for (const chunk of chunkedCategories) {
-      const categoriesParam = encodeURIComponent(chunk.join(','));
-      const apiUrl = `https://creator-advisor.naver.com/api/v6/trend/category?categories=${categoriesParam}&contentType=text&date=${targetDate}&hasRankChange=true&interval=day&limit=${limit}&service=naver_blog`;
+    let actualDate = targetDate;
+    let allData = [];
 
-      console.log(`[fetch-trends] Requesting chunk (${chunk.join(', ')}) ...`);
-      const trendResult = await page.evaluate(async (url) => {
-        try {
-          const res = await fetch(url);
-          return await res.json();
-        } catch (e) {
-          return { error: e.message };
+    async function fetchChunksForDate(dateStr) {
+      const results = [];
+      for (const chunk of chunkedCategories) {
+        const categoriesParam = encodeURIComponent(chunk.join(','));
+        const apiUrl = `https://creator-advisor.naver.com/api/v6/trend/category?categories=${categoriesParam}&contentType=text&date=${dateStr}&hasRankChange=true&interval=day&limit=${limit}&service=naver_blog`;
+        const trendResult = await page.evaluate(async (url) => {
+          try {
+            const res = await fetch(url);
+            return await res.json();
+          } catch (e) {
+            return { error: e.message };
+          }
+        }, apiUrl);
+        if (trendResult && trendResult.data) {
+          results.push(...trendResult.data);
         }
-      }, apiUrl);
-
-      if (trendResult && trendResult.data) {
-        allData.push(...trendResult.data);
-      } else {
-        console.warn(`Warning on chunk ${chunk.join(', ')}:`, trendResult?.message || trendResult);
       }
+      return results;
+    }
+
+    allData = await fetchChunksForDate(actualDate);
+    const totalQueries = allData.reduce((sum, item) => sum + (item.queryList?.length || 0), 0);
+    if (totalQueries === 0) {
+      const tMinusTwo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      console.log(`[fetch-trends] Date ${actualDate} has 0 queries (unfinalized batch). Falling back to ${tMinusTwo} ...`);
+      actualDate = tMinusTwo;
+      allData = await fetchChunksForDate(actualDate);
     }
 
     const publishedList = loadPublishedIndex();
