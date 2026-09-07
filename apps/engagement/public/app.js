@@ -173,6 +173,11 @@ function setActiveTab(tabName, moveFocus = false) {
       if (typeof loadFeedPreview === 'function') loadFeedPreview();
     }
   }
+  if (tabName === 'comment-management') {
+    if (state.connected && $('#receivedRequestsContainer')?.querySelector('.empty-state')) {
+      if (typeof loadReceivedCleanerList === 'function') loadReceivedCleanerList();
+    }
+  }
 }
 
 workspaceTabs.forEach((tab, index) => {
@@ -2156,6 +2161,485 @@ function initFeedEngagement() {
 }
 
 // ---------------------------------------------------------------------------
+// Neighbor Cleaner (Received AI Screening & Sent Slot Recovery) Controller
+// ---------------------------------------------------------------------------
+let cleanerStatusTimer = null;
+let isCleanerLoading = false;
+
+function updateCleanerDashboard(statusData) {
+  if (!statusData) return;
+  const { state: cleanerState, stats = {}, logs = [] } = statusData;
+  const isRunning = cleanerState === 'running';
+  const isPaused = cleanerState === 'paused';
+  const isCompleted = cleanerState === 'completed';
+  const isError = cleanerState === 'error';
+  const isIdle = cleanerState === 'idle' || cleanerState === 'stopped' || isCompleted || isError;
+
+  // If received task
+  if (stats.type === 'received') {
+    const statusBadge = $('#receivedCleanAutoStatus');
+    if (statusBadge) {
+      statusBadge.className = `status ${isRunning ? 'active' : isPaused ? 'warning' : isCompleted ? 'success' : isError ? 'error' : 'ready'}`;
+      if (isRunning) statusBadge.innerHTML = `<i></i> 진행 중 (${stats.processed || 0}/${stats.total || 0})`;
+      else if (isPaused) statusBadge.innerHTML = '<i></i> 일시정지됨';
+      else if (isCompleted) statusBadge.innerHTML = '<i></i> 처리 완료';
+      else if (isError) statusBadge.innerHTML = '<i></i> 오류 발생';
+      else statusBadge.innerHTML = '<i></i> 대기 중';
+    }
+
+    const startBtn = $('#startReceivedCleanBtn');
+    const pauseBtn = $('#pauseReceivedCleanBtn');
+    const resumeBtn = $('#resumeReceivedCleanBtn');
+    const stopBtn = $('#stopReceivedCleanBtn');
+
+    if (startBtn) startBtn.classList.toggle('hidden', !isIdle);
+    if (pauseBtn) pauseBtn.classList.toggle('hidden', !isRunning);
+    if (resumeBtn) resumeBtn.classList.toggle('hidden', !isPaused);
+    if (stopBtn) stopBtn.classList.toggle('hidden', isIdle);
+
+    if ($('#cleanerStatReceivedTotal')) $('#cleanerStatReceivedTotal').textContent = String(stats.total || 0);
+    if ($('#cleanerStatReceivedAccepted')) $('#cleanerStatReceivedAccepted').textContent = String(stats.accepted || 0);
+    if ($('#cleanerStatReceivedRejected')) $('#cleanerStatReceivedRejected').textContent = String(stats.rejected || 0);
+
+    // Terminal logs
+    const container = $('#cleanerTerminalLogs');
+    if (container && Array.isArray(logs) && logs.length > 0) {
+      const chronological = [...logs].reverse();
+      container.innerHTML = chronological.map((log) => {
+        const time = escapeHtml(log.time || '');
+        const type = escapeHtml(log.type || 'info');
+        const msg = escapeHtml(log.message || '');
+        return `<div class="terminal-line ${type}">[${time}] ${msg}</div>`;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+  } else if (stats.type === 'sent') {
+    // If sent task
+    const statusBadge = $('#sentCleanAutoStatus');
+    if (statusBadge) {
+      statusBadge.className = `status ${isRunning ? 'active' : isPaused ? 'warning' : isCompleted ? 'success' : isError ? 'error' : 'ready'}`;
+      if (isRunning) statusBadge.innerHTML = `<i></i> 취소 진행 중 (${stats.processed || 0}/${stats.total || 0})`;
+      else if (isCompleted) statusBadge.innerHTML = '<i></i> 회수 완료';
+      else if (isError) statusBadge.innerHTML = '<i></i> 오류 발생';
+      else statusBadge.innerHTML = '<i></i> 대기 중';
+    }
+
+    const startBtn = $('#startSentCancelBtn');
+    const stopBtn = $('#stopSentCancelBtn');
+
+    if (startBtn) startBtn.classList.toggle('hidden', !isIdle);
+    if (stopBtn) stopBtn.classList.toggle('hidden', isIdle);
+
+    if ($('#cleanerStatSentTotal')) $('#cleanerStatSentTotal').textContent = String(stats.total || 0);
+    if ($('#cleanerStatSentCanceled')) $('#cleanerStatSentCanceled').textContent = String(stats.canceled || 0);
+
+    const container = $('#sentTerminalLogs');
+    if (container && Array.isArray(logs) && logs.length > 0) {
+      const chronological = [...logs].reverse();
+      container.innerHTML = chronological.map((log) => {
+        const time = escapeHtml(log.time || '');
+        const type = escapeHtml(log.type || 'info');
+        const msg = escapeHtml(log.message || '');
+        return `<div class="terminal-line ${type}">[${time}] ${msg}</div>`;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+  }
+}
+
+function startCleanerPolling(taskType) {
+  if (cleanerStatusTimer) return;
+  const poll = async () => {
+    try {
+      const data = await api('/api/cleaner/status');
+      updateCleanerDashboard(data);
+      if (data.state !== 'running' && data.state !== 'paused') {
+        stopCleanerPolling();
+        if (taskType === 'received') loadReceivedCleanerList();
+        if (taskType === 'sent') loadSentCleanerList();
+      }
+    } catch {
+      stopCleanerPolling();
+    }
+  };
+  poll();
+  cleanerStatusTimer = setInterval(poll, 1500);
+}
+
+function stopCleanerPolling() {
+  if (cleanerStatusTimer) {
+    clearInterval(cleanerStatusTimer);
+    cleanerStatusTimer = null;
+  }
+}
+
+async function loadReceivedCleanerList() {
+  const container = $('#receivedRequestsContainer');
+  const refreshBtn = $('#refreshReceivedListBtn');
+  if (!container || isCleanerLoading) return;
+
+  if (!state.connected) {
+    container.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
+        <p style="font-weight:600; margin-bottom:8px; color:#1e293b;">네이버 로그인이 필요합니다</p>
+        <span style="font-size:12.5px; color:#64748b;">받은 신청 목록을 불러오려면 먼저 네이버 계정을 연결해주세요.</span>
+      </div>
+    `;
+    return;
+  }
+
+  isCleanerLoading = true;
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = '🔄 불러오는 중...';
+  }
+
+  container.innerHTML = `
+    <div style="text-align:center; padding:40px 20px; color:var(--text-muted, #64748b);">
+      <div class="desktop-spinner" style="margin:0 auto 12px auto;"></div>
+      <span>받은 서로이웃 신청 목록을 가져와 AI 분석 중입니다...</span>
+    </div>
+  `;
+
+  try {
+    const data = await api('/api/cleaner/received/preview');
+    const requests = data.requests || [];
+
+    if ($('#cleanerStatReceivedTotal')) $('#cleanerStatReceivedTotal').textContent = String(requests.length);
+
+    if (!requests.length) {
+      container.innerHTML = `
+        <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
+          <span>✨ 현재 대기 중인 받은 서로이웃 신청이 없습니다.</span>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = requests.map((req) => {
+      const isAccept = req.evaluation?.decision === 'accept';
+      const badgeStyle = isAccept
+        ? 'background:#dcfce7; color:#15803d; border:1px solid #bbf7d0;'
+        : 'background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;';
+      const badgeIcon = isAccept ? '✅' : '🛡️';
+      const badgeLabel = isAccept ? '수락 권장' : '거절 권장';
+      const reason = escapeHtml(req.evaluation?.reason || '');
+
+      return `
+        <article class="cleaner-request-card" style="display:flex; flex-direction:column; gap:8px; padding:12px 14px; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; transition:all 0.2s ease; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:13px; font-weight:600; color:#1e293b; display:inline-flex; align-items:center; gap:6px;">
+              <span>👤</span> ${escapeHtml(req.nickname || req.targetBlogId)}
+              <a href="${escapeHtml(req.blogUrl)}" target="_blank" rel="noopener noreferrer" style="color:#64748b; font-weight:normal; font-size:11.5px; text-decoration:none;">@${escapeHtml(req.targetBlogId)} ↗</a>
+            </span>
+            <span style="font-size:11px; color:#94a3b8;">${escapeHtml(req.dateStr || '')} (${req.daysAgo || 0}일 전)</span>
+          </div>
+          <div style="background:#f8fafc; padding:8px 10px; border-radius:6px; font-size:12.5px; color:#334155; line-height:1.4;">
+            "${escapeHtml(req.message || '메시지 없음')}"
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+            <span style="${badgeStyle} padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
+              <span>${badgeIcon}</span> ${badgeLabel} <small style="font-weight:normal; opacity:0.85;">· ${reason}</small>
+            </span>
+          </div>
+        </article>
+      `;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; color:#ef4444;">
+        <p style="margin-bottom:8px; font-weight:600;">신청 목록을 불러오지 못했습니다.</p>
+        <span style="font-size:12px; color:#64748b;">${escapeHtml(err.message)}</span>
+      </div>
+    `;
+  } finally {
+    isCleanerLoading = false;
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = '🔄 목록 새로고침';
+    }
+  }
+}
+
+async function loadSentCleanerList() {
+  const container = $('#sentRequestsContainer');
+  const refreshBtn = $('#refreshSentListBtn');
+  if (!container || isCleanerLoading) return;
+
+  if (!state.connected) {
+    container.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
+        <p style="font-weight:600; margin-bottom:8px; color:#1e293b;">네이버 로그인이 필요합니다</p>
+        <span style="font-size:12.5px; color:#64748b;">보낸 신청 목록을 불러오려면 먼저 네이버 계정을 연결해주세요.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const olderThanDays = Number($('#sentOlderThanDays')?.value) || 7;
+  isCleanerLoading = true;
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = '🔄 불러오는 중...';
+  }
+
+  container.innerHTML = `
+    <div style="text-align:center; padding:40px 20px; color:var(--text-muted, #64748b);">
+      <div class="desktop-spinner" style="margin:0 auto 12px auto;"></div>
+      <span>${olderThanDays}일 이상 경과한 보낸 신청 목록을 탐색 중입니다...</span>
+    </div>
+  `;
+
+  try {
+    const data = await api(`/api/cleaner/sent/preview?olderThanDays=${olderThanDays}`);
+    const requests = data.requests || [];
+
+    if ($('#cleanerStatSentTotal')) $('#cleanerStatSentTotal').textContent = String(requests.length);
+
+    if (!requests.length) {
+      container.innerHTML = `
+        <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
+          <span>✨ ${olderThanDays}일 이상 경과한 미수락 보낸 신청이 없습니다.</span>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = requests.map((req) => {
+      return `
+        <article class="cleaner-request-card" style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; transition:all 0.2s ease;">
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+              <span style="font-size:13px; font-weight:600; color:#1e293b;">
+                ${escapeHtml(req.nickname || req.targetBlogId)}
+              </span>
+              <a href="https://blog.naver.com/${escapeHtml(req.targetBlogId)}" target="_blank" rel="noopener noreferrer" style="font-size:11.5px; color:#64748b; text-decoration:none;">@${escapeHtml(req.targetBlogId)} ↗</a>
+            </div>
+            <div style="font-size:11.5px; color:#64748b; margin-top:2px;">
+              신청일: ${escapeHtml(req.dateStr || '')} · <strong style="color:#d97706;">${req.daysAgo || 0}일 경과</strong>
+            </div>
+          </div>
+          <span style="font-size:12px; color:#dc2626; font-weight:600; background:#fef2f2; padding:3px 8px; border-radius:12px; border:1px solid #fecaca;">
+            회수 대상
+          </span>
+        </article>
+      `;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; color:#ef4444;">
+        <p style="margin-bottom:8px; font-weight:600;">보낸 신청 목록을 불러오지 못했습니다.</p>
+        <span style="font-size:12px; color:#64748b;">${escapeHtml(err.message)}</span>
+      </div>
+    `;
+  } finally {
+    isCleanerLoading = false;
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = '🔄 목록 새로고침';
+    }
+  }
+}
+
+function initNeighborCleaner() {
+  // Sub-tab switcher
+  $$('.cleaner-subtab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $$('.cleaner-subtab-btn').forEach((b) => {
+        b.classList.remove('active', 'primary');
+        b.classList.add('ghost');
+      });
+      btn.classList.add('active', 'primary');
+      btn.classList.remove('ghost');
+
+      const targetSubtab = btn.dataset.subtab;
+      $('#subtabReceivedCleaner')?.classList.toggle('hidden', targetSubtab !== 'received-cleaner');
+      $('#subtabSentCleaner')?.classList.toggle('hidden', targetSubtab !== 'sent-cleaner');
+      $('#subtabCommentInbox')?.classList.toggle('hidden', targetSubtab !== 'comment-inbox');
+
+      if (targetSubtab === 'received-cleaner') {
+        if (state.connected && $('#receivedRequestsContainer')?.querySelector('.empty-state')) {
+          loadReceivedCleanerList();
+        }
+      } else if (targetSubtab === 'sent-cleaner') {
+        if (state.connected && $('#sentRequestsContainer')?.querySelector('.empty-state')) {
+          loadSentCleanerList();
+        }
+      }
+    });
+  });
+
+  // Received Cleaner Actions
+  $('#startReceivedCleanBtn')?.addEventListener('click', async (e) => {
+    e?.preventDefault();
+    if (!state.connected) {
+      toast('⚠️ 네이버 계정이 연결되어 있지 않습니다. 먼저 계정을 연결해주세요.', true);
+      setActiveTab('settings', true);
+      return;
+    }
+
+    const acceptGenuine = $('#cleanerAcceptGenuine')?.checked ?? true;
+    const rejectSpam = $('#cleanerRejectSpam')?.checked ?? true;
+
+    if (!acceptGenuine && !rejectSpam) {
+      return toast('수락 또는 거절 옵션 중 최소 1개 이상을 선택해주세요.', true);
+    }
+
+    const startBtn = $('#startReceivedCleanBtn');
+    try {
+      if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="btn-icon">⏳</span> <strong>선별 준비 중...</strong>';
+      }
+
+      await api('/api/cleaner/received/start', {
+        method: 'POST',
+        body: JSON.stringify({ acceptGenuine, rejectSpam })
+      });
+
+      toast('받은 서로이웃 신청 AI 자동 선별 처리를 시작합니다.');
+      startCleanerPolling('received');
+    } catch (err) {
+      toast(`선별 시작 실패: ${err.message}`, true);
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<span class="btn-icon">🚀</span> <strong>AI 선별 자동 처리 시작</strong>';
+      }
+    }
+  });
+
+  $('#pauseReceivedCleanBtn')?.addEventListener('click', async () => {
+    try {
+      await api('/api/cleaner/pause', { method: 'POST' });
+      toast('선별 작업을 일시정지했습니다.');
+      const data = await api('/api/cleaner/status');
+      updateCleanerDashboard(data);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  $('#resumeReceivedCleanBtn')?.addEventListener('click', async () => {
+    try {
+      await api('/api/cleaner/resume', { method: 'POST' });
+      toast('선별 작업을 다시 재개합니다.');
+      startCleanerPolling('received');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  $('#stopReceivedCleanBtn')?.addEventListener('click', async () => {
+    if (!confirm('정말 진행 중인 선별 작업을 중단하시겠습니까?')) return;
+    try {
+      await api('/api/cleaner/stop', { method: 'POST' });
+      toast('선별 작업 중단을 요청했습니다.');
+      stopCleanerPolling();
+      const data = await api('/api/cleaner/status');
+      updateCleanerDashboard(data);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  $('#copyCleanerLogsBtn')?.addEventListener('click', () => {
+    copyTerminalLogs('#cleanerTerminalLogs');
+  });
+
+  $('#clearCleanerLogsBtn')?.addEventListener('click', () => {
+    const container = $('#cleanerTerminalLogs');
+    if (container) container.innerHTML = '<div class="terminal-line info">[로그 초기화됨]</div>';
+  });
+
+  $('#refreshReceivedListBtn')?.addEventListener('click', () => {
+    loadReceivedCleanerList();
+  });
+
+  // Sent Cleaner Actions
+  $$('#sentDaysChips .chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      $$('#sentDaysChips .chip').forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      const input = $('#sentOlderThanDays');
+      if (input) {
+        input.value = chip.dataset.days;
+        loadSentCleanerList();
+      }
+    });
+  });
+
+  $('#sentOlderThanDays')?.addEventListener('change', () => {
+    const val = $('#sentOlderThanDays')?.value;
+    $$('#sentDaysChips .chip').forEach((c) => {
+      c.classList.toggle('active', c.dataset.days === val);
+    });
+    loadSentCleanerList();
+  });
+
+  $('#startSentCancelBtn')?.addEventListener('click', async (e) => {
+    e?.preventDefault();
+    if (!state.connected) {
+      toast('⚠️ 네이버 계정이 연결되어 있지 않습니다. 먼저 계정을 연결해주세요.', true);
+      setActiveTab('settings', true);
+      return;
+    }
+
+    const olderThanDays = Number($('#sentOlderThanDays')?.value) || 7;
+    if (!confirm(`${olderThanDays}일 이상 경과한 미수락 보낸 신청을 일괄 취소하여 슬롯을 복구하시겠습니까?`)) {
+      return;
+    }
+
+    const startBtn = $('#startSentCancelBtn');
+    try {
+      if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="btn-icon">⏳</span> <strong>신청 회수 준비 중...</strong>';
+      }
+
+      await api('/api/cleaner/sent/start', {
+        method: 'POST',
+        body: JSON.stringify({ olderThanDays })
+      });
+
+      toast(`보낸 신청 회수 작업을 시작합니다. (${olderThanDays}일 이상 경과 대상)`);
+      startCleanerPolling('sent');
+    } catch (err) {
+      toast(`회수 시작 실패: ${err.message}`, true);
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<span class="btn-icon">🗑️</span> <strong>오래된 신청 일괄 취소 (슬롯 복구)</strong>';
+      }
+    }
+  });
+
+  $('#stopSentCancelBtn')?.addEventListener('click', async () => {
+    if (!confirm('정말 보낸 신청 회수 작업을 중단하시겠습니까?')) return;
+    try {
+      await api('/api/cleaner/stop', { method: 'POST' });
+      toast('회수 작업 중단을 요청했습니다.');
+      stopCleanerPolling();
+      const data = await api('/api/cleaner/status');
+      updateCleanerDashboard(data);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  $('#copySentLogsBtn')?.addEventListener('click', () => {
+    copyTerminalLogs('#sentTerminalLogs');
+  });
+
+  $('#clearSentLogsBtn')?.addEventListener('click', () => {
+    const container = $('#sentTerminalLogs');
+    if (container) container.innerHTML = '<div class="terminal-line info">[로그 초기화됨]</div>';
+  });
+
+  $('#refreshSentListBtn')?.addEventListener('click', () => {
+    loadSentCleanerList();
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Target Finder & AI Recommendation Modal Controller
 // ---------------------------------------------------------------------------
 const CATEGORY_PRESETS = [
@@ -2556,6 +3040,7 @@ api('/api/health').then(async (data) => {
   initModelEvents();
   initEngagementAutomation();
   initFeedEngagement();
+  initNeighborCleaner();
   initCommentManagement();
   initTargetFinderModal();
 
@@ -2581,6 +3066,7 @@ api('/api/health').then(async (data) => {
   initModelEvents();
   initEngagementAutomation();
   initFeedEngagement();
+  initNeighborCleaner();
   initCommentManagement();
   initTargetFinderModal();
 });

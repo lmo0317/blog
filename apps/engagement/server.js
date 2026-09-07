@@ -19,6 +19,7 @@ import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-re
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { CommentReplyStore } from './lib/comment-replies.js';
 import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManager } from './lib/naver-feed-engage.js';
+import { fetchReceivedBuddyRequests, fetchSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
@@ -55,6 +56,11 @@ const engagementManager = new EngagementAutomationManager({ browserSession, embe
 const commentReplyStore = new CommentReplyStore(path.join(__dirname, '.data', 'comment-replies.json'));
 const feedHistoryStore = new FeedEngagementHistoryStore(path.join(__dirname, '.data', 'feed-engagement-history.json'));
 const feedManager = new FeedEngagementManager({ browserSession, embeddedLlama, historyStore: feedHistoryStore });
+const neighborCleanerManager = new NeighborCleanerManager({
+  browserSession,
+  embeddedLlama,
+  neighborGroupStore: browserSession.groupStore
+});
 
 async function resolveActiveLlmEndpoint() {
   const activeModel = await modelManager.getActiveModel();
@@ -685,6 +691,104 @@ app.delete('/api/feed/history', async (_req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
+// Neighbor Cleaner: Received Requests Screening & Sent Requests Recovery
+// ---------------------------------------------------------------------------
+app.get('/api/cleaner/received/preview', async (_req, res, next) => {
+  try {
+    if (!browserSession.connected) {
+      return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않습니다.' });
+    }
+    const blogId = browserSession.accountLabel || 'lmo0317';
+    const page = await browserSession.context.newPage();
+    try {
+      const requests = await fetchReceivedBuddyRequests(page, blogId);
+      const evaluated = [];
+      for (const r of requests) {
+        const evalResult = await evaluateBuddyRequestWithAI(r, embeddedLlama);
+        evaluated.push({ ...r, evaluation: evalResult });
+      }
+      res.json({ ok: true, requests: evaluated, total: evaluated.length });
+    } finally {
+      await page.close().catch(() => {});
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/cleaner/received/start', async (req, res, next) => {
+  try {
+    const result = await neighborCleanerManager.startCleanReceived(req.body || {});
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/cleaner/sent/preview', async (req, res, next) => {
+  try {
+    if (!browserSession.connected) {
+      return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않습니다.' });
+    }
+    const blogId = browserSession.accountLabel || 'lmo0317';
+    const olderThanDays = Number(req.query.olderThanDays) || 7;
+    const page = await browserSession.context.newPage();
+    try {
+      const initial = await fetchSentBuddyRequests(page, blogId, 1);
+      const allExpired = [];
+      for (let p = 1; p <= initial.maxPage; p++) {
+        const pageData = p === 1 ? initial : await fetchSentBuddyRequests(page, blogId, p);
+        for (const item of pageData.items) {
+          if (item.daysAgo >= olderThanDays) {
+            allExpired.push(item);
+          }
+        }
+        if (allExpired.length >= 100) break;
+      }
+      res.json({
+        ok: true,
+        requests: allExpired,
+        total: allExpired.length,
+        totalPages: initial.maxPage,
+        olderThanDays
+      });
+    } finally {
+      await page.close().catch(() => {});
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/cleaner/sent/start', async (req, res, next) => {
+  try {
+    const result = await neighborCleanerManager.startCancelSent(req.body || {});
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/cleaner/status', (_req, res) => {
+  res.json(neighborCleanerManager.getState());
+});
+
+app.post('/api/cleaner/pause', (_req, res) => {
+  neighborCleanerManager.pause();
+  res.json({ ok: true, state: neighborCleanerManager.state });
+});
+
+app.post('/api/cleaner/resume', (_req, res) => {
+  neighborCleanerManager.resume();
+  res.json({ ok: true, state: neighborCleanerManager.state });
+});
+
+app.post('/api/cleaner/stop', (_req, res) => {
+  neighborCleanerManager.stop();
+  res.json({ ok: true, state: neighborCleanerManager.state });
+});
+
+// ---------------------------------------------------------------------------
 // My-post comment management: scan -> AI reply -> mutual-neighbor request
 // ---------------------------------------------------------------------------
 app.get('/api/comment-management/scan', async (req, res, next) => {
@@ -1307,7 +1411,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-export { app, browserSession, modelManager, embeddedLlama, engagementManager, feedManager, feedHistoryStore };
+export { app, browserSession, modelManager, embeddedLlama, engagementManager, feedManager, feedHistoryStore, neighborCleanerManager };
 
 function normalizeHttpUrl(value) {
   try {

@@ -1,9 +1,13 @@
 # Gemma 4 E2B 블로그 맞춤 댓글 모델 학습 계획
 
-> 문서 코드: SPEC-02-AI  
-> 대상 앱: `apps/engagement` (홍보 프로그램), `windows` 미러 경로  
-> 대상 모델: Gemma 4 E2B 계열  
-> 문서 상태: 실행 계획 v1  
+> 문서 코드: SPEC-02-AI
+>
+> 대상 앱: `apps/engagement` (홍보 프로그램), `windows` 미러 경로
+>
+> 대상 모델: Gemma 4 E2B 계열
+>
+> 문서 상태: 실행 계획 v1
+>
 > 최종 수정일: 2026-09-07
 
 ## 1. 결론
@@ -242,7 +246,7 @@ DPO는 SFT 모델의 반복되는 선호 오류가 확인된 뒤에만 쓴다.
 | epoch | 1~3, early stopping |
 | effective batch | GPU에 맞춰 16~64 |
 
-QDoRA/QLoRA식 `target_modules="all-linear"`도 후보로 두되 실제 Gemma 모듈 이름과 프레임워크 호환성을 확인한다.
+QLoRA식 `target_modules="all-linear"`도 후보로 두되 실제 Gemma 모듈 이름과 프레임워크 호환성을 확인한다.
 
 파일럿 순서:
 
