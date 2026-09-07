@@ -2319,27 +2319,40 @@ async function loadReceivedCleanerList() {
     container.innerHTML = requests.map((req) => {
       const isAccept = req.evaluation?.decision === 'accept';
       const badgeStyle = isAccept
-        ? 'background:#dcfce7; color:#15803d; border:1px solid #bbf7d0;'
-        : 'background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;';
+        ? 'background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;'
+        : 'background:#fef2f2; color:#991b1b; border:1px solid #fecaca;';
       const badgeIcon = isAccept ? '✅' : '🛡️';
       const badgeLabel = isAccept ? '수락 권장' : '거절 권장';
       const reason = escapeHtml(req.evaluation?.reason || '');
 
       return `
-        <article class="cleaner-request-card" style="display:flex; flex-direction:column; gap:8px; padding:12px 14px; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; transition:all 0.2s ease; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:13px; font-weight:600; color:#1e293b; display:inline-flex; align-items:center; gap:6px;">
-              <span>👤</span> ${escapeHtml(req.nickname || req.targetBlogId)}
-              <a href="${escapeHtml(req.blogUrl)}" target="_blank" rel="noopener noreferrer" style="color:#64748b; font-weight:normal; font-size:11.5px; text-decoration:none;">@${escapeHtml(req.targetBlogId)} ↗</a>
+        <article class="cleaner-request-card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="width:32px; height:32px; border-radius:50%; background:#e0e7ff; color:#4338ca; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0;">
+                ${escapeHtml((req.nickname || req.targetBlogId || '이').slice(0, 1))}
+              </div>
+              <div style="display:flex; flex-direction:column; gap:1px;">
+                <span style="font-size:13.5px; font-weight:700; color:#0f172a; line-height:1.2;">
+                  ${escapeHtml(req.nickname || req.targetBlogId)}
+                </span>
+                <a href="${escapeHtml(req.blogUrl)}" target="_blank" rel="noopener noreferrer" style="color:#64748b; font-size:11.5px; text-decoration:none;">
+                  @${escapeHtml(req.targetBlogId)} ↗
+                </a>
+              </div>
+            </div>
+            <span style="font-size:11px; font-weight:600; color:#64748b; background:#f1f5f9; padding:3px 8px; border-radius:9999px;">
+              ${escapeHtml(req.dateStr || '')} (${req.daysAgo || 0}일 전)
             </span>
-            <span style="font-size:11px; color:#94a3b8;">${escapeHtml(req.dateStr || '')} (${req.daysAgo || 0}일 전)</span>
           </div>
-          <div style="background:#f8fafc; padding:8px 10px; border-radius:6px; font-size:12.5px; color:#334155; line-height:1.4;">
-            "${escapeHtml(req.message || '메시지 없음')}"
+
+          <div style="background:#f8fafc; padding:10px 12px; border-radius:8px; border:1px solid #f1f5f9; font-size:12.5px; color:#334155; line-height:1.5;">
+            💬 "${escapeHtml(req.message || '메시지 없음')}"
           </div>
+
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-            <span style="${badgeStyle} padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
-              <span>${badgeIcon}</span> ${badgeLabel} <small style="font-weight:normal; opacity:0.85;">· ${reason}</small>
+            <span style="${badgeStyle} padding:4px 10px; border-radius:9999px; font-size:11.5px; font-weight:700; display:inline-flex; align-items:center; gap:5px;">
+              <span>${badgeIcon}</span> ${badgeLabel} <small style="font-weight:500; opacity:0.85;">· ${reason}</small>
             </span>
           </div>
         </article>
@@ -2443,14 +2456,12 @@ async function loadSentCleanerList() {
 
 function initNeighborCleaner() {
   // Sub-tab switcher
-  $$('.cleaner-subtab-btn').forEach((btn) => {
+  $$('.cleaner-subtabs-nav .cleaner-subtab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      $$('.cleaner-subtab-btn').forEach((b) => {
-        b.classList.remove('active', 'primary');
-        b.classList.add('ghost');
+      $$('.cleaner-subtabs-nav .cleaner-subtab-btn').forEach((b) => {
+        b.classList.remove('active');
       });
-      btn.classList.add('active', 'primary');
-      btn.classList.remove('ghost');
+      btn.classList.add('active');
 
       const targetSubtab = btn.dataset.subtab;
       $('#subtabReceivedCleaner')?.classList.toggle('hidden', targetSubtab !== 'received-cleaner');
@@ -2467,6 +2478,14 @@ function initNeighborCleaner() {
         }
       }
     });
+  });
+
+  // Option card toggle handlers
+  $('#cleanerAcceptGenuine')?.addEventListener('change', (e) => {
+    $('#cardOptionAcceptGenuine')?.classList.toggle('checked', e.target.checked);
+  });
+  $('#cleanerRejectSpam')?.addEventListener('change', (e) => {
+    $('#cardOptionRejectSpam')?.classList.toggle('checked', e.target.checked);
   });
 
   // Received Cleaner Actions

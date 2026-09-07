@@ -982,14 +982,15 @@
 
     <section class="workspace-panel hidden" id="commentManagementWorkspace" role="tabpanel" aria-labelledby="commentManagementTab" data-tab-panel="comment-management">
       <!-- Sub-Tab Navigation Bar -->
-      <div class="cleaner-subtabs-nav" style="display:flex; gap:8px; margin-bottom:16px; background:var(--bg-card, #ffffff); padding:8px 12px; border-radius:10px; border:1px solid var(--border-color, #e2e8f0);">
-        <button type="button" class="button primary small cleaner-subtab-btn active" data-subtab="received-cleaner" style="display:flex; align-items:center; gap:6px;">
+      <!-- Sub-Tab Navigation Bar -->
+      <div class="cleaner-subtabs-nav">
+        <button type="button" class="cleaner-subtab-btn active" data-subtab="received-cleaner">
           <span>🤝</span> <strong>받은 신청 AI 선별 수락</strong>
         </button>
-        <button type="button" class="button ghost small cleaner-subtab-btn" data-subtab="sent-cleaner" style="display:flex; align-items:center; gap:6px;">
+        <button type="button" class="cleaner-subtab-btn" data-subtab="sent-cleaner">
           <span>⏳</span> <strong>보낸 신청 일괄 회수</strong>
         </button>
-        <button type="button" class="button ghost small cleaner-subtab-btn" data-subtab="comment-inbox" style="display:flex; align-items:center; gap:6px;">
+        <button type="button" class="cleaner-subtab-btn" data-subtab="comment-inbox">
           <span>💬</span> <strong>내 글 댓글 수신함</strong>
         </button>
       </div>
@@ -1008,27 +1009,33 @@
                 <span class="status ready" id="receivedCleanAutoStatus"><i></i> 대기 중</span>
               </div>
               <div class="desktop-card-body">
-                <p class="section-desc">
+                <p class="section-desc" style="background:#f8fafc; padding:12px 14px; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:14px; line-height:1.5;">
                   기본 매크로(<em>"우리 서로이웃해요~"</em>) 및 대출/광고/도박성 신청은 <strong>자동 거절</strong>하고, 온디바이스 AI가 진성 소통 블로거 신청만 선별하여 <strong>지정된 이웃 그룹에 자동 수락</strong>합니다.
                 </p>
 
-                <div class="form-group" style="margin-top:14px;">
-                  <label><strong>작업 처리 옵션</strong></label>
-                  <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
-                    <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <div style="margin-top:14px;">
+                  <div style="font-size:12px; font-weight:700; color:#334155; margin-bottom:6px;">작업 처리 옵션</div>
+                  <div class="cleaner-options-grid">
+                    <label class="cleaner-option-card checked" id="cardOptionAcceptGenuine">
                       <input type="checkbox" id="cleanerAcceptGenuine" checked>
-                      <span>✅ 진성 블로거 판정 시 자동 수락</span>
+                      <div class="option-content">
+                        <span class="option-title">✅ 진성 블로거 판정 시 자동 수락</span>
+                        <span class="option-desc">AI가 분석한 정상 소통 블로거를 지정된 새 그룹에 자동 수락</span>
+                      </div>
                     </label>
-                    <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <label class="cleaner-option-card checked" id="cardOptionRejectSpam">
                       <input type="checkbox" id="cleanerRejectSpam" checked>
-                      <span>🛡️ 광고·매크로 의심 시 자동 거절</span>
+                      <div class="option-content">
+                        <span class="option-title">🛡️ 광고·매크로 의심 시 자동 거절</span>
+                        <span class="option-desc">상업 키워드 및 "우리 서로이웃해요~" 기본 멘트 즉각 거절</span>
+                      </div>
                     </label>
                   </div>
                 </div>
 
-                <div class="action-command-toolbar" style="margin-top:20px;">
-                  <button type="button" class="button primary large full-width" id="startReceivedCleanBtn">
-                    <span class="btn-icon">🚀</span> <strong>AI 선별 자동 처리 시작</strong>
+                <div class="action-command-toolbar" style="margin-top:18px;">
+                  <button type="button" class="cleaner-cta-btn" id="startReceivedCleanBtn">
+                    <span class="btn-icon" style="font-size:16px;">🚀</span> <strong>AI 선별 자동 처리 시작</strong>
                   </button>
                   <div style="display:flex; gap:8px; width:100%; margin-top:8px;">
                     <button type="button" class="button warning medium full-width hidden" id="pauseReceivedCleanBtn">
@@ -1044,18 +1051,18 @@
                 </div>
 
                 <!-- Stats summary -->
-                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:16px;">
-                  <div class="stat-card" style="padding:10px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
-                    <span style="font-size:11px; color:#64748b;">전체 신청</span>
-                    <div style="font-size:18px; font-weight:bold; color:#111;" id="cleanerStatReceivedTotal">0</div>
+                <div class="cleaner-stat-grid">
+                  <div class="cleaner-stat-card stat-total">
+                    <span class="stat-label">전체 대기 신청</span>
+                    <div class="stat-value" id="cleanerStatReceivedTotal">0</div>
                   </div>
-                  <div class="stat-card" style="padding:10px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
-                    <span style="font-size:11px; color:#15803d;">✅ 수락</span>
-                    <div style="font-size:18px; font-weight:bold; color:#15803d;" id="cleanerStatReceivedAccepted">0</div>
+                  <div class="cleaner-stat-card stat-accepted">
+                    <span class="stat-label">✅ 선별 수락</span>
+                    <div class="stat-value" id="cleanerStatReceivedAccepted">0</div>
                   </div>
-                  <div class="stat-card" style="padding:10px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
-                    <span style="font-size:11px; color:#dc2626;">🛡️ 거절</span>
-                    <div style="font-size:18px; font-weight:bold; color:#dc2626;" id="cleanerStatReceivedRejected">0</div>
+                  <div class="cleaner-stat-card stat-rejected">
+                    <span class="stat-label">🛡️ 스팸 거절</span>
+                    <div class="stat-value" id="cleanerStatReceivedRejected">0</div>
                   </div>
                 </div>
               </div>
@@ -1074,7 +1081,7 @@
                 </div>
               </div>
               <div class="desktop-card-body">
-                <div class="terminal-container" id="cleanerTerminalLogs" style="height:220px; overflow-y:auto; background:#1e1e1e; color:#d4d4d4; padding:12px; font-family:monospace; border-radius:6px; font-size:13px;">
+                <div class="cleaner-terminal-box" id="cleanerTerminalLogs">
                   <div class="terminal-line info">[대기 중] 'AI 선별 자동 처리 시작' 버튼을 누르면 받은 신청 선별이 시작됩니다.</div>
                 </div>
               </div>
@@ -1136,9 +1143,9 @@
                   </div>
                 </div>
 
-                <div class="action-command-toolbar" style="margin-top:20px;">
-                  <button type="button" class="button primary large full-width" id="startSentCancelBtn">
-                    <span class="btn-icon">🗑️</span> <strong>오래된 신청 일괄 취소 (슬롯 복구)</strong>
+                <div class="action-command-toolbar" style="margin-top:18px;">
+                  <button type="button" class="cleaner-cta-btn" id="startSentCancelBtn">
+                    <span class="btn-icon" style="font-size:16px;">🗑️</span> <strong>오래된 신청 일괄 취소 (슬롯 복구)</strong>
                   </button>
                   <div style="display:flex; gap:8px; width:100%; margin-top:8px;">
                     <button type="button" class="button danger medium full-width hidden" id="stopSentCancelBtn">
@@ -1148,14 +1155,14 @@
                 </div>
 
                 <!-- Stats summary -->
-                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-top:16px;">
-                  <div class="stat-card" style="padding:10px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
-                    <span style="font-size:11px; color:#64748b;">회수 대상 신청</span>
-                    <div style="font-size:18px; font-weight:bold; color:#111;" id="cleanerStatSentTotal">0</div>
+                <div class="cleaner-stat-grid" style="grid-template-columns: repeat(2, 1fr);">
+                  <div class="cleaner-stat-card stat-total">
+                    <span class="stat-label">회수 대상 신청</span>
+                    <div class="stat-value" id="cleanerStatSentTotal">0</div>
                   </div>
-                  <div class="stat-card" style="padding:10px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
-                    <span style="font-size:11px; color:#2563eb;">복구된 슬롯</span>
-                    <div style="font-size:18px; font-weight:bold; color:#2563eb;" id="cleanerStatSentCanceled">0</div>
+                  <div class="cleaner-stat-card stat-accepted" style="background:#eff6ff; border-color:#bfdbfe;">
+                    <span class="stat-label" style="color:#1d4ed8;">⚡ 복구된 슬롯</span>
+                    <div class="stat-value" id="cleanerStatSentCanceled" style="color:#2563eb;">0</div>
                   </div>
                 </div>
               </div>
@@ -1174,7 +1181,7 @@
                 </div>
               </div>
               <div class="desktop-card-body">
-                <div class="terminal-container" id="sentTerminalLogs" style="height:220px; overflow-y:auto; background:#1e1e1e; color:#d4d4d4; padding:12px; font-family:monospace; border-radius:6px; font-size:13px;">
+                <div class="cleaner-terminal-box" id="sentTerminalLogs">
                   <div class="terminal-line info">[대기 중] '오래된 신청 일괄 취소' 버튼을 누르면 만료 신청 회수가 시작됩니다.</div>
                 </div>
               </div>
