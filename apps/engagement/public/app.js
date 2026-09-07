@@ -145,7 +145,7 @@ const selectionBar = $('#selectionBar');
 const confirmReview = $('#confirmReview');
 const openButton = $('#openButton');
 const manualLoginButton = $('#manualLoginButton');
-const workspaceTabs = [...document.querySelectorAll('[role="tab"]')].filter((tab) => tab.offsetParent !== null);
+const workspaceTabs = [...document.querySelectorAll('[role="tab"]')].filter((tab) => !tab.classList.contains('hidden'));
 const fetchDealsButton = $('#fetchDealsButton');
 const dealsResults = $('#dealsResults');
 const draftForm = $('#draftForm');
@@ -167,6 +167,12 @@ function setActiveTab(tabName, moveFocus = false) {
   document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
     panel.classList.toggle('hidden', panel.dataset.tabPanel !== tabName);
   });
+  if (tabName === 'feed') {
+    if (typeof refreshFeedSummary === 'function') refreshFeedSummary();
+    if (state.connected && $('#feedPostsContainer')?.querySelector('.empty-state')) {
+      if (typeof loadFeedPreview === 'function') loadFeedPreview();
+    }
+  }
 }
 
 workspaceTabs.forEach((tab, index) => {
@@ -1827,6 +1833,329 @@ function appendEngagementLog(entry) {
 }
 
 // ---------------------------------------------------------------------------
+// Neighbor Feed Real-Time Engagement Controller
+// ---------------------------------------------------------------------------
+let feedStatusTimer = null;
+let isFeedPreviewLoading = false;
+
+function updateFeedDashboard(statusData) {
+  if (!statusData) return;
+  const { state: feedState, stats = {}, logs = [] } = statusData;
+  const isRunning = feedState === 'running';
+  const isPaused = feedState === 'paused';
+  const isCompleted = feedState === 'completed';
+  const isError = feedState === 'error';
+  const isIdle = feedState === 'idle' || feedState === 'stopped' || isCompleted || isError;
+
+  // Status Badge
+  const statusBadge = $('#feedAutoStatus');
+  if (statusBadge) {
+    statusBadge.className = `status ${isRunning ? 'active' : isPaused ? 'warning' : isCompleted ? 'success' : isError ? 'error' : 'ready'}`;
+    if (isRunning) {
+      statusBadge.innerHTML = `<i></i> 진행 중 (${stats.processed || 0}/${stats.target || 10})`;
+    } else if (isPaused) {
+      statusBadge.innerHTML = '<i></i> 일시정지됨';
+    } else if (isCompleted) {
+      statusBadge.innerHTML = '<i></i> 소통 완료';
+    } else if (isError) {
+      statusBadge.innerHTML = '<i></i> 오류 발생';
+    } else {
+      statusBadge.innerHTML = '<i></i> 대기 중';
+    }
+  }
+
+  // Buttons visibility
+  const startBtn = $('#startFeedBtn');
+  const pauseBtn = $('#pauseFeedBtn');
+  const resumeBtn = $('#resumeFeedBtn');
+  const stopBtn = $('#stopFeedBtn');
+
+  if (startBtn) {
+    startBtn.classList.toggle('hidden', !isIdle);
+    if (isIdle) {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<span class="btn-icon">🚀</span> <strong>이웃 새글 자동 소통 시작</strong>';
+    }
+  }
+  if (pauseBtn) pauseBtn.classList.toggle('hidden', !isRunning);
+  if (resumeBtn) resumeBtn.classList.toggle('hidden', !isPaused);
+  if (stopBtn) stopBtn.classList.toggle('hidden', isIdle);
+
+  // Stats Counters
+  if ($('#feedStatTotal')) $('#feedStatTotal').textContent = String(stats.processed || 0);
+  if ($('#feedStatLikes')) $('#feedStatLikes').textContent = String(stats.likes || 0);
+  if ($('#feedStatComments')) $('#feedStatComments').textContent = String(stats.comments || 0);
+
+  // Terminal Logs
+  if (Array.isArray(logs) && logs.length > 0) {
+    const container = $('#feedTerminalLogs');
+    if (container) {
+      const chronological = [...logs].reverse();
+      container.innerHTML = chronological.map((log) => {
+        const time = escapeHtml(log.time || '');
+        const type = escapeHtml(log.type || 'info');
+        const msg = escapeHtml(log.message || '');
+        return `<div class="terminal-line ${type}">[${time}] ${msg}</div>`;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+  }
+}
+
+async function refreshFeedSummary() {
+  try {
+    const summary = await api('/api/feed/summary');
+    if ($('#feedStatTotal') && summary.todayTotal !== undefined) {
+      $('#feedStatTotal').textContent = String(summary.todayTotal);
+    }
+    if ($('#feedStatLikes') && summary.todayLikes !== undefined) {
+      $('#feedStatLikes').textContent = String(summary.todayLikes);
+    }
+    if ($('#feedStatComments') && summary.todayComments !== undefined) {
+      $('#feedStatComments').textContent = String(summary.todayComments);
+    }
+    if (summary.autoState === 'running' || summary.autoState === 'paused') {
+      startFeedPolling();
+    }
+  } catch {}
+}
+
+function startFeedPolling() {
+  if (feedStatusTimer) return;
+  const poll = async () => {
+    try {
+      const data = await api('/api/feed/status');
+      updateFeedDashboard(data);
+      if (data.state !== 'running' && data.state !== 'paused') {
+        stopFeedPolling();
+        refreshFeedSummary();
+        loadFeedPreview();
+      }
+    } catch {
+      stopFeedPolling();
+    }
+  };
+  poll();
+  feedStatusTimer = setInterval(poll, 1500);
+}
+
+function stopFeedPolling() {
+  if (feedStatusTimer) {
+    clearInterval(feedStatusTimer);
+    feedStatusTimer = null;
+  }
+}
+
+async function loadFeedPreview() {
+  const container = $('#feedPostsContainer');
+  const refreshBtn = $('#refreshFeedPreviewBtn');
+  if (!container || isFeedPreviewLoading) return;
+
+  if (!state.connected) {
+    container.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted, #888);">
+        <p style="font-weight:600; margin-bottom:8px; color:#1e293b;">네이버 로그인이 필요합니다</p>
+        <span style="font-size:12.5px; color:#64748b;">이웃 새글 피드를 가져오려면 먼저 네이버 계정을 연결해주세요.</span>
+        <div style="margin-top:14px;">
+          <button type="button" class="button primary small" id="feedGoSettingsBtn">네이버 계정 연결하기</button>
+        </div>
+      </div>
+    `;
+    $('#feedGoSettingsBtn')?.addEventListener('click', () => setActiveTab('settings', true));
+    return;
+  }
+
+  isFeedPreviewLoading = true;
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = '🔄 불러오는 중...';
+  }
+
+  container.innerHTML = `
+    <div style="text-align:center; padding: 40px 20px; color: var(--text-muted, #64748b);">
+      <div class="desktop-spinner" style="margin: 0 auto 12px auto;"></div>
+      <span>실시간 네이버 이웃 새글 피드를 가져오는 중입니다...</span>
+    </div>
+  `;
+
+  try {
+    const data = await api('/api/feed/preview?limit=15');
+    const posts = data.posts || [];
+
+    if (!posts.length) {
+      container.innerHTML = `
+        <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted, #888);">
+          <span>표시할 이웃 새글이 없습니다. 네이버 블로그에 새글을 올린 이웃이 있는지 확인해주세요.</span>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = posts.map((post) => {
+      const hasThumb = Boolean(post.thumbnail);
+      const engagedBadge = post.engaged
+        ? `<span class="badge completed" style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:3px;"><span>✅</span> 소통 완료</span>`
+        : `<span class="badge pending" style="background:#f1f5f9; color:#64748b; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:500; display:inline-flex; align-items:center; gap:3px;"><span>⏳</span> 소통 대기</span>`;
+
+      const thumbHtml = hasThumb
+        ? `<img src="${escapeHtml(post.thumbnail)}" alt="썸네일" style="width:72px; height:72px; border-radius:8px; object-fit:cover; flex-shrink:0; border:1px solid #e2e8f0;" onerror="this.onerror=null;this.parentElement.innerHTML='<div style=\\'width:72px; height:72px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; color:#94a3b8;\\'>📝</div>';">`
+        : `<div style="width:72px; height:72px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; color:#94a3b8;">📝</div>`;
+
+      return `
+        <article class="feed-post-card" style="display:flex; gap:12px; padding:12px 14px; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; transition:all 0.2s ease; align-items:center; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+          ${thumbHtml}
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; gap:8px;">
+              <span style="font-size:12px; font-weight:600; color:#475569; display:inline-flex; align-items:center; gap:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                <span>👤</span> ${escapeHtml(post.author || post.blogId)}
+                ${post.publishedTime ? `<span style="font-weight:normal; color:#94a3b8; font-size:11px;">· ${escapeHtml(post.publishedTime)}</span>` : ''}
+              </span>
+              ${engagedBadge}
+            </div>
+            <a href="${escapeHtml(post.url)}" target="_blank" rel="noopener noreferrer" style="font-weight:600; font-size:13.5px; color:#1e293b; text-decoration:none; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4;" title="${escapeHtml(post.title)}">
+              ${escapeHtml(post.title || '제목 없음')}
+            </a>
+            ${post.snippet ? `
+              <p style="font-size:12px; color:#64748b; margin:4px 0 0 0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4;">
+                ${escapeHtml(post.snippet)}
+              </p>
+            ` : ''}
+          </div>
+        </article>
+      `;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `
+      <div style="text-align:center; padding: 40px 20px; color: #ef4444;">
+        <p style="margin-bottom:8px; font-weight:600;">피드 목록을 불러오지 못했습니다.</p>
+        <span style="font-size:12px; color:#64748b;">${escapeHtml(err.message)}</span>
+      </div>
+    `;
+  } finally {
+    isFeedPreviewLoading = false;
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = '🔄 피드 새로고침';
+    }
+  }
+}
+
+function initFeedEngagement() {
+  // Quick count buttons
+  $('#feedQuickCounts')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    $$('#feedQuickCounts .chip').forEach((c) => c.classList.remove('active'));
+    chip.classList.add('active');
+    const input = $('#feedTargetCount');
+    if (input) {
+      input.value = chip.dataset.val;
+      input.dispatchEvent(new Event('input'));
+    }
+  });
+
+  $('#feedTargetCount')?.addEventListener('input', (e) => {
+    const val = String(e.target.value);
+    $$('#feedQuickCounts .chip').forEach((c) => {
+      c.classList.toggle('active', c.dataset.val === val);
+    });
+  });
+
+  // Action Buttons
+  $('#startFeedBtn')?.addEventListener('click', async (e) => {
+    e?.preventDefault();
+
+    if (!state.connected) {
+      toast('⚠️ 네이버 계정이 연결되어 있지 않습니다. 먼저 계정을 연결해주세요.', true);
+      setActiveTab('settings', true);
+      return;
+    }
+
+    const doLike = $('#feedDoLike')?.checked ?? true;
+    const doComment = $('#feedDoComment')?.checked ?? true;
+    if (!doLike && !doComment) {
+      return toast('공감(❤️) 또는 AI 맞춤 댓글(💬) 중 최소 1개 이상을 선택해주세요.', true);
+    }
+
+    const targetCount = Number($('#feedTargetCount')?.value) || 10;
+    const tone = $('#feedCommentTone')?.value || 'friendly';
+
+    const startBtn = $('#startFeedBtn');
+    try {
+      if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="btn-icon">⏳</span> <strong>피드 탐색 준비 중...</strong>';
+      }
+
+      await api('/api/feed/start', {
+        method: 'POST',
+        body: JSON.stringify({ targetCount, doLike, doComment, tone })
+      });
+
+      toast(`이웃 새글 실시간 자동 소통을 시작합니다. (목표: ${targetCount}건)`);
+      startFeedPolling();
+    } catch (err) {
+      toast(`피드 소통 시작 실패: ${err.message}`, true);
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<span class="btn-icon">🚀</span> <strong>이웃 새글 자동 소통 시작</strong>';
+      }
+    }
+  });
+
+  $('#pauseFeedBtn')?.addEventListener('click', async () => {
+    try {
+      await api('/api/feed/pause', { method: 'POST' });
+      toast('이웃 새글 소통 작업을 일시정지했습니다.');
+      const data = await api('/api/feed/status');
+      updateFeedDashboard(data);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  $('#resumeFeedBtn')?.addEventListener('click', async () => {
+    try {
+      await api('/api/feed/resume', { method: 'POST' });
+      toast('이웃 새글 소통 작업을 재개했습니다.');
+      const data = await api('/api/feed/status');
+      updateFeedDashboard(data);
+      startFeedPolling();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  $('#stopFeedBtn')?.addEventListener('click', async () => {
+    if (!confirm('정말 진행 중인 이웃 새글 소통 작업을 중단하시겠습니까?')) return;
+    try {
+      await api('/api/feed/stop', { method: 'POST' });
+      toast('이웃 새글 소통 작업 중단을 요청했습니다.');
+      const data = await api('/api/feed/status');
+      updateFeedDashboard(data);
+      stopFeedPolling();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  $('#copyFeedLogsBtn')?.addEventListener('click', () => {
+    copyTerminalLogs('#feedTerminalLogs');
+  });
+
+  $('#clearFeedLogsBtn')?.addEventListener('click', () => {
+    const container = $('#feedTerminalLogs');
+    if (container) container.innerHTML = '<div class="terminal-line info">[로그 초기화됨]</div>';
+  });
+
+  $('#refreshFeedPreviewBtn')?.addEventListener('click', () => {
+    loadFeedPreview();
+  });
+
+  refreshFeedSummary();
+}
+
+// ---------------------------------------------------------------------------
 // Target Finder & AI Recommendation Modal Controller
 // ---------------------------------------------------------------------------
 const CATEGORY_PRESETS = [
@@ -2226,6 +2555,7 @@ api('/api/health').then(async (data) => {
   initAiHardwareAndModels();
   initModelEvents();
   initEngagementAutomation();
+  initFeedEngagement();
   initCommentManagement();
   initTargetFinderModal();
 
@@ -2250,6 +2580,7 @@ api('/api/health').then(async (data) => {
   initAiHardwareAndModels();
   initModelEvents();
   initEngagementAutomation();
+  initFeedEngagement();
   initCommentManagement();
   initTargetFinderModal();
 });

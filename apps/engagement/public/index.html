@@ -36,7 +36,11 @@
     <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
       <button class="workspace-tab active" id="engagementTab" type="button" role="tab" aria-selected="true" aria-controls="engagementWorkspace" data-tab="engagement">
         <span class="tab-icon" aria-hidden="true">❤️</span>
-        <span><strong>공감 & AI 맞춤 댓글</strong></span>
+        <span><strong>1-Click AI 소통</strong></span>
+      </button>
+      <button class="workspace-tab" id="feedTab" type="button" role="tab" aria-selected="false" aria-controls="feedWorkspace" data-tab="feed" tabindex="-1">
+        <span class="tab-icon" aria-hidden="true">📰</span>
+        <span><strong>이웃 새글 피드 소통</strong></span>
       </button>
       <button class="workspace-tab" id="commentManagementTab" type="button" role="tab" aria-selected="false" aria-controls="commentManagementWorkspace" data-tab="comment-management" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">💬</span>
@@ -833,6 +837,139 @@
               <button type="button" class="button primary" id="applyTargetFinderBtn" disabled>
                 <span>🎯</span> <span id="applyTargetBtnText">선택 키워드 적용하기</span>
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Workspace: Neighbor Feed Real-Time Engagement Panel -->
+    <section class="workspace-panel hidden" id="feedWorkspace" role="tabpanel" aria-labelledby="feedTab" data-tab-panel="feed">
+      <div class="desktop-workspace-grid">
+        <!-- Left Column: Controls & Real-time Terminal -->
+        <div class="desktop-col desktop-col-left">
+          <div class="desktop-card hero-card">
+            <div class="desktop-card-header">
+              <div class="card-title-group">
+                <span class="card-badge pulse">REAL-TIME</span>
+                <h3>📰 이웃 새글 피드 실시간 소통</h3>
+              </div>
+              <span class="status ready" id="feedAutoStatus"><i></i> 대기 중</span>
+            </div>
+            <div class="desktop-card-body">
+              <p class="section-desc">
+                내 네이버 블로그 이웃들의 최신 새글 피드를 실시간으로 탐색하여 <strong>공감(❤️)</strong>을 누르고 <strong>온디바이스 AI 맞춤형 찐이웃 댓글(💬)</strong>을 전자동으로 작성합니다.
+              </p>
+
+              <!-- Option Selectors -->
+              <div class="form-group" style="margin-top: 14px;">
+                <label><strong>소통 목표 건수</strong></label>
+                <div class="quick-counts eng-quick-counts" id="feedQuickCounts" style="display:flex; gap:6px; margin-bottom:8px;">
+                  <button type="button" class="chip" data-val="5">5건</button>
+                  <button type="button" class="chip active" data-val="10">10건</button>
+                  <button type="button" class="chip" data-val="20">20건</button>
+                  <button type="button" class="chip" data-val="30">30건</button>
+                </div>
+                <input type="number" id="feedTargetCount" min="1" max="50" value="10" class="desktop-input" style="max-width:140px;">
+              </div>
+
+              <div class="form-group" style="margin-top: 14px;">
+                <label><strong>작업 항목 선택</strong></label>
+                <div style="display:flex; gap:16px; margin-top:6px;">
+                  <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" id="feedDoLike" checked>
+                    <span>❤️ 공감(좋아요) 누르기</span>
+                  </label>
+                  <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" id="feedDoComment" checked>
+                    <span>💬 AI 맞춤 댓글 작성</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 14px;">
+                <label for="feedCommentTone"><strong>AI 댓글 말투</strong></label>
+                <select id="feedCommentTone" class="desktop-select">
+                  <option value="friendly" selected>친근한 이웃체 (~해요! 넘 정성 가득한 글이네요 😊)</option>
+                  <option value="informative">정중하고 차분한 소통체 (좋은 정보 유익하게 잘 읽고 갑니다.)</option>
+                  <option value="warm">따뜻한 공감체 (공감 꾹 누르고 가요! 늘 응원합니다 ✨)</option>
+                </select>
+              </div>
+
+              <!-- Action Toolbar -->
+              <div class="action-command-toolbar" style="margin-top: 20px;">
+                <button type="button" class="button primary large full-width" id="startFeedBtn">
+                  <span class="btn-icon">🚀</span> <strong>이웃 새글 자동 소통 시작</strong>
+                </button>
+                <div style="display:flex; gap:8px; width:100%; margin-top:8px;">
+                  <button type="button" class="button warning medium full-width hidden" id="pauseFeedBtn">
+                    <span class="btn-icon">⏸️</span> 일시정지
+                  </button>
+                  <button type="button" class="button primary medium full-width hidden" id="resumeFeedBtn">
+                    <span class="btn-icon">▶️</span> 계속 진행
+                  </button>
+                  <button type="button" class="button danger medium full-width hidden" id="stopFeedBtn">
+                    <span class="btn-icon">⏹️</span> 작업 중단
+                  </button>
+                </div>
+              </div>
+
+              <!-- Live Stats Summary -->
+              <div class="feed-stats-row" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-top:20px;">
+                <div class="stat-card" style="padding:12px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
+                  <span style="font-size:12px; color:var(--text-muted, #666);">오늘 총 소통</span>
+                  <div style="font-size:20px; font-weight:bold; color:var(--text-main, #111);" id="feedStatTotal">0</div>
+                </div>
+                <div class="stat-card" style="padding:12px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
+                  <span style="font-size:12px; color:#e11d48;">❤️ 공감</span>
+                  <div style="font-size:20px; font-weight:bold; color:#e11d48;" id="feedStatLikes">0</div>
+                </div>
+                <div class="stat-card" style="padding:12px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
+                  <span style="font-size:12px; color:#2563eb;">💬 AI 댓글</span>
+                  <div style="font-size:20px; font-weight:bold; color:#2563eb;" id="feedStatComments">0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-Time Terminal Log -->
+          <div class="desktop-card" style="margin-top: 14px;">
+            <div class="desktop-card-header">
+              <div class="card-title-group">
+                <span class="card-badge terminal-badge">LOG</span>
+                <h3>실시간 작업 진행 로그</h3>
+              </div>
+              <div style="display:flex; gap:6px;">
+                <button type="button" class="button secondary small" id="copyFeedLogsBtn">로그 복사</button>
+                <button type="button" class="button secondary small" id="clearFeedLogsBtn">로그 지우기</button>
+              </div>
+            </div>
+            <div class="desktop-card-body">
+              <div class="terminal-container" id="feedTerminalLogs" style="height: 240px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 12px; font-family: monospace; border-radius: 6px; font-size: 13px;">
+                <div class="terminal-line info">[대기 중] '이웃 새글 자동 소통 시작' 버튼을 누르면 실시간 피드 탐색이 시작됩니다.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Neighbor Feed Live Preview & Recent History -->
+        <div class="desktop-col desktop-col-right">
+          <div class="desktop-card">
+            <div class="desktop-card-header">
+              <div class="card-title-group">
+                <span class="card-badge">FEED</span>
+                <h3>📰 내 이웃 새글 피드 목록</h3>
+              </div>
+              <button type="button" class="button secondary small" id="refreshFeedPreviewBtn">
+                🔄 피드 새로고침
+              </button>
+            </div>
+            <div class="desktop-card-body">
+              <div id="feedPostsContainer" class="feed-posts-list" style="display:flex; flex-direction:column; gap:10px; max-height: 650px; overflow-y: auto;">
+                <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted, #888);">
+                  <span>피드 목록을 불러오려면 [🔄 피드 새로고침] 버튼을 눌러주세요.</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

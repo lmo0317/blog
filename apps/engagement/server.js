@@ -18,6 +18,7 @@ import { EngagementAutomationManager } from './lib/engagement-automation.js';
 import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { CommentReplyStore } from './lib/comment-replies.js';
+import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManager } from './lib/naver-feed-engage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
@@ -52,6 +53,8 @@ const automationManager = new NeighborAutomationManager({ browserSession, histor
 const engagementHistoryStore = new EngagementHistoryStore(path.join(__dirname, '.data', 'engagement-history.json'));
 const engagementManager = new EngagementAutomationManager({ browserSession, embeddedLlama, historyStore: engagementHistoryStore });
 const commentReplyStore = new CommentReplyStore(path.join(__dirname, '.data', 'comment-replies.json'));
+const feedHistoryStore = new FeedEngagementHistoryStore(path.join(__dirname, '.data', 'feed-engagement-history.json'));
+const feedManager = new FeedEngagementManager({ browserSession, embeddedLlama, historyStore: feedHistoryStore });
 
 async function resolveActiveLlmEndpoint() {
   const activeModel = await modelManager.getActiveModel();
@@ -597,6 +600,85 @@ app.delete('/api/engagement/history', async (_req, res, next) => {
   try {
     await engagementHistoryStore.clear();
     res.json({ ok: true, message: '공감/댓글 소통 이력이 초기화되었습니다.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Neighbor Feed Real-Time Engagement: FeedList -> AI Comment + Like
+// ---------------------------------------------------------------------------
+app.get('/api/feed/summary', async (_req, res, next) => {
+  try {
+    const summary = await feedHistoryStore.getSummary();
+    res.json({
+      ...summary,
+      connected: browserSession.connected,
+      autoState: feedManager.state,
+      stats: feedManager.stats
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/feed/preview', async (req, res, next) => {
+  try {
+    if (!browserSession.connected) {
+      return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않습니다.' });
+    }
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 30);
+    const page = await browserSession.context.newPage();
+    try {
+      const posts = await fetchNeighborFeedPosts(page, { maxItems: limit });
+      const postsWithStatus = [];
+      for (const p of posts) {
+        const engaged = await feedHistoryStore.hasEngaged(p.logNo);
+        postsWithStatus.push({ ...p, engaged });
+      }
+      res.json({ ok: true, posts: postsWithStatus, total: postsWithStatus.length });
+    } finally {
+      await page.close().catch(() => {});
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/feed/status', (_req, res) => {
+  res.json(feedManager.getState());
+});
+
+app.post('/api/feed/start', async (req, res, next) => {
+  try {
+    const result = await feedManager.start(req.body || {});
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/feed/pause', (_req, res) => {
+  feedManager.pause();
+  res.json({ ok: true, state: feedManager.state });
+});
+
+app.post('/api/feed/resume', (_req, res) => {
+  feedManager.resume();
+  res.json({ ok: true, state: feedManager.state });
+});
+
+app.post('/api/feed/stop', (_req, res) => {
+  feedManager.stop();
+  res.json({ ok: true, state: feedManager.state });
+});
+
+app.delete('/api/feed/history', async (_req, res, next) => {
+  try {
+    feedHistoryStore.data.records = [];
+    feedHistoryStore.data.dailyCounts = {};
+    await feedHistoryStore.save();
+    res.json({ ok: true, message: '이웃 새글 소통 이력이 초기화되었습니다.' });
   } catch (error) {
     next(error);
   }
@@ -1225,7 +1307,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-export { app, browserSession, modelManager, embeddedLlama, engagementManager };
+export { app, browserSession, modelManager, embeddedLlama, engagementManager, feedManager, feedHistoryStore };
 
 function normalizeHttpUrl(value) {
   try {
