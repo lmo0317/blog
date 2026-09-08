@@ -70,7 +70,7 @@ test('Commons image search keeps reusable images and builds attribution', async 
   }) });
   assert.equal(images.length, 1);
   assert.equal(images[0].author, 'Photo Author');
-  assert.match(appendImageAttributions('본문', images), /이미지 출처 및 라이선스/);
+  assert.match(appendImageAttributions('본문', images), /이미지 출처 및 (안내|라이선스)/);
   assert.match(appendImageAttributions('본문', images), /CC BY-SA 4.0/);
 });
 

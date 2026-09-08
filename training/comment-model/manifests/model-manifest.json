@@ -1,0 +1,11 @@
+{
+  "modelId": "google/gemma-4-E2B-it",
+  "revision": "3e22461f65e89153144f8adb70e3b8c2cc9845a7",
+  "license": "apache-2.0",
+  "architecture": "Gemma4ForConditionalGeneration",
+  "parameterCount": "5.1B total, 2.3B effective",
+  "source": "https://huggingface.co/google/gemma-4-E2B-it",
+  "transformersRevision": "0514b65827ea0eade3d0260a81afcef763a3b94d",
+  "purpose": "Korean Naver Blog contextual comment LoRA smoke test",
+  "verifiedAt": "2026-09-08"
+}

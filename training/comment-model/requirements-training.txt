@@ -1,0 +1,10 @@
+# Install inside the dedicated training virtual environment.
+transformers @ git+https://github.com/huggingface/transformers.git@0514b65827ea0eade3d0260a81afcef763a3b94d
+huggingface-hub==1.30.0
+tokenizers==0.23.2
+safetensors==0.8.0
+peft @ git+https://github.com/huggingface/peft.git@cc196ab8bb655137bef4da5947fc70607d798488
+accelerate==1.12.0
+bitsandbytes==0.48.2
+datasets==4.8.5
+trl==0.24.0

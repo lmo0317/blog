@@ -1912,10 +1912,216 @@ function appendEngagementLog(entry) {
 // ---------------------------------------------------------------------------
 let feedStatusTimer = null;
 let isFeedPreviewLoading = false;
+let cachedFeedPosts = [];
+let activeFeedFilter = 'all'; // 'all' | 'pending' | 'engaged' | 'skipped'
+let feedSearchQuery = '';
+let activeFeedCurrentPost = null;
+
+function renderFeedPosts() {
+  const container = $('#feedPostsContainer');
+  if (!container) return;
+
+  if (!cachedFeedPosts || cachedFeedPosts.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted, #888);">
+        <span>표시할 이웃 새글이 없습니다. [🔄 피드 새로고침] 버튼을 눌러주세요.</span>
+      </div>
+    `;
+    return;
+  }
+
+  // Calculate categorized counts
+  const totalCount = cachedFeedPosts.length;
+  const pendingCount = cachedFeedPosts.filter((p) => !p.engaged && !p.skipped).length;
+  const engagedCount = cachedFeedPosts.filter((p) => p.engaged).length;
+  const skippedCount = cachedFeedPosts.filter((p) => p.skipped).length;
+
+  if ($('#feedFoundCountBadge')) $('#feedFoundCountBadge').textContent = `${totalCount}개 발견`;
+  if ($('#countFilterAll')) $('#countFilterAll').textContent = String(totalCount);
+  if ($('#countFilterPending')) $('#countFilterPending').textContent = String(pendingCount);
+  if ($('#countFilterEngaged')) $('#countFilterEngaged').textContent = String(engagedCount);
+  if ($('#countFilterSkipped')) $('#countFilterSkipped').textContent = String(skippedCount);
+
+  // Filter posts by active tab and search query
+  const filtered = cachedFeedPosts.filter((post) => {
+    // 1. Tab filter
+    if (activeFeedFilter === 'pending') {
+      if (post.engaged || post.skipped) return false;
+    } else if (activeFeedFilter === 'engaged') {
+      if (!post.engaged) return false;
+    } else if (activeFeedFilter === 'skipped') {
+      if (!post.skipped) return false;
+    }
+
+    // 2. Search query filter
+    if (feedSearchQuery) {
+      const q = feedSearchQuery.toLowerCase();
+      const matchAuthor = (post.author || post.blogId || '').toLowerCase().includes(q);
+      const matchTitle = (post.title || '').toLowerCase().includes(q);
+      const matchComment = (post.engagementRecord?.commentText || '').toLowerCase().includes(q);
+      if (!matchAuthor && !matchTitle && !matchComment) return false;
+    }
+
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    const filterLabel = activeFeedFilter === 'pending'
+      ? '소통 대기'
+      : activeFeedFilter === 'engaged'
+      ? '내가 소통한 글'
+      : activeFeedFilter === 'skipped'
+      ? '제외/기작성 글'
+      : '검색 조건에 맞는';
+
+    container.innerHTML = `
+      <div class="empty-state" style="text-align:center; padding: 36px 20px; color: var(--text-muted, #888);">
+        <p style="font-weight:600; color:#334155; margin-bottom:4px;">해당 조건의 글이 없습니다</p>
+        <span style="font-size:12px; color:#64748b;">현재 [${filterLabel}] 상태에 해당하는 이웃 새글이 없습니다.</span>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map((post) => {
+    const isCurrentActive = Boolean(
+      activeFeedCurrentPost &&
+      (activeFeedCurrentPost.logNo === post.logNo || (activeFeedCurrentPost.url && post.url && activeFeedCurrentPost.url.includes(post.logNo)))
+    );
+
+    const isEngaged = Boolean(post.engaged);
+    const isSkipped = Boolean(post.skipped || post.engagementRecord?.status === 'skipped');
+    const isPending = !isEngaged && !isSkipped;
+
+    const cardClass = isCurrentActive
+      ? 'is-processing'
+      : isEngaged
+      ? 'is-engaged'
+      : isSkipped
+      ? 'is-skipped'
+      : 'is-pending';
+
+    const isNew = Boolean(
+      post.publishedTime && (
+        post.publishedTime.includes('방금') ||
+        post.publishedTime.includes('분') ||
+        post.publishedTime.includes('시간') ||
+        post.publishedTime.includes('오늘')
+      )
+    );
+
+    let statusBadgesHtml = '';
+    if (isCurrentActive) {
+      statusBadgesHtml = `<span class="feed-status-badge processing">⚡ 실시간 소통 중</span>`;
+    } else if (isEngaged) {
+      statusBadgesHtml = `<span class="feed-status-badge done">✅ 내가 소통한 글</span>`;
+      if (post.engagementRecord?.liked) {
+        statusBadgesHtml += ` <span class="feed-mini-action-badge">❤️ 공감</span>`;
+      }
+      if (post.engagementRecord?.commented) {
+        statusBadgesHtml += ` <span class="feed-mini-action-badge">💬 댓글</span>`;
+      }
+    } else if (isSkipped) {
+      const msg = post.engagementRecord?.statusMessage || '기작성 댓글 감지';
+      statusBadgesHtml = `<span class="feed-status-badge skipped">⏩ ${escapeHtml(msg)}</span>`;
+    } else {
+      statusBadgesHtml = `<span class="feed-status-badge pending">⏳ 소통 대기</span>`;
+    }
+
+    const hasThumb = Boolean(post.thumbnail);
+    const thumbHtml = hasThumb
+      ? `<img src="${escapeHtml(post.thumbnail)}" alt="썸네일" class="feed-card-thumb" onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\\'feed-card-thumb-placeholder\\'>📝</div>';">`
+      : `<div class="feed-card-thumb-placeholder">📝</div>`;
+
+    let myCommentHtml = '';
+    if (isEngaged && post.engagementRecord?.commentText) {
+      const recordDate = post.engagementRecord.timestamp
+        ? new Date(post.engagementRecord.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+        : '';
+      myCommentHtml = `
+        <div class="feed-my-comment-box">
+          <div class="feed-comment-bubble-header">
+            <span>💬 내가 남긴 AI 맞춤 댓글</span>
+            ${recordDate ? `<span class="feed-comment-time">🕒 ${escapeHtml(recordDate)}</span>` : ''}
+          </div>
+          <div class="feed-comment-bubble-text">"${escapeHtml(post.engagementRecord.commentText)}"</div>
+        </div>
+      `;
+    }
+
+    let liveStepHtml = '';
+    if (isCurrentActive && activeFeedCurrentPost?.stepLabel) {
+      liveStepHtml = `
+        <div class="feed-live-step-strip">
+          <span>⚡</span>
+          <span>${escapeHtml(activeFeedCurrentPost.stepLabel)}</span>
+          ${activeFeedCurrentPost.countdown > 0 ? `<span style="margin-left:auto; color:#d97706; font-weight:700;">(${activeFeedCurrentPost.countdown}초)</span>` : ''}
+        </div>
+      `;
+    }
+
+    return `
+      <article class="feed-post-card ${cardClass}" data-logno="${post.logNo}">
+        <div class="feed-card-header">
+          <div class="feed-card-author-row">
+            <span class="feed-author-badge">
+              <span class="feed-author-avatar">👤</span>
+              <strong class="feed-author-name">${escapeHtml(post.author || post.blogId)}</strong>
+              <span class="feed-blog-id">@${escapeHtml(post.blogId)}</span>
+            </span>
+            ${post.publishedTime ? `
+              <span class="feed-time-badge">
+                ${isNew ? '<span class="feed-new-pill">NEW</span>' : ''}
+                🕒 ${escapeHtml(post.publishedTime)}
+              </span>
+            ` : ''}
+          </div>
+          <div class="feed-status-badges">
+            ${statusBadgesHtml}
+          </div>
+        </div>
+
+        <div class="feed-card-main">
+          ${thumbHtml}
+          <div class="feed-card-content">
+            <a href="${escapeHtml(post.url)}" target="_blank" rel="noopener noreferrer" class="feed-post-title" title="${escapeHtml(post.title)}">
+              ${escapeHtml(post.title || '제목 없음')}
+              <span class="feed-link-icon">↗</span>
+            </a>
+            ${post.snippet ? `
+              <p class="feed-post-snippet">${escapeHtml(post.snippet)}</p>
+            ` : ''}
+          </div>
+        </div>
+
+        ${myCommentHtml}
+        ${liveStepHtml}
+      </article>
+    `;
+  }).join('');
+
+  const loadMoreHtml = (cachedFeedPosts.length >= 15 && cachedFeedPosts.length < 100)
+    ? `
+      <div class="feed-load-more-wrap" style="text-align:center; padding:12px 0 4px 0;">
+        <button type="button" class="button secondary small" id="feedLoadMoreBtn" style="border-radius:9999px; padding:7px 18px; font-size:12px; font-weight:600; cursor:pointer;">
+          ➕ 피드 더 불러오기 (+20개)
+        </button>
+      </div>
+    `
+    : '';
+
+  container.innerHTML = cardsHtml + loadMoreHtml;
+
+  $('#feedLoadMoreBtn')?.addEventListener('click', () => {
+    loadFeedPreview(true);
+  });
+}
 
 function updateFeedDashboard(statusData) {
   if (!statusData) return;
-  const { state: feedState, stats = {}, logs = [] } = statusData;
+  const { state: feedState, stats = {}, logs = [], currentPost = null } = statusData;
+  activeFeedCurrentPost = currentPost;
+
   const isRunning = feedState === 'running';
   const isPaused = feedState === 'paused';
   const isCompleted = feedState === 'completed';
@@ -1927,7 +2133,7 @@ function updateFeedDashboard(statusData) {
   if (statusBadge) {
     statusBadge.className = `status ${isRunning ? 'active' : isPaused ? 'warning' : isCompleted ? 'success' : isError ? 'error' : 'ready'}`;
     if (isRunning) {
-      statusBadge.innerHTML = `<i></i> 진행 중 (${stats.processed || 0}/${stats.target || 10})`;
+      statusBadge.innerHTML = `<i></i> 진행 중 (${stats.successCount || 0}/${stats.target || 10})`;
     } else if (isPaused) {
       statusBadge.innerHTML = '<i></i> 일시정지됨';
     } else if (isCompleted) {
@@ -1949,17 +2155,81 @@ function updateFeedDashboard(statusData) {
     startBtn.classList.toggle('hidden', !isIdle);
     if (isIdle) {
       startBtn.disabled = false;
-      startBtn.innerHTML = '<span class="btn-icon">🚀</span> <strong>이웃 새글 자동 소통 시작</strong>';
+      startBtn.innerHTML = '<span>🚀</span> <strong>이웃 새글 자동 소통 시작</strong>';
     }
   }
   if (pauseBtn) pauseBtn.classList.toggle('hidden', !isRunning);
   if (resumeBtn) resumeBtn.classList.toggle('hidden', !isPaused);
   if (stopBtn) stopBtn.classList.toggle('hidden', isIdle);
 
-  // Stats Counters
-  if ($('#feedStatTotal')) $('#feedStatTotal').textContent = String(stats.processed || 0);
-  if ($('#feedStatLikes')) $('#feedStatLikes').textContent = String(stats.likes || 0);
-  if ($('#feedStatComments')) $('#feedStatComments').textContent = String(stats.comments || 0);
+  // Session Stats Grid (4 Cards)
+  const targetCount = stats.target || Number($('#feedTargetCount')?.value) || 10;
+  const successCount = stats.successCount || 0;
+  const remainingCount = Math.max(0, targetCount - successCount);
+  const skippedCount = stats.skippedCount || 0;
+
+  if ($('#feedStatTarget')) $('#feedStatTarget').textContent = String(targetCount);
+  if ($('#feedStatSuccess')) $('#feedStatSuccess').textContent = String(successCount);
+  if ($('#feedStatRemaining')) $('#feedStatRemaining').textContent = String(remainingCount);
+  if ($('#feedStatSkipped')) $('#feedStatSkipped').textContent = String(skippedCount);
+
+  // Today Cumulative Stats
+  if (statusData.todayTotal !== undefined && $('#feedStatTotal')) {
+    $('#feedStatTotal').textContent = String(statusData.todayTotal);
+  }
+  if (statusData.todayLikes !== undefined && $('#feedStatLikes')) {
+    $('#feedStatLikes').textContent = String(statusData.todayLikes);
+  }
+  if (statusData.todayComments !== undefined && $('#feedStatComments')) {
+    $('#feedStatComments').textContent = String(statusData.todayComments);
+  }
+
+  // Live Progress & In-Progress Highlight Banner
+  const progressWidget = $('#feedLiveProgressWidget');
+  if (progressWidget) {
+    const shouldShow = isRunning || isPaused || (isCompleted && successCount > 0);
+    progressWidget.style.display = shouldShow ? 'block' : 'none';
+
+    const percent = Math.min(100, Math.round((successCount / Math.max(1, targetCount)) * 100));
+    const progressBar = $('#feedProgressBar');
+    const progressPercent = $('#feedProgressPercent');
+    const progressText = $('#feedProgressText');
+
+    if (progressBar) progressBar.style.width = `${percent}%`;
+    if (progressPercent) progressPercent.textContent = `${percent}% (${successCount}/${targetCount})`;
+    if (progressText) {
+      progressText.textContent = isRunning
+        ? '실시간 소통 진행 중...'
+        : isPaused
+        ? '소통 일시정지됨'
+        : isCompleted
+        ? '회차 목표 달성 완료!'
+        : '소통 준비 중';
+    }
+  }
+
+  // Active Post Highlight Card
+  const activeCard = $('#feedActiveCard');
+  if (activeCard) {
+    if (currentPost && (isRunning || isPaused)) {
+      activeCard.style.display = 'block';
+      if ($('#feedActiveAuthor')) $('#feedActiveAuthor').textContent = `👤 @${currentPost.author || currentPost.blogId}`;
+      if ($('#feedActiveTitle')) $('#feedActiveTitle').textContent = currentPost.title || '새글 분석 중...';
+      if ($('#feedActiveStepLabel')) $('#feedActiveStepLabel').textContent = currentPost.stepLabel || '분석 중...';
+
+      const countdownEl = $('#feedActiveCountdown');
+      if (countdownEl) {
+        if (currentPost.countdown > 0) {
+          countdownEl.style.display = 'inline-block';
+          countdownEl.textContent = `⏳ ${currentPost.countdown}초 후 다음 글`;
+        } else {
+          countdownEl.style.display = 'none';
+        }
+      }
+    } else {
+      activeCard.style.display = 'none';
+    }
+  }
 
   // Terminal Logs
   if (Array.isArray(logs) && logs.length > 0) {
@@ -1968,12 +2238,35 @@ function updateFeedDashboard(statusData) {
       const chronological = [...logs].reverse();
       container.innerHTML = chronological.map((log) => {
         const time = escapeHtml(log.time || '');
-        const type = escapeHtml(log.type || 'info');
+        const type = escapeHtml(log.level || log.type || 'info');
         const msg = escapeHtml(log.message || '');
         return `<div class="terminal-line ${type}">[${time}] ${msg}</div>`;
       }).join('');
       container.scrollTop = container.scrollHeight;
     }
+  }
+
+  // Dynamically update cached posts if currentPost newly completed or skipped
+  if (cachedFeedPosts && cachedFeedPosts.length > 0) {
+    if (currentPost && (currentPost.step === 'done' || currentPost.step === 'skipped')) {
+      const cached = cachedFeedPosts.find((p) => p.logNo === currentPost.logNo);
+      if (cached) {
+        if (currentPost.step === 'done') {
+          cached.engaged = true;
+          cached.skipped = false;
+          cached.engagementRecord = {
+            liked: currentPost.liked,
+            commented: currentPost.commented,
+            commentText: currentPost.commentText,
+            timestamp: new Date().toISOString(),
+            status: 'success'
+          };
+        } else if (currentPost.step === 'skipped') {
+          cached.skipped = true;
+        }
+      }
+    }
+    renderFeedPosts();
   }
 }
 
@@ -2021,7 +2314,7 @@ function stopFeedPolling() {
   }
 }
 
-async function loadFeedPreview() {
+async function loadFeedPreview(more = false) {
   const container = $('#feedPostsContainer');
   const refreshBtn = $('#refreshFeedPreviewBtn');
   if (!container || isFeedPreviewLoading) return;
@@ -2046,66 +2339,46 @@ async function loadFeedPreview() {
     refreshBtn.textContent = '🔄 불러오는 중...';
   }
 
-  container.innerHTML = `
-    <div style="text-align:center; padding: 40px 20px; color: var(--text-muted, #64748b);">
-      <div class="desktop-spinner" style="margin: 0 auto 12px auto;"></div>
-      <span>실시간 네이버 이웃 새글 피드를 가져오는 중입니다...</span>
-    </div>
-  `;
+  const targetLimit = more ? Math.min((cachedFeedPosts.length || 30) + 20, 100) : 30;
 
-  try {
-    const data = await api('/api/feed/preview?limit=15');
-    const posts = data.posts || [];
-
-    if (!posts.length) {
-      container.innerHTML = `
-        <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted, #888);">
-          <span>표시할 이웃 새글이 없습니다. 네이버 블로그에 새글을 올린 이웃이 있는지 확인해주세요.</span>
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = posts.map((post) => {
-      const hasThumb = Boolean(post.thumbnail);
-      const engagedBadge = post.engaged
-        ? `<span class="badge completed" style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:3px;"><span>✅</span> 소통 완료</span>`
-        : `<span class="badge pending" style="background:#f1f5f9; color:#64748b; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:500; display:inline-flex; align-items:center; gap:3px;"><span>⏳</span> 소통 대기</span>`;
-
-      const thumbHtml = hasThumb
-        ? `<img src="${escapeHtml(post.thumbnail)}" alt="썸네일" style="width:72px; height:72px; border-radius:8px; object-fit:cover; flex-shrink:0; border:1px solid #e2e8f0;" onerror="this.onerror=null;this.parentElement.innerHTML='<div style=\\'width:72px; height:72px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; color:#94a3b8;\\'>📝</div>';">`
-        : `<div style="width:72px; height:72px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; color:#94a3b8;">📝</div>`;
-
-      return `
-        <article class="feed-post-card" style="display:flex; gap:12px; padding:12px 14px; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; transition:all 0.2s ease; align-items:center; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
-          ${thumbHtml}
-          <div style="flex:1; min-width:0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; gap:8px;">
-              <span style="font-size:12px; font-weight:600; color:#475569; display:inline-flex; align-items:center; gap:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                <span>👤</span> ${escapeHtml(post.author || post.blogId)}
-                ${post.publishedTime ? `<span style="font-weight:normal; color:#94a3b8; font-size:11px;">· ${escapeHtml(post.publishedTime)}</span>` : ''}
-              </span>
-              ${engagedBadge}
-            </div>
-            <a href="${escapeHtml(post.url)}" target="_blank" rel="noopener noreferrer" style="font-weight:600; font-size:13.5px; color:#1e293b; text-decoration:none; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4;" title="${escapeHtml(post.title)}">
-              ${escapeHtml(post.title || '제목 없음')}
-            </a>
-            ${post.snippet ? `
-              <p style="font-size:12px; color:#64748b; margin:4px 0 0 0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4;">
-                ${escapeHtml(post.snippet)}
-              </p>
-            ` : ''}
-          </div>
-        </article>
-      `;
-    }).join('');
-  } catch (err) {
+  if (!more) {
     container.innerHTML = `
-      <div style="text-align:center; padding: 40px 20px; color: #ef4444;">
-        <p style="margin-bottom:8px; font-weight:600;">피드 목록을 불러오지 못했습니다.</p>
-        <span style="font-size:12px; color:#64748b;">${escapeHtml(err.message)}</span>
+      <div style="text-align:center; padding: 40px 20px; color: var(--text-muted, #64748b);">
+        <div class="desktop-spinner" style="margin: 0 auto 12px auto;"></div>
+        <span>실시간 네이버 이웃 새글 피드를 가져오는 중입니다...</span>
       </div>
     `;
+  } else {
+    const loadMoreBtn = $('#feedLoadMoreBtn');
+    if (loadMoreBtn) {
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = '⏳ 피드 글 더 불러오는 중...';
+    }
+  }
+
+  try {
+    const data = await api(`/api/feed/preview?limit=${targetLimit}`);
+    cachedFeedPosts = data.posts || [];
+    renderFeedPosts();
+    if (more) {
+      toast(`이웃 새글 피드를 총 ${cachedFeedPosts.length}개까지 추가로 불러왔습니다.`);
+    }
+  } catch (err) {
+    if (!more) {
+      container.innerHTML = `
+        <div style="text-align:center; padding: 40px 20px; color: #ef4444;">
+          <p style="margin-bottom:8px; font-weight:600;">피드 목록을 불러오지 못했습니다.</p>
+          <span style="font-size:12px; color:#64748b;">${escapeHtml(err.message)}</span>
+        </div>
+      `;
+    } else {
+      toast(`추가 피드 로딩 실패: ${err.message}`, true);
+      const loadMoreBtn = $('#feedLoadMoreBtn');
+      if (loadMoreBtn) {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = '➕ 피드 더 불러오기 (+20개)';
+      }
+    }
   } finally {
     isFeedPreviewLoading = false;
     if (refreshBtn) {
@@ -2116,6 +2389,38 @@ async function loadFeedPreview() {
 }
 
 function initFeedEngagement() {
+  // Option Cards interactive toggle
+  const cardDoLike = $('#cardFeedDoLike');
+  const inputDoLike = $('#feedDoLike');
+  const cardDoComment = $('#cardFeedDoComment');
+  const inputDoComment = $('#feedDoComment');
+
+  const syncOptionCards = () => {
+    if (cardDoLike && inputDoLike) {
+      cardDoLike.classList.toggle('checked', inputDoLike.checked);
+    }
+    if (cardDoComment && inputDoComment) {
+      cardDoComment.classList.toggle('checked', inputDoComment.checked);
+    }
+  };
+
+  cardDoLike?.addEventListener('click', (e) => {
+    if (e.target !== inputDoLike) {
+      inputDoLike.checked = !inputDoLike.checked;
+    }
+    syncOptionCards();
+  });
+
+  cardDoComment?.addEventListener('click', (e) => {
+    if (e.target !== inputDoComment) {
+      inputDoComment.checked = !inputDoComment.checked;
+    }
+    syncOptionCards();
+  });
+
+  inputDoLike?.addEventListener('change', syncOptionCards);
+  inputDoComment?.addEventListener('change', syncOptionCards);
+
   // Quick count buttons
   $('#feedQuickCounts')?.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
@@ -2134,6 +2439,25 @@ function initFeedEngagement() {
     $$('#feedQuickCounts .chip').forEach((c) => {
       c.classList.toggle('active', c.dataset.val === val);
     });
+    if ($('#feedStatTarget')) $('#feedStatTarget').textContent = val || '10';
+    const success = Number($('#feedStatSuccess')?.textContent) || 0;
+    if ($('#feedStatRemaining')) $('#feedStatRemaining').textContent = String(Math.max(0, (Number(val) || 10) - success));
+  });
+
+  // Filter Tabs
+  $('#feedFilterTabs')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.feed-filter-btn');
+    if (!btn) return;
+    $$('#feedFilterTabs .feed-filter-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFeedFilter = btn.dataset.filter || 'all';
+    renderFeedPosts();
+  });
+
+  // Search Input
+  $('#feedSearchInput')?.addEventListener('input', (e) => {
+    feedSearchQuery = String(e.target.value || '').trim();
+    renderFeedPosts();
   });
 
   // Action Buttons
@@ -2159,7 +2483,7 @@ function initFeedEngagement() {
     try {
       if (startBtn) {
         startBtn.disabled = true;
-        startBtn.innerHTML = '<span class="btn-icon">⏳</span> <strong>피드 탐색 준비 중...</strong>';
+        startBtn.innerHTML = '<span>⏳</span> <strong>피드 탐색 준비 중...</strong>';
       }
 
       await api('/api/feed/start', {
@@ -2173,7 +2497,7 @@ function initFeedEngagement() {
       toast(`피드 소통 시작 실패: ${err.message}`, true);
       if (startBtn) {
         startBtn.disabled = false;
-        startBtn.innerHTML = '<span class="btn-icon">🚀</span> <strong>이웃 새글 자동 소통 시작</strong>';
+        startBtn.innerHTML = '<span>🚀</span> <strong>이웃 새글 자동 소통 시작</strong>';
       }
     }
   });

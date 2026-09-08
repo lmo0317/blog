@@ -686,11 +686,13 @@ app.delete('/api/engagement/history', async (_req, res, next) => {
 app.get('/api/feed/summary', async (_req, res, next) => {
   try {
     const summary = await feedHistoryStore.getSummary();
+    const managerState = feedManager.getState();
     res.json({
       ...summary,
       connected: browserSession.connected,
       autoState: feedManager.state,
-      stats: feedManager.stats
+      stats: managerState.stats,
+      currentPost: managerState.currentPost
     });
   } catch (error) {
     next(error);
@@ -702,14 +704,31 @@ app.get('/api/feed/preview', async (req, res, next) => {
     if (!browserSession.connected) {
       return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않습니다.' });
     }
-    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 30);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
     const page = await browserSession.context.newPage();
     try {
-      const posts = await fetchNeighborFeedPosts(page, { maxItems: limit });
+      const posts = await fetchNeighborFeedPosts(page, {
+        maxItems: limit,
+        maxScrolls: Math.max(5, Math.ceil(limit / 10))
+      });
       const postsWithStatus = [];
       for (const p of posts) {
-        const engaged = await feedHistoryStore.hasEngaged(p.logNo);
-        postsWithStatus.push({ ...p, engaged });
+        const record = await feedHistoryStore.getRecord(p.logNo);
+        const isEngaged = Boolean(record && (record.liked || record.commented || record.status === 'success'));
+        const isSkipped = Boolean(record && record.status === 'skipped');
+        postsWithStatus.push({
+          ...p,
+          engaged: isEngaged,
+          skipped: isSkipped,
+          engagementRecord: record ? {
+            liked: record.liked,
+            commented: record.commented,
+            commentText: record.commentText,
+            timestamp: record.timestamp,
+            status: record.status,
+            statusMessage: record.statusMessage
+          } : null
+        });
       }
       res.json({ ok: true, posts: postsWithStatus, total: postsWithStatus.length });
     } finally {

@@ -2722,5 +2722,728 @@ input[type="radio"] {
   transform: translateY(-1px);
 }
 
+/* ==========================================================================
+   Neighbor Feed Engagement (이웃 새글 피드 실시간 소통) UI Design System
+   Compliant with .agents/skills/ui-designer/SKILL.md
+   ========================================================================== */
+
+/* 1. Feed Options Grid & Modern Option Cards */
+.feed-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .feed-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.feed-option-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.feed-option-card:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.feed-option-card.checked {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.feed-option-card input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  accent-color: #03c75a !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+}
+
+.feed-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.feed-option-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.feed-option-desc {
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+/* 2. Feed Action CTA Button */
+.feed-cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 20px;
+  background: linear-gradient(135deg, #03c75a 0%, #00a94f 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(3, 199, 90, 0.2);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feed-cta-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #00b352 0%, #009947 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(3, 199, 90, 0.3);
+}
+
+.feed-cta-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.feed-cta-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 3. Live Progress & In-Progress Highlight Banner */
+.feed-live-widget {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+
+.feed-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.feed-progress-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.feed-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #03c75a;
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(3, 199, 90, 0.7);
+  animation: feedPulse 1.8s infinite;
+}
+
+@keyframes feedPulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(3, 199, 90, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 7px rgba(3, 199, 90, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(3, 199, 90, 0);
+  }
+}
+
+.feed-progress-percent {
+  font-size: 13px;
+  font-weight: 800;
+  color: #03c75a;
+}
+
+.feed-progress-track {
+  width: 100%;
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.feed-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #03c75a 0%, #10b981 100%);
+  border-radius: 9999px;
+  transition: width 0.4s ease;
+}
+
+/* Active Processing Card */
+.feed-active-card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1.5px solid #a7f3d0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  box-shadow: 0 3px 10px rgba(3, 199, 90, 0.08);
+}
+
+.feed-active-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.feed-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #166534;
+  background: #dcfce7;
+  padding: 3px 9px;
+  border-radius: 9999px;
+}
+
+.feed-active-countdown {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #d97706;
+  background: #fef3c7;
+  padding: 3px 9px;
+  border-radius: 9999px;
+}
+
+.feed-active-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feed-active-author {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.feed-active-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-active-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-top: 6px;
+  padding: 7px 10px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+}
+
+.feed-active-step-icon {
+  font-size: 14px;
+}
+
+/* 4. Feed Stats Grid (4 Columns) */
+.feed-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+@media (max-width: 600px) {
+  .feed-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.feed-stat-card {
+  padding: 10px 8px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.feed-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.feed-stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 3px;
+  line-height: 1.2;
+}
+
+/* 5. Terminal Box (Compact Slate 900) */
+.feed-terminal-box {
+  height: 170px;
+  overflow-y: auto;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  border: 1px solid #1e293b;
+}
+
+.feed-terminal-box::-webkit-scrollbar {
+  width: 6px;
+}
+.feed-terminal-box::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+.feed-terminal-box::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+/* 6. Feed Filter Bar & Search */
+.feed-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.feed-filter-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.feed-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.feed-filter-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.feed-filter-btn.active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+.feed-search-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.feed-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.feed-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 32px;
+  font-size: 12.5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1e293b;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.feed-search-input:focus {
+  outline: none;
+  border-color: #03c75a;
+  box-shadow: 0 0 0 3px rgba(3, 199, 90, 0.12);
+}
+
+.feed-count-chip {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #4f46e5;
+  background: #e0e7ff;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  margin-left: 8px;
+}
+
+/* 7. Feed Post Cards (List Items) */
+.feed-posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 650px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.feed-posts-list::-webkit-scrollbar {
+  width: 6px;
+}
+.feed-posts-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+
+.feed-post-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px 15px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.feed-post-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+/* State Variant 1: Active Processing (실시간 소통 진행 중) */
+.feed-post-card.is-processing {
+  border: 2px solid #6366f1 !important;
+  background: linear-gradient(180deg, #f5f3ff 0%, #ffffff 100%);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15), 0 4px 14px rgba(99, 102, 241, 0.12);
+  animation: cardBorderPulse 2s infinite;
+}
+
+@keyframes cardBorderPulse {
+  0% {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.1);
+  }
+  100% {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+}
+
+/* State Variant 2: Engaged (내가 소통한 글) */
+.feed-post-card.is-engaged {
+  background: #f8fdfa;
+  border: 1px solid #bbf7d0;
+}
+
+.feed-post-card.is-engaged:hover {
+  border-color: #86efac;
+  box-shadow: 0 4px 12px rgba(3, 199, 90, 0.08);
+}
+
+/* State Variant 3: Pending (소통 대기 새글) */
+.feed-post-card.is-pending {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+/* State Variant 4: Skipped (제외/기작성 글) */
+.feed-post-card.is-skipped {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  opacity: 0.88;
+}
+
+/* Card Header */
+.feed-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.feed-card-author-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-author-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: #1e293b;
+}
+
+.feed-author-avatar {
+  font-size: 13px;
+}
+
+.feed-author-name {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.feed-blog-id {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: normal;
+}
+
+.feed-time-badge {
+  font-size: 11px;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.feed-new-pill {
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.feed-status-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.feed-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.feed-status-badge.done {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.feed-status-badge.processing {
+  background: #e0e7ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+}
+
+.feed-status-badge.pending {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.feed-status-badge.skipped {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.feed-mini-action-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #d1fae5;
+  color: #047857;
+}
+
+/* Card Main (Thumb + Content) */
+.feed-card-main {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.feed-card-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.feed-card-thumb-placeholder {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.feed-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.feed-post-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  text-decoration: none;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.15s ease;
+}
+
+.feed-post-title:hover {
+  color: #03c75a;
+  text-decoration: underline;
+}
+
+.feed-link-icon {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 2px;
+}
+
+.feed-post-snippet {
+  font-size: 12px;
+  color: #64748b;
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* My Comment Speech Bubble */
+.feed-my-comment-box {
+  margin-top: 2px;
+  padding: 9px 12px;
+  background: #ffffff;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(3, 199, 90, 0.05);
+}
+
+.feed-comment-bubble-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #166534;
+}
+
+.feed-comment-time {
+  font-size: 10.5px;
+  font-weight: normal;
+  color: #64748b;
+}
+
+.feed-comment-bubble-text {
+  font-size: 12px;
+  color: #1e293b;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+/* Live Step Inline Indicator */
+.feed-live-step-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #e0e7ff;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #3730a3;
+  margin-top: 2px;
+}
+
+
 
 

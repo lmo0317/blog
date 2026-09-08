@@ -51,13 +51,35 @@ export function parseFeedHtml(html = '') {
   return items;
 }
 
-export async function fetchNeighborFeedPosts(page, { maxItems = 20 } = {}) {
+export async function fetchNeighborFeedPosts(page, { maxItems = 30, maxScrolls = 8 } = {}) {
   await page.goto('https://m.blog.naver.com/FeedList.naver', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1200);
 
-  // Trigger lazy-load by scrolling down once
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7)).catch(() => {});
-  await page.waitForTimeout(1000);
+  // Progressive scroll to load deeper neighbor posts beyond 30
+  let scrollAttempts = 0;
+  while (scrollAttempts < maxScrolls) {
+    const currentCount = await page.evaluate(() => {
+      const postLinks = document.querySelectorAll('a[href*="?enterPage=feed"], a[data-click-area="fed.bptn"], a[data-ba-scene-id="neighbor_new_post"]');
+      return postLinks.length;
+    }).catch(() => 0);
+
+    if (currentCount >= maxItems) break;
+
+    // Scroll down to load more
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
+    await page.waitForTimeout(1000);
+
+    const newCount = await page.evaluate(() => {
+      const postLinks = document.querySelectorAll('a[href*="?enterPage=feed"], a[data-click-area="fed.bptn"], a[data-ba-scene-id="neighbor_new_post"]');
+      return postLinks.length;
+    }).catch(() => 0);
+
+    if (newCount <= currentCount) {
+      // Reached bottom of feed or no more posts available
+      break;
+    }
+    scrollAttempts += 1;
+  }
 
   const posts = await page.evaluate((max) => {
     const postLinks = Array.from(document.querySelectorAll('a[href*="?enterPage=feed"], a[data-click-area="fed.bptn"], a[data-ba-scene-id="neighbor_new_post"]'));
@@ -179,6 +201,13 @@ export class FeedEngagementHistoryStore {
     return this.data.records.some((r) => r.logNo === target || r.url === target || (r.url && r.url.includes(target)));
   }
 
+  async getRecord(logNoOrUrl) {
+    await this.load();
+    const target = String(logNoOrUrl || '').trim();
+    if (!target) return null;
+    return this.data.records.find((r) => r.logNo === target || r.url === target || (r.url && r.url.includes(target))) || null;
+  }
+
   async addRecord({ blogId, logNo, author = '', title = '', url = '', liked = false, commented = false, commentText = '', status = 'success', statusMessage = '' }) {
     await this.load();
     const dateKey = koreaDateKey();
@@ -250,6 +279,7 @@ export class FeedEngagementManager {
     this.state = 'idle'; // idle | running | paused | stopped | completed | error
     this.shouldStop = false;
     this.isPaused = false;
+    this.currentPost = null;
     this.logs = [];
 
     this.stats = {
@@ -287,8 +317,13 @@ export class FeedEngagementManager {
   getState() {
     return {
       state: this.state,
-      stats: { ...this.stats },
+      stats: {
+        ...this.stats,
+        target: this.config.targetCount,
+        remaining: Math.max(0, this.config.targetCount - this.stats.successCount)
+      },
       config: { ...this.config },
+      currentPost: this.currentPost ? { ...this.currentPost } : null,
       logs: this.logs.slice(0, 50)
     };
   }
@@ -297,6 +332,10 @@ export class FeedEngagementManager {
     if (this.state === 'running') {
       this.isPaused = true;
       this.state = 'paused';
+      if (this.currentPost) {
+        this.currentPost.step = 'paused';
+        this.currentPost.stepLabel = '⏸️ 일시정지됨';
+      }
       this.log('⏸️ 이웃 새글 자동 소통 작업이 일시정지되었습니다.', 'warn');
     }
   }
@@ -305,6 +344,10 @@ export class FeedEngagementManager {
     if (this.state === 'paused') {
       this.isPaused = false;
       this.state = 'running';
+      if (this.currentPost) {
+        this.currentPost.step = 'resumed';
+        this.currentPost.stepLabel = '▶️ 작업 재개 중...';
+      }
       this.log('▶️ 이웃 새글 자동 소통 작업을 다시 재개합니다.', 'info');
     }
   }
@@ -313,6 +356,7 @@ export class FeedEngagementManager {
     this.shouldStop = true;
     this.isPaused = false;
     this.state = 'stopped';
+    this.currentPost = null;
     this.log('⏹️ 사용자에 의해 이웃 새글 소통 작업이 중단되었습니다.', 'warn');
   }
 
@@ -377,8 +421,11 @@ export class FeedEngagementManager {
       feedPage = await this.browserSession.context.newPage();
       this.log('🔍 네이버 모바일 이웃 피드(FeedList.naver)에서 최신 새글을 탐색합니다...', 'info');
 
-      const maxFetch = Math.max(this.config.targetCount * 2, 20);
-      const feedPosts = await fetchNeighborFeedPosts(feedPage, { maxItems: maxFetch });
+      const maxFetch = Math.max(this.config.targetCount * 3, 30);
+      const feedPosts = await fetchNeighborFeedPosts(feedPage, {
+        maxItems: maxFetch,
+        maxScrolls: Math.max(5, Math.ceil(maxFetch / 10))
+      });
       await feedPage.close().catch(() => {});
       feedPage = null;
 
@@ -408,15 +455,32 @@ export class FeedEngagementManager {
         const post = feedPosts[i];
         const postLabel = `@${post.author} ('${post.title.slice(0, 24)}...')`;
 
+        this.currentPost = {
+          logNo: post.logNo,
+          blogId: post.blogId,
+          author: post.author,
+          title: post.title,
+          url: post.url,
+          thumbnail: post.thumbnail || '',
+          publishedTime: post.publishedTime || '',
+          step: 'checking',
+          stepLabel: '📋 기존 소통 이력 확인 중...',
+          countdown: 0
+        };
+
         // Check history deduplication
         const alreadyEngaged = await this.historyStore.hasEngaged(post.logNo);
         if (alreadyEngaged) {
           this.stats.skippedCount += 1;
+          this.currentPost.step = 'skipped';
+          this.currentPost.stepLabel = '⏩ 이미 소통한 기록이 있어 건너뜁니다.';
           this.log(`⏩ [기록 제외] ${postLabel} 이미 소통한 기록이 있는 글입니다.`, 'info');
           continue;
         }
 
         this.stats.processedCount += 1;
+        this.currentPost.step = 'inspecting';
+        this.currentPost.stepLabel = '🔍 이웃 글 본문 및 사진 분석 중...';
         this.log(`[${this.stats.processedCount}] ${postLabel} 분석 중...`, 'info');
 
         try {
@@ -425,6 +489,8 @@ export class FeedEngagementManager {
 
           if (inspection.alreadyCommented) {
             this.stats.skippedCount += 1;
+            this.currentPost.step = 'skipped';
+            this.currentPost.stepLabel = '⏩ 이미 내 댓글이 확인되어 건너뜁니다 (중복 방지).';
             this.log(`⏩ [중복 댓글 제외] ${postLabel} 이미 내 댓글이 확인된 포스팅입니다.`, 'warn');
             await this.historyStore.addRecord({
               blogId: post.blogId,
@@ -443,6 +509,8 @@ export class FeedEngagementManager {
           // 2. Generate contextual AI comment if enabled
           let generatedComment = '';
           if (this.config.doComment && inspection.canComment) {
+            this.currentPost.step = 'generating';
+            this.currentPost.stepLabel = '🤖 온디바이스 AI 맞춤 찐이웃 댓글 작성 중...';
             this.log(`🤖 AI가 이웃 글 내용과 사진을 읽고 맞춤 댓글을 생성하고 있습니다...`, 'info');
             const imageSummary = inspection.firstImage?.alt || (inspection.images.length > 0 ? `${inspection.images.length}장의 본문 사진 포함` : '');
             const recentComments = await this.historyStore.getRecentComments(30);
@@ -465,6 +533,8 @@ export class FeedEngagementManager {
           }
 
           // 3. Execute Like & Comment
+          this.currentPost.step = 'engaging';
+          this.currentPost.stepLabel = '❤️ 공감 누르기 및 💬 댓글 등록 중...';
           const result = await this.browserSession.likeAndCommentPost({
             postUrl: post.url,
             commentText: generatedComment,
@@ -478,6 +548,7 @@ export class FeedEngagementManager {
             this.shouldStop = true;
             this.state = 'stopped';
             this.stats.protectionTriggered = true;
+            this.currentPost = null;
             this.log(`🛑 네이버 보호조치 신호를 감지해 작업을 즉시 안전하게 중단합니다.`, 'error');
             break;
           }
@@ -486,6 +557,12 @@ export class FeedEngagementManager {
             this.stats.successCount += 1;
             if (result.liked) this.stats.likedCount += 1;
             if (result.commented) this.stats.commentedCount += 1;
+
+            this.currentPost.step = 'done';
+            this.currentPost.stepLabel = `✅ 소통 완료 (${this.stats.successCount}/${this.config.targetCount})`;
+            this.currentPost.commentText = generatedComment;
+            this.currentPost.liked = result.liked;
+            this.currentPost.commented = result.commented;
 
             const actions = [result.liked ? '공감(❤️)' : '', result.commented ? 'AI 댓글(💬)' : ''].filter(Boolean).join(' 및 ');
             this.log(`✅ [새글 소통 완료] ${postLabel} ${actions} 등록 완료! (누적 성공: ${this.stats.successCount}/${this.config.targetCount})`, 'success');
@@ -514,8 +591,13 @@ export class FeedEngagementManager {
             const totalDelaySec = baseDelay + jitter;
             this.log(`⏳ 다음 이웃 새글까지 ${totalDelaySec}초간 대기합니다 (계정 보호 랜덤 딜레이 +${jitter}s)...`, 'info');
 
+            this.currentPost.step = 'waiting';
+            this.currentPost.stepLabel = '⏳ 다음 새글 대기 중...';
+            this.currentPost.countdown = totalDelaySec;
+
             let elapsed = 0;
             while (elapsed < totalDelaySec * 1000 && !this.shouldStop) {
+              this.currentPost.countdown = Math.max(0, Math.ceil((totalDelaySec * 1000 - elapsed) / 1000));
               await sleep(500);
               elapsed += 500;
               while (this.isPaused && !this.shouldStop) {
@@ -536,6 +618,7 @@ export class FeedEngagementManager {
         }
       }
 
+      this.currentPost = null;
       this.state = this.stats.targetReached ? 'completed' : (this.shouldStop ? 'stopped' : 'completed');
     } finally {
       if (feedPage && !feedPage.isClosed()) {

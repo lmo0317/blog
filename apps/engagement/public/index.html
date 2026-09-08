@@ -887,15 +887,21 @@
 
               <div class="form-group" style="margin-top: 14px;">
                 <label><strong>작업 항목 선택</strong></label>
-                <div style="display:flex; gap:16px; margin-top:6px;">
-                  <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <div class="feed-options-grid">
+                  <div class="feed-option-card checked" id="cardFeedDoLike">
                     <input type="checkbox" id="feedDoLike" checked>
-                    <span>❤️ 공감(좋아요) 누르기</span>
-                  </label>
-                  <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <div class="feed-option-content">
+                      <div class="feed-option-title">❤️ 공감(좋아요) 누르기</div>
+                      <div class="feed-option-desc">이웃 글에 하트를 눌러 친밀도를 높입니다.</div>
+                    </div>
+                  </div>
+                  <div class="feed-option-card checked" id="cardFeedDoComment">
                     <input type="checkbox" id="feedDoComment" checked>
-                    <span>💬 AI 맞춤 댓글 작성</span>
-                  </label>
+                    <div class="feed-option-content">
+                      <div class="feed-option-title">💬 AI 맞춤 댓글 작성</div>
+                      <div class="feed-option-desc">본문과 사진을 분석해 찐이웃 댓글을 남깁니다.</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -909,9 +915,9 @@
               </div>
 
               <!-- Action Toolbar -->
-              <div class="action-command-toolbar" style="margin-top: 20px;">
-                <button type="button" class="button primary large full-width" id="startFeedBtn">
-                  <span class="btn-icon">🚀</span> <strong>이웃 새글 자동 소통 시작</strong>
+              <div class="action-command-toolbar" style="margin-top: 18px;">
+                <button type="button" class="feed-cta-btn" id="startFeedBtn">
+                  <span>🚀</span> <strong>이웃 새글 자동 소통 시작</strong>
                 </button>
                 <div style="display:flex; gap:8px; width:100%; margin-top:8px;">
                   <button type="button" class="button warning medium full-width hidden" id="pauseFeedBtn">
@@ -926,19 +932,62 @@
                 </div>
               </div>
 
-              <!-- Live Stats Summary -->
-              <div class="feed-stats-row" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-top:20px;">
-                <div class="stat-card" style="padding:12px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
-                  <span style="font-size:12px; color:var(--text-muted, #666);">오늘 총 소통</span>
-                  <div style="font-size:20px; font-weight:bold; color:var(--text-main, #111);" id="feedStatTotal">0</div>
+              <!-- Live Progress & In-Progress Highlight Widget -->
+              <div class="feed-live-widget" id="feedLiveProgressWidget" style="display:none;">
+                <div class="feed-progress-header">
+                  <span class="feed-progress-label">
+                    <span class="feed-pulse-dot"></span> <span id="feedProgressText">실시간 소통 진행 중</span>
+                  </span>
+                  <span class="feed-progress-percent" id="feedProgressPercent">0%</span>
                 </div>
-                <div class="stat-card" style="padding:12px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
-                  <span style="font-size:12px; color:#e11d48;">❤️ 공감</span>
-                  <div style="font-size:20px; font-weight:bold; color:#e11d48;" id="feedStatLikes">0</div>
+                <div class="feed-progress-track">
+                  <div class="feed-progress-fill" id="feedProgressBar" style="width: 0%;"></div>
                 </div>
-                <div class="stat-card" style="padding:12px; border-radius:8px; background:var(--bg-card-subtle, #f8f9fa); border:1px solid var(--border-color, #e5e7eb); text-align:center;">
-                  <span style="font-size:12px; color:#2563eb;">💬 AI 댓글</span>
-                  <div style="font-size:20px; font-weight:bold; color:#2563eb;" id="feedStatComments">0</div>
+
+                <!-- Active In-Progress Post Highlight Card -->
+                <div class="feed-active-card" id="feedActiveCard" style="display:none;">
+                  <div class="feed-active-header">
+                    <span class="feed-active-badge">⚡ 현재 소통 진행 중</span>
+                    <span class="feed-active-countdown" id="feedActiveCountdown" style="display:none;"></span>
+                  </div>
+                  <div class="feed-active-body">
+                    <div class="feed-active-author" id="feedActiveAuthor">@블로거</div>
+                    <div class="feed-active-title" id="feedActiveTitle">이웃 글 분석 중...</div>
+                    <div class="feed-active-step">
+                      <span class="feed-active-step-icon">🤖</span>
+                      <span id="feedActiveStepLabel">이웃 글 본문 및 사진 분석 중...</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Session Stats Grid (4 Columns) -->
+              <div class="feed-stat-grid">
+                <div class="feed-stat-card">
+                  <span class="feed-stat-label">🎯 회차 목표</span>
+                  <div class="feed-stat-value" id="feedStatTarget">10</div>
+                </div>
+                <div class="feed-stat-card" style="background:#f0fdf4; border-color:#bbf7d0;">
+                  <span class="feed-stat-label" style="color:#166534;">✅ 소통 완료</span>
+                  <div class="feed-stat-value" style="color:#15803d;" id="feedStatSuccess">0</div>
+                </div>
+                <div class="feed-stat-card" style="background:#eff6ff; border-color:#bfdbfe;">
+                  <span class="feed-stat-label" style="color:#1e40af;">⏳ 남은 글</span>
+                  <div class="feed-stat-value" style="color:#2563eb;" id="feedStatRemaining">10</div>
+                </div>
+                <div class="feed-stat-card" style="background:#f8fafc; border-color:#e2e8f0;">
+                  <span class="feed-stat-label" style="color:#64748b;">⏩ 제외/기작성</span>
+                  <div class="feed-stat-value" style="color:#64748b;" id="feedStatSkipped">0</div>
+                </div>
+              </div>
+
+              <!-- Today's Cumulative Performance Strip -->
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-top:10px; font-size:12px; color:#475569;">
+                <span>📅 <strong>오늘 누적 소통 실적</strong></span>
+                <div style="display:flex; gap:12px; font-weight:700;">
+                  <span>총 <strong id="feedStatTotal" style="color:#0f172a;">0</strong>건</span>
+                  <span>❤️ 공감 <strong id="feedStatLikes" style="color:#e11d48;">0</strong>건</span>
+                  <span>💬 AI 댓글 <strong id="feedStatComments" style="color:#2563eb;">0</strong>건</span>
                 </div>
               </div>
             </div>
@@ -957,27 +1006,43 @@
               </div>
             </div>
             <div class="desktop-card-body">
-              <div class="terminal-container" id="feedTerminalLogs" style="height: 240px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 12px; font-family: monospace; border-radius: 6px; font-size: 13px;">
+              <div class="feed-terminal-box" id="feedTerminalLogs">
                 <div class="terminal-line info">[대기 중] '이웃 새글 자동 소통 시작' 버튼을 누르면 실시간 피드 탐색이 시작됩니다.</div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Right Column: Neighbor Feed Live Preview & Recent History -->
+        <!-- Right Column: Neighbor Feed Live Preview & Filter Controls -->
         <div class="desktop-col desktop-col-right">
           <div class="desktop-card">
             <div class="desktop-card-header">
               <div class="card-title-group">
                 <span class="card-badge">FEED</span>
                 <h3>📰 내 이웃 새글 피드 목록</h3>
+                <span class="feed-count-chip" id="feedFoundCountBadge">0개 발견</span>
               </div>
               <button type="button" class="button secondary small" id="refreshFeedPreviewBtn">
                 🔄 피드 새로고침
               </button>
             </div>
-            <div class="desktop-card-body">
-              <div id="feedPostsContainer" class="feed-posts-list" style="display:flex; flex-direction:column; gap:10px; max-height: 650px; overflow-y: auto;">
+            <div class="desktop-card-body" style="padding-top: 12px;">
+              <!-- Feed Filter Tabs & Search Filter -->
+              <div class="feed-filter-bar">
+                <div class="feed-filter-tabs" id="feedFilterTabs">
+                  <button type="button" class="feed-filter-btn active" data-filter="all">전체 (<span id="countFilterAll">0</span>)</button>
+                  <button type="button" class="feed-filter-btn" data-filter="pending">⏳ 소통 대기 (<span id="countFilterPending">0</span>)</button>
+                  <button type="button" class="feed-filter-btn" data-filter="engaged">✅ 내가 소통한 글 (<span id="countFilterEngaged">0</span>)</button>
+                  <button type="button" class="feed-filter-btn" data-filter="skipped">⏩ 제외/기작성 (<span id="countFilterSkipped">0</span>)</button>
+                </div>
+                <div class="feed-search-wrap">
+                  <span class="feed-search-icon">🔍</span>
+                  <input type="text" id="feedSearchInput" placeholder="이웃 닉네임 또는 글 제목 검색..." class="feed-search-input">
+                </div>
+              </div>
+
+              <!-- Feed Post Cards List Container -->
+              <div id="feedPostsContainer" class="feed-posts-list">
                 <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted, #888);">
                   <span>피드 목록을 불러오려면 [🔄 피드 새로고침] 버튼을 눌러주세요.</span>
                 </div>

@@ -163,8 +163,19 @@ test('FeedEngagementManager validates connection and executes feed engagement up
 
   const state = activeManager.getState();
   assert.equal(state.state, 'completed');
+  assert.equal(state.stats.target, 2);
+  assert.equal(state.stats.remaining, 0);
   assert.ok(state.logs.length > 0);
   assert.ok(state.logs.some((l) => l.message.includes('새글 소통 완료')));
 
+  // Test getRecord on completed item
+  const record = await store.getRecord('1001');
+  assert.ok(record);
+  assert.equal(record.blogId, 'friend1');
+  assert.equal(record.liked, true);
+  assert.equal(record.commented, true);
+  assert.equal(record.commentText, '글 유익하게 잘 읽고 갑니다~!');
+
   await rm(testDbPath, { force: true }).catch(() => {});
 });
+
