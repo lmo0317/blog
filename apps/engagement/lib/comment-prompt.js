@@ -1,0 +1,84 @@
+export const COMMENT_PROMPT_VERSION = 'comment-system-v1';
+export const COMMENT_DUPLICATE_THRESHOLD = 0.72;
+
+const COMMENT_STOPWORDS = new Set([
+  '그리고', '하지만', '정말', '너무', '관련', '대한', '이번', '오늘', '포스팅', '블로그',
+  '후기', '정보', '내용', '사진', '입니다', '있습니다', '했어요', '하는', '에서', '으로'
+]);
+
+export function normalizeCommentText(value) {
+  return String(value || '')
+    .normalize('NFC')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\ufeff\ufffd]/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/^(?:댓글|답변|assistant|comment)\s*[:：-]\s*/i, '')
+    .replace(/^["'“”‘’「」『』]+|["'“”‘’「」『』]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function contentKeywords({ title = '', contentSnippet = '', imageSummary = '' } = {}) {
+  return [...new Set(`${title} ${contentSnippet} ${imageSummary}`.normalize('NFC').match(/[가-힣A-Za-z0-9]{2,}/g) || [])]
+    .filter((word) => !COMMENT_STOPWORDS.has(word) && !/^\d+$/.test(word))
+    .sort((a, b) => b.length - a.length);
+}
+
+export function commentSimilarity(a, b) {
+  const grams = (value) => {
+    const clean = normalizeCommentText(value).replace(/\s/g, '');
+    return new Set(Array.from({ length: Math.max(0, clean.length - 1) }, (_, index) => clean.slice(index, index + 2)));
+  };
+  const left = grams(a);
+  const right = grams(b);
+  if (!left.size || !right.size) return 0;
+  return [...left].filter((gram) => right.has(gram)).length / Math.min(left.size, right.size);
+}
+
+export function validateBlogComment(comment, context = {}, recentComments = []) {
+  const raw = String(comment || '');
+  const text = normalizeCommentText(comment);
+  const reasons = [];
+  if (text === 'SKIP') return { ok: true, text, reasons, keywords: [], action: 'skip' };
+  if (text.length < 15 || text.length > 120) reasons.push('length');
+  if (/[<>\[\]{}]|https?:\/\/|www\.|```|\b(?:system|assistant|user)\b/i.test(raw)) reasons.push('artifact');
+  if (/([!?.ㅋㅎㅠㅜ])\1{3,}/.test(text)) reasons.push('noise');
+  if (/(?:제가|저도).*?(?:가봤|다녀왔|먹어봤|써봤|구매했|사용해봤)/.test(text) && !/(?:다녀왔|방문했|먹어봤|구매했|사용했)/.test(String(context.contentSnippet || ''))) reasons.push('unsupported_experience');
+  const keywords = contentKeywords(context);
+  if (keywords.length && !keywords.slice(0, 30).some((word) => text.toLowerCase().includes(word.toLowerCase()))) reasons.push('irrelevant');
+  if (recentComments.some((previous) => commentSimilarity(text, previous) >= COMMENT_DUPLICATE_THRESHOLD)) reasons.push('duplicate');
+  return { ok: reasons.length === 0, text, reasons, keywords, action: 'comment' };
+}
+
+export function buildBlogCommentMessages({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] } = {}) {
+  const tones = {
+    friendly: '따뜻하고 친근한 해요체',
+    polite: '정중하고 차분한 해요체',
+    enthusiastic: '밝게 감탄하되 과장하지 않는 해요체'
+  };
+  const system = `당신은 네이버 블로그 글을 읽고 자연스러운 맞춤 댓글을 작성합니다.
+
+규칙:
+1. 제공된 글에 실제로 나온 구체적 대상이나 경험을 하나 이상 언급합니다.
+2. 글에 없는 방문, 구매, 사용, 맛, 효과를 경험한 것처럼 지어내지 않습니다.
+3. 최근 댓글의 문구와 문장 구조를 반복하지 않습니다.
+4. 따뜻한 한국어 1~2문장, 35~100자로 씁니다. 이모지는 최대 1개입니다.
+5. 홍보, URL, 자기소개, 이웃 신청, 답변 해설을 쓰지 않습니다.
+6. 내용이 부족하거나 안전하게 맞춤 댓글을 쓸 수 없으면 SKIP만 출력합니다.
+
+댓글 본문 또는 SKIP만 출력합니다.`;
+  const user = `[제목]
+${normalizeCommentText(title) || '없음'}
+
+[본문 요약]
+${normalizeCommentText(contentSnippet) || '없음'}
+
+[이미지 설명]
+${normalizeCommentText(imageSummary) || '없음'}
+
+[최근 사용 댓글]
+${recentComments.slice(0, 8).map((comment) => `- ${normalizeCommentText(comment)}`).join('\n') || '- 없음'}
+
+[말투]
+${tones[tone] || tones.friendly}`;
+  return [{ role: 'system', content: system }, { role: 'user', content: user }];
+}

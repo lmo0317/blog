@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { COMMENT_PROMPT_VERSION } from './comment-prompt.js';
 
 export const ENGAGEMENT_LIMITS = Object.freeze({
   likesPerDay: 200,
@@ -386,10 +387,12 @@ export class EngagementAutomationManager extends EventEmitter {
 
           // 2. Generate AI comment if requested
           let generatedComment = '';
+          let imageSummary = '';
+          let recentComments = [];
           if (doCommentForPost) {
             this.log(`🤖 AI가 포스팅 내용과 사진을 읽고 맞춤 댓글을 생성하고 있습니다...`, 'info');
-            const imageSummary = inspection.firstImage?.alt || (inspection.images.length > 0 ? `${inspection.images.length}장의 본문 사진 포함` : '');
-            const recentComments = this.historyStore?.getRecentComments ? await this.historyStore.getRecentComments(30) : [];
+            imageSummary = inspection.firstImage?.alt || (inspection.images.length > 0 ? `${inspection.images.length}장의 본문 사진 포함` : '');
+            recentComments = this.historyStore?.getRecentComments ? await this.historyStore.getRecentComments(30) : [];
             generatedComment = await this.embeddedLlama.generateBlogComment({
               title: inspection.title || post.title,
               contentSnippet: inspection.snippet,
@@ -496,6 +499,11 @@ export class EngagementAutomationManager extends EventEmitter {
               liked: result.liked,
               commented: result.commented,
               commentText: generatedComment,
+              contentSnippet: inspection.snippet,
+              imageSummary,
+              recentComments,
+              promptVersion: COMMENT_PROMPT_VERSION,
+              modelId: this.embeddedLlama?.currentModelId || '',
               neighborRequested,
               neighborStatus,
               neighborMessage: sentNeighborMessage,

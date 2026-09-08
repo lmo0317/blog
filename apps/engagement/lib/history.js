@@ -254,6 +254,11 @@ export class EngagementHistoryStore {
   }
   async getRecentComments(limit = 30) { await this.load(); return this.data.records.filter((record) => record.commented && record.commentText).slice(0, limit).map((record) => record.commentText); }
 
+  async getRecordById(recordId) {
+    await this.load();
+    return this.data.records.find((record) => record.id === String(recordId || '')) || null;
+  }
+
   async addRecord({
     blogId,
     bloggerName = '',
@@ -263,6 +268,11 @@ export class EngagementHistoryStore {
     liked = false,
     commented = false,
     commentText = '',
+    contentSnippet = '',
+    imageSummary = '',
+    recentComments = [],
+    promptVersion = '',
+    modelId = '',
     neighborRequested = false,
     neighborStatus = '',
     neighborMessage = '',
@@ -291,6 +301,11 @@ export class EngagementHistoryStore {
       liked: Boolean(liked),
       commented: Boolean(commented),
       commentText: String(commentText || '').trim(),
+      contentSnippet: String(contentSnippet || '').trim().slice(0, 12000),
+      imageSummary: String(imageSummary || '').trim().slice(0, 1000),
+      recentComments: (Array.isArray(recentComments) ? recentComments : []).map((comment) => String(comment || '').trim()).filter(Boolean).slice(0, 8),
+      promptVersion: String(promptVersion || '').trim(),
+      modelId: String(modelId || '').trim(),
       neighborRequested: Boolean(neighborRequested),
       neighborStatus: String(neighborStatus || '').trim(),
       neighborMessage: String(neighborMessage || '').trim(),
@@ -317,6 +332,55 @@ export class EngagementHistoryStore {
 
     await this.save();
     return newRecord;
+  }
+
+  async reviewForTraining(recordId, { decision = '', finalComment = '', reasonCodes = [] } = {}) {
+    await this.load();
+    const allowed = new Set(['accepted', 'edited', 'rejected', 'skip']);
+    if (!allowed.has(decision)) throw new Error('학습 검수 상태가 올바르지 않습니다.');
+    const index = this.data.records.findIndex((record) => record.id === String(recordId || ''));
+    if (index < 0) throw new Error('검수할 댓글 기록을 찾지 못했습니다.');
+    const record = this.data.records[index];
+    if (!record.commented || !String(record.commentText || '').trim()) throw new Error('실제로 등록된 AI 댓글만 학습 검수할 수 있습니다.');
+    const cleanFinal = decision === 'accepted'
+      ? String(record.commentText).trim()
+      : decision === 'skip'
+        ? 'SKIP'
+        : String(finalComment || '').trim();
+    if (decision === 'edited' && (cleanFinal.length < 15 || cleanFinal.length > 120)) {
+      throw new Error('수정 댓글은 15~120자로 입력해주세요.');
+    }
+    record.trainingReview = {
+      decision,
+      finalComment: decision === 'rejected' ? '' : cleanFinal,
+      reasonCodes: [...new Set((Array.isArray(reasonCodes) ? reasonCodes : []).map(String).map((value) => value.trim()).filter(Boolean))].slice(0, 10),
+      reviewedAt: new Date().toISOString()
+    };
+    await this.save();
+    return record.trainingReview;
+  }
+
+  async getTrainingSummary() {
+    await this.load();
+    const reviewed = this.data.records.filter((record) => record.trainingReview);
+    const byDecision = reviewed.reduce((counts, record) => {
+      const decision = record.trainingReview.decision;
+      counts[decision] = (counts[decision] || 0) + 1;
+      return counts;
+    }, { accepted: 0, edited: 0, rejected: 0, skip: 0 });
+    const ready = reviewed.filter((record) => record.trainingReview.decision === 'skip'
+      || (record.trainingReview.finalComment && record.contentSnippet));
+    return {
+      totalCommentRecords: this.data.records.filter((record) => record.commented && record.commentText).length,
+      reviewed: reviewed.length,
+      trainingReady: ready.length,
+      byDecision
+    };
+  }
+
+  async getTrainingRecords() {
+    await this.load();
+    return this.data.records.filter((record) => record.trainingReview);
   }
 
   async getSummary() {

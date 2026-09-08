@@ -690,8 +690,15 @@
             </div>
             <div class="history-actions">
               <button class="button primary small" id="exportEngCsvBtn" type="button">📥 엑셀(CSV) 다운로드</button>
+              <button class="button secondary small" id="exportTrainingSftBtn" type="button">🧠 SFT JSONL</button>
+              <button class="button secondary small" id="exportTrainingDpoBtn" type="button">⚖️ DPO JSONL</button>
               <button class="button danger small" id="clearEngHistoryBtn" type="button">🗑️ 이력 초기화</button>
             </div>
+          </div>
+          <div class="training-review-summary" id="trainingReviewSummary" aria-live="polite">
+            <span class="training-stat"><strong>0</strong> 검수</span>
+            <span class="training-stat success"><strong>0</strong> 학습 준비</span>
+            <span class="training-review-hint">댓글을 그대로 승인하거나 문장을 고친 뒤 저장하면 학습 데이터가 됩니다.</span>
           </div>
           <div class="history-table-wrap" style="max-height: 480px; overflow-y: auto;">
             <table class="history-table">
@@ -702,12 +709,13 @@
                   <th style="width: 160px;">글 제목</th>
                   <th style="width: 90px;">반응</th>
                   <th>작성된 AI 댓글</th>
+                  <th style="width: 220px;">학습 검수</th>
                   <th style="width: 90px;">서로이웃</th>
                   <th style="width: 80px;">상태</th>
                 </tr>
               </thead>
               <tbody id="engHistoryTableBody">
-                <tr><td colspan="7" style="text-align: center; color: #888; padding: 24px;">소통 이력을 불러오는 중...</td></tr>
+                <tr><td colspan="8" style="text-align: center; color: #888; padding: 24px;">소통 이력을 불러오는 중...</td></tr>
               </tbody>
             </table>
           </div>

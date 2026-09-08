@@ -136,8 +136,9 @@ test('publish outcome requires a confirmed Naver result', () => {
 test('publish category accepts the configured health and living categories only', () => {
   assert.equal(normalizePublishCategoryName(' 건강 '), '건강');
   assert.equal(normalizePublishCategoryName('생활'), '생활');
+  assert.equal(normalizePublishCategoryName('개발'), '개발');
   assert.equal(normalizePublishCategoryName(''), '');
-  assert.throws(() => normalizePublishCategoryName('기본'), /건강 또는 생활/);
+  assert.throws(() => normalizePublishCategoryName('기본'), /건강, 생활, 개발 또는 자동화/);
 });
 
 test('local LLM client generates deals blog post from Algumon rankings', async () => {

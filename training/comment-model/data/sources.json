@@ -1,0 +1,54 @@
+{
+  "updatedAt": "2026-09-08",
+  "policy": {
+    "naverThirdPartyScraping": "excluded",
+    "privateHistory": "anonymized_review_candidates_only",
+    "publicData": "license_metadata_recorded_review_before_training"
+  },
+  "sources": [
+    {
+      "id": "local-engagement-history",
+      "kind": "private",
+      "license": "user-controlled application history",
+      "usage": "weak_unverified",
+      "note": "본문 요약이 없어 SFT 정답으로 직접 사용 금지"
+    },
+    {
+      "id": "local-comment-replies",
+      "kind": "private",
+      "license": "user-controlled application history",
+      "usage": "review_required",
+      "note": "작성자 식별값 제거 후 사람 검수 필요"
+    },
+    {
+      "id": "heegyu/open-korean-instructions",
+      "url": "https://huggingface.co/datasets/heegyu/open-korean-instructions",
+      "kind": "public_auxiliary",
+      "license": "mit",
+      "usage": "Korean instruction auxiliary only",
+      "files": [
+        "OIG-smallchip2-ko.json",
+        "koalpaca.json",
+        "korquad-chat.json",
+        "sharegpt_deepl_ko.json"
+      ]
+    },
+    {
+      "id": "nlpai-lab/kullm-v2",
+      "url": "https://huggingface.co/datasets/nlpai-lab/kullm-v2",
+      "kind": "public_auxiliary",
+      "license": "apache-2.0",
+      "usage": "Korean instruction auxiliary only",
+      "files": ["kullm-v2.jsonl"]
+    },
+    {
+      "id": "changpt/ko-lima-vicuna",
+      "url": "https://huggingface.co/datasets/changpt/ko-lima-vicuna",
+      "kind": "public_auxiliary",
+      "license": "cc-by-2.0",
+      "usage": "Korean conversation auxiliary with attribution",
+      "files": ["ko_lima_vicuna.json"]
+    }
+  ]
+}
+

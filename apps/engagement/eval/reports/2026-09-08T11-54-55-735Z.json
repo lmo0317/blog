@@ -1,0 +1,682 @@
+{
+  "summary": {
+    "generatedAt": "2026-09-08T11:54:55.734Z",
+    "mode": "static-regression",
+    "endpoint": null,
+    "promptVersion": "comment-system-v1",
+    "total": 20,
+    "valid": 10,
+    "skipped": 2,
+    "staticPassed": 20,
+    "staticFailed": 0,
+    "averageLatencyMs": null,
+    "rejectionReasons": {
+      "length": 2,
+      "irrelevant": 2,
+      "artifact": 3,
+      "duplicate": 2,
+      "noise": 1,
+      "unsupported_experience": 1
+    }
+  },
+  "results": [
+    {
+      "id": "food-valid-001",
+      "category": "맛집",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "a94756cdd286abf39c8c34a658299fb1107206e0a31d9fa981563907d466d96e",
+      "modelId": "fixture-candidate",
+      "candidate": "오전 11시에도 대기가 20분이나 있었군요. 소금빵 단면의 버터층이 특히 인상적이에요!",
+      "validation": {
+        "ok": true,
+        "text": "오전 11시에도 대기가 20분이나 있었군요. 소금빵 단면의 버터층이 특히 인상적이에요!",
+        "reasons": [],
+        "keywords": [
+          "주문하기까지",
+          "11시에",
+          "방문했고",
+          "소금빵을",
+          "기다렸다",
+          "버터층이",
+          "소금빵",
+          "20분",
+          "보이는",
+          "성수",
+          "카페",
+          "오전",
+          "단면"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": true
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "travel-valid-001",
+      "category": "여행",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "51b05207be70f10f086ba16ab23d48ce2aba1b726c59ae0bc54c4e7c43462a49",
+      "modelId": "fixture-candidate",
+      "candidate": "이른 아침 대릉원 돌담길과 목련이 어우러진 모습이 참 차분했겠어요. 산책 동선도 잘 봤습니다.",
+      "validation": {
+        "ok": true,
+        "text": "이른 아침 대릉원 돌담길과 목련이 어우러진 모습이 참 차분했겠어요. 산책 동선도 잘 봤습니다.",
+        "reasons": [],
+        "keywords": [
+          "돌담길은",
+          "한적했고",
+          "대릉원",
+          "목련이",
+          "있었다",
+          "목련과",
+          "돌담길",
+          "경주",
+          "아침",
+          "산책",
+          "이른",
+          "피어"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": true
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "living-valid-001",
+      "category": "살림",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "ce1265bb2d6e0560226e266e8e05e7992ca4b6deb2e7b13ceba2627c6ca91fff",
+      "modelId": "fixture-candidate",
+      "candidate": "세탁 뒤 수건을 바로 꺼내 간격을 두고 말리는 과정이 핵심이군요. 오늘부터 적용해 봐야겠어요.",
+      "validation": {
+        "ok": true,
+        "text": "세탁 뒤 수건을 바로 꺼내 간격을 두고 말리는 과정이 핵심이군요. 오늘부터 적용해 봐야겠어요.",
+        "reasons": [],
+        "keywords": [
+          "중요하다",
+          "건조대에",
+          "줄이는",
+          "세탁이",
+          "끝나면",
+          "말리는",
+          "간격을",
+          "널어둔",
+          "수건",
+          "쉰내",
+          "건조",
+          "습관",
+          "바로",
+          "꺼내",
+          "넓게",
+          "펼쳐",
+          "것이",
+          "두고"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": true
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "it-valid-001",
+      "category": "IT",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "656a189be1f2e4355b567eaed773d280c6ed4f257519bae61f95e5fe90e1ffe8",
+      "modelId": "fixture-candidate",
+      "candidate": "DDR5를 32GB로 올린 뒤 프로그램 전환이 부드러워졌다는 실사용 차이가 참고가 됐어요.",
+      "validation": {
+        "ok": true,
+        "text": "DDR5를 32GB로 올린 뒤 프로그램 전환이 부드러워졌다는 실사용 차이가 참고가 됐어요.",
+        "reasons": [],
+        "keywords": [
+          "16GB에서",
+          "부드러워졌다",
+          "업그레이드",
+          "32GB로",
+          "DDR5",
+          "메모리를",
+          "프로그램",
+          "메모리",
+          "교체한",
+          "전환이",
+          "내부의",
+          "미니",
+          "PC",
+          "여러",
+          "슬롯"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": true
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "parenting-valid-001",
+      "category": "육아",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "00856d5b1f4aeb1a98245a8dd3117e221795ccf9ac0a6534d62a78c4099c0278",
+      "modelId": "fixture-candidate",
+      "candidate": "색종이 배와 개구리를 함께 접은 오후가 아이에게도 즐거운 기억으로 남겠어요.",
+      "validation": {
+        "ok": true,
+        "text": "색종이 배와 개구리를 함께 접은 오후가 아이에게도 즐거운 기억으로 남겠어요.",
+        "reasons": [],
+        "keywords": [
+          "종이접기한",
+          "색종이로",
+          "개구리를",
+          "아이와",
+          "접으며",
+          "오후를",
+          "보냈다",
+          "색종이",
+          "개구리",
+          "주말",
+          "작은",
+          "배와"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": true
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "short-invalid-001",
+      "category": "맛집",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "a13a612872445db63d77296de2b234935277f727ec1eeda4ca017a4d436ee70a",
+      "modelId": "fixture-candidate",
+      "candidate": "맛있네요",
+      "validation": {
+        "ok": false,
+        "text": "맛있네요",
+        "reasons": [
+          "length",
+          "irrelevant"
+        ],
+        "keywords": [
+          "파스타를",
+          "주문했다",
+          "망원동",
+          "파스타",
+          "바질"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "length"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "url-invalid-001",
+      "category": "IT",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "1869ce9fe30f86465a6f78f07456a80df76eec7d7866f7ea85d62c81dfb57142",
+      "modelId": "fixture-candidate",
+      "candidate": "키캡 청소 과정은 https://example.com 에서 더 봐야겠네요.",
+      "validation": {
+        "ok": false,
+        "text": "키캡 청소 과정은 https://example.com 에서 더 봐야겠네요.",
+        "reasons": [
+          "artifact"
+        ],
+        "keywords": [
+          "제거했다",
+          "키보드",
+          "청소법",
+          "키캡을",
+          "분리해",
+          "먼지를",
+          "분리한",
+          "키캡"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "artifact"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "irrelevant-invalid-001",
+      "category": "여행",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "bb46afb1016c434f8b7700aaeff6589ca1c018ddf9e337a1a9480accd94d5dbf",
+      "modelId": "fixture-candidate",
+      "candidate": "새로 산 화장품 색상이 피부톤과 정말 잘 어울리는 것 같아요.",
+      "validation": {
+        "ok": false,
+        "text": "새로 산 화장품 색상이 피부톤과 정말 잘 어울리는 것 같아요.",
+        "reasons": [
+          "irrelevant"
+        ],
+        "keywords": [
+          "해운대에서",
+          "수평선의",
+          "해운대",
+          "6시에",
+          "일출을",
+          "부산",
+          "일출",
+          "아침",
+          "봤다"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "irrelevant"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "duplicate-invalid-001",
+      "category": "요리",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "f03688087307039877e79f60df9d41823bad6f96c0c773357efe1cb8be43d0d6",
+      "modelId": "fixture-candidate",
+      "candidate": "감자 물기를 충분히 제거하는 게 바삭한 감자전의 핵심이군요!",
+      "validation": {
+        "ok": false,
+        "text": "감자 물기를 충분히 제거하는 게 바삭한 감자전의 핵심이군요!",
+        "reasons": [
+          "duplicate"
+        ],
+        "keywords": [
+          "바삭해진다",
+          "바삭하게",
+          "제거해야",
+          "감자전",
+          "감자의",
+          "물기를",
+          "충분히",
+          "노릇한",
+          "굽기"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "duplicate"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "noise-invalid-001",
+      "category": "일상",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "34fd58775c11e81c51783ef362d7bd9e223f45bff7112accb6724867d92bbab2",
+      "modelId": "fixture-candidate",
+      "candidate": "동네 공원 노을이 정말 좋네요!!!! 산책하기 딱이에요!!!!",
+      "validation": {
+        "ok": false,
+        "text": "동네 공원 노을이 정말 좋네요!!!! 산책하기 딱이에요!!!!",
+        "reasons": [
+          "noise"
+        ],
+        "keywords": [
+          "저녁에",
+          "공원을",
+          "천천히",
+          "걸었다",
+          "산책로",
+          "공원",
+          "산책",
+          "동네",
+          "노을"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "noise"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "artifact-invalid-001",
+      "category": "뷰티",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "5beba864a399675865e61b98206875c14816395c3569a6bfb0376aa3fe527472",
+      "modelId": "fixture-candidate",
+      "candidate": "assistant: 무향 립밤이 번들거림도 적다니 데일리로 편하겠어요.",
+      "validation": {
+        "ok": false,
+        "text": "무향 립밤이 번들거림도 적다니 데일리로 편하겠어요.",
+        "reasons": [
+          "artifact"
+        ],
+        "keywords": [
+          "번들거림이",
+          "촉촉한",
+          "립밤을",
+          "바르니",
+          "적었다",
+          "립밤",
+          "무향"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "artifact"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "experience-invalid-001",
+      "category": "맛집",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "e0304f17849c47127c45697d59bfff6c4d44f5771931f454947645dcf928a9b7",
+      "modelId": "fixture-candidate",
+      "candidate": "저도 을지로에서 먹어봤는데 물냉면 육수가 정말 담백해서 좋았어요.",
+      "validation": {
+        "ok": false,
+        "text": "저도 을지로에서 먹어봤는데 물냉면 육수가 정말 담백해서 좋았어요.",
+        "reasons": [
+          "unsupported_experience"
+        ],
+        "keywords": [
+          "작성자는",
+          "물냉면의",
+          "소개했다",
+          "을지로",
+          "담백한",
+          "육수를",
+          "물냉면",
+          "냉면",
+          "그릇"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "unsupported_experience"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "skip-valid-001",
+      "category": "광고",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "8e292fead53a43b03a76aecf22a3c4c513dd1e024c2c23b81c7d58f030079832",
+      "modelId": "fixture-candidate",
+      "candidate": "SKIP",
+      "validation": {
+        "ok": true,
+        "text": "SKIP",
+        "reasons": [],
+        "keywords": [],
+        "action": "skip"
+      },
+      "expected": {
+        "ok": true,
+        "action": "skip"
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "skip-valid-002",
+      "category": "정보부족",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "2c798ac2f687eb4208771267361a01fc3cf092eae82f21ad650220abe5286006",
+      "modelId": "fixture-candidate",
+      "candidate": "SKIP",
+      "validation": {
+        "ok": true,
+        "text": "SKIP",
+        "reasons": [],
+        "keywords": [],
+        "action": "skip"
+      },
+      "expected": {
+        "ok": true,
+        "action": "skip"
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "product-valid-001",
+      "category": "제품",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "8551c75be9ef6b75949ddc9ca6b08753df0fab313a247ac8ec44f7d7795eac73",
+      "modelId": "fixture-candidate",
+      "candidate": "필터를 물세척한 뒤 완전히 말려야 한다는 순서가 명확해서 청소기 관리에 도움이 됐어요.",
+      "validation": {
+        "ok": true,
+        "text": "필터를 물세척한 뒤 완전히 말려야 한다는 순서가 명확해서 청소기 관리에 도움이 됐어요.",
+        "reasons": [],
+        "keywords": [
+          "물세척한",
+          "장착했다",
+          "그늘에서",
+          "청소기",
+          "필터를",
+          "완전히",
+          "무선",
+          "필터",
+          "관리",
+          "말려",
+          "다시",
+          "건조",
+          "중인"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": true
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "garden-valid-001",
+      "category": "원예",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "4ac720a54343e8785491e2ba84cab40a38bf9d90031f793db64e5f6e3d9daa4f",
+      "modelId": "fixture-candidate",
+      "candidate": "뿌리가 화분 아래로 나온 시점에 한 단계 큰 화분으로 옮긴 과정이 이해하기 쉬웠어요.",
+      "validation": {
+        "ok": true,
+        "text": "뿌리가 화분 아래로 나온 시점에 한 단계 큰 화분으로 옮긴 과정이 이해하기 쉬웠어요.",
+        "reasons": [],
+        "keywords": [
+          "몬스테라",
+          "화분으로",
+          "분갈이한",
+          "분갈이",
+          "뿌리가",
+          "아래로",
+          "옮겼다",
+          "기록",
+          "화분",
+          "나와",
+          "단계"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": true
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "markdown-invalid-001",
+      "category": "건강",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "676f354cfe260f8678af54702cf0b1756b94287b0d3be38f40cc7fa8c63b0ea8",
+      "modelId": "fixture-candidate",
+      "candidate": "[저녁 걷기] 식후 10분 산책을 꾸준히 기록하신 점이 인상적이에요.",
+      "validation": {
+        "ok": false,
+        "text": "[저녁 걷기] 식후 10분 산책을 꾸준히 기록하신 점이 인상적이에요.",
+        "reasons": [
+          "artifact"
+        ],
+        "keywords": [
+          "10분간",
+          "천천히",
+          "걸었다",
+          "산책로",
+          "저녁",
+          "걷기",
+          "기록",
+          "식사"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "artifact"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "long-invalid-001",
+      "category": "생활",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "df7c3aebf8a83dbd6496d60383c70d4131d2ec76551643e6894f2670e5ab1228",
+      "modelId": "fixture-candidate",
+      "candidate": "서랍 안에 칸막이를 넣고 자주 사용하는 물건을 앞쪽에 배치하신 방법이 정말 구체적이고 유용해서 저도 집에 있는 모든 서랍을 하나씩 꺼내 같은 순서로 정리하고 물건마다 이름표까지 붙여 오래 유지할 수 있도록 꼭 실천해 보고 싶다는 생각이 들었어요.",
+      "validation": {
+        "ok": false,
+        "text": "서랍 안에 칸막이를 넣고 자주 사용하는 물건을 앞쪽에 배치하신 방법이 정말 구체적이고 유용해서 저도 집에 있는 모든 서랍을 하나씩 꺼내 같은 순서로 정리하고 물건마다 이름표까지 붙여 오래 유지할 수 있도록 꼭 실천해 보고 싶다는 생각이 들었어요.",
+        "reasons": [
+          "length"
+        ],
+        "keywords": [
+          "배치했다",
+          "칸막이로",
+          "물건을",
+          "앞쪽에",
+          "서랍",
+          "정리",
+          "자주",
+          "쓰는",
+          "나눈"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "length"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "emoji-valid-001",
+      "category": "카페",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "812113b820f4842b75a9888094034ea7dfd8b9fcf055ee233df984ac9c614593",
+      "modelId": "fixture-candidate",
+      "candidate": "귤 타르트의 산뜻함과 바삭한 타르트지 조합이 잘 느껴져요. 제주 카페 선택에 참고할게요 😊",
+      "validation": {
+        "ok": true,
+        "text": "귤 타르트의 산뜻함과 바삭한 타르트지 조합이 잘 느껴져요. 제주 카페 선택에 참고할게요 😊",
+        "reasons": [],
+        "keywords": [
+          "타르트지를",
+          "타르트의",
+          "소개했다",
+          "디저트",
+          "산뜻한",
+          "바삭한",
+          "타르트",
+          "제주",
+          "카페",
+          "맛과"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": true
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    },
+    {
+      "id": "duplicate-structure-invalid-001",
+      "category": "IT",
+      "promptVersion": "comment-system-v1",
+      "promptHash": "0927bdc2d5de8bec1615d502e0e7563cfbd1a286b1dbfa65ca28f7375fd82877",
+      "modelId": "fixture-candidate",
+      "candidate": "노트북 받침대로 바닥을 띄워 통풍을 만든 부분이 특히 도움이 됐어요!",
+      "validation": {
+        "ok": false,
+        "text": "노트북 받침대로 바닥을 띄워 통풍을 만든 부분이 특히 도움이 됐어요!",
+        "reasons": [
+          "duplicate"
+        ],
+        "keywords": [
+          "받침대로",
+          "노트북",
+          "바닥을",
+          "띄우니",
+          "통풍에",
+          "도움이",
+          "받침대",
+          "발열",
+          "관리",
+          "됐다"
+        ],
+        "action": "comment"
+      },
+      "expected": {
+        "ok": false,
+        "reasons": [
+          "duplicate"
+        ]
+      },
+      "staticPass": true,
+      "latencyMs": 0
+    }
+  ]
+}

@@ -14,6 +14,7 @@ import { NeighborAutomationManager } from './lib/automation.js';
 import { getSystemHardwareSummary, MODEL_CATALOG } from './lib/hardware.js';
 import { ModelManager } from './lib/model-manager.js';
 import { EmbeddedLlamaServer } from './lib/embedded-llama.js';
+import { buildBlogCommentMessages } from './lib/comment-prompt.js';
 import { EngagementAutomationManager } from './lib/engagement-automation.js';
 import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
@@ -572,6 +573,69 @@ app.get('/api/engagement/summary', async (_req, res, next) => {
   try {
     const summary = await engagementHistoryStore.getSummary();
     res.json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/engagement/training-summary', async (_req, res, next) => {
+  try {
+    res.json(await engagementHistoryStore.getTrainingSummary());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/engagement/training-review', async (req, res, next) => {
+  try {
+    const review = await engagementHistoryStore.reviewForTraining(req.body?.recordId, {
+      decision: String(req.body?.decision || ''),
+      finalComment: String(req.body?.finalComment || ''),
+      reasonCodes: req.body?.reasonCodes
+    });
+    res.json({ ok: true, review, summary: await engagementHistoryStore.getTrainingSummary() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/engagement/training-export', async (req, res, next) => {
+  try {
+    const format = String(req.query?.format || 'sft').toLowerCase();
+    if (!['sft', 'dpo'].includes(format)) return res.status(400).json({ error: '내보내기 형식은 sft 또는 dpo만 지원합니다.' });
+    const records = await engagementHistoryStore.getTrainingRecords();
+    const examples = records.flatMap((record) => {
+      const review = record.trainingReview;
+      if (!review || !record.contentSnippet) return [];
+      const messages = buildBlogCommentMessages({
+        title: record.title,
+        contentSnippet: record.contentSnippet,
+        imageSummary: record.imageSummary,
+        recentComments: record.recentComments
+      });
+      if (format === 'dpo') {
+        if (review.decision !== 'edited' || !review.finalComment || review.finalComment === record.commentText) return [];
+        return [{
+          id: record.id,
+          prompt: messages,
+          chosen: [{ role: 'assistant', content: review.finalComment }],
+          rejected: [{ role: 'assistant', content: record.commentText }],
+          reasonCodes: review.reasonCodes,
+          promptVersion: record.promptVersion,
+          modelId: record.modelId
+        }];
+      }
+      if (!['accepted', 'edited', 'skip'].includes(review.decision) || !review.finalComment) return [];
+      return [{
+        id: record.id,
+        messages: [...messages, { role: 'assistant', content: review.finalComment }],
+        meta: { source: 'human_reviewed_engagement', decision: review.decision, promptVersion: record.promptVersion, modelId: record.modelId }
+      }];
+    });
+    const body = examples.map((example) => JSON.stringify(example)).join('\n');
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="comment-training-${format}-${new Date().toISOString().slice(0, 10)}.jsonl"`);
+    res.send(body ? `${body}\n` : '');
   } catch (error) {
     next(error);
   }

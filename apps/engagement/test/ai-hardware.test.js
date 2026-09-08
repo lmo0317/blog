@@ -257,7 +257,7 @@ test('EngagementHistoryStore stores records, prevents duplicates, and exports CS
 
   assert.equal(await store.hasEngagedPost('https://m.blog.naver.com/testuser/12345678', 'testuser'), false);
 
-  await store.addRecord({
+  const added = await store.addRecord({
     blogId: 'testuser',
     bloggerName: '테스트유저',
     title: '맛있는 음식 후기',
@@ -266,6 +266,11 @@ test('EngagementHistoryStore stores records, prevents duplicates, and exports CS
     liked: true,
     commented: true,
     commentText: '정말 유익한 맛집 글이네요!',
+    contentSnippet: '직접 방문한 식당의 대표 메뉴와 대기 시간을 정리했습니다.',
+    imageSummary: '대표 메뉴 사진',
+    recentComments: ['메뉴가 맛있어 보여요.'],
+    promptVersion: 'comment-system-v1',
+    modelId: 'gemma-4-e2b-it',
     neighborRequested: true,
     neighborStatus: 'requested',
     neighborMessage: '서로이웃 맺고 소통해요',
@@ -286,6 +291,16 @@ test('EngagementHistoryStore stores records, prevents duplicates, and exports CS
   assert.equal(summary.totalLikes, 1);
   assert.equal(summary.totalComments, 1);
   assert.equal(summary.totalNeighbors, 1);
+
+  await store.reviewForTraining(added.id, {
+    decision: 'edited',
+    finalComment: '대표 메뉴와 대기 시간을 함께 정리해 주셔서 방문 계획에 도움이 됐어요.',
+    reasonCodes: ['more_specific']
+  });
+  const trainingSummary = await store.getTrainingSummary();
+  assert.equal(trainingSummary.reviewed, 1);
+  assert.equal(trainingSummary.trainingReady, 1);
+  assert.equal((await store.getTrainingRecords())[0].trainingReview.decision, 'edited');
 
   const csv = await store.exportCsv();
   assert.ok(csv.startsWith('\uFEFF'));

@@ -1180,13 +1180,13 @@ const engHistoryModal = $('#engHistoryModal');
 async function loadEngagementHistory(query = '') {
   const tbody = $('#engHistoryTableBody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">소통 이력을 불러오는 중...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px;">소통 이력을 불러오는 중...</td></tr>';
 
   try {
     const data = await api(`/api/engagement/history?limit=100&keyword=${encodeURIComponent(query)}`);
     const records = data.items || [];
     if (records.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#a0aec0;">공감/댓글 소통 이력이 없습니다.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px; color:#a0aec0;">공감/댓글 소통 이력이 없습니다.</td></tr>';
       return;
     }
 
@@ -1211,6 +1211,25 @@ async function loadEngagementHistory(query = '') {
         ? `<a href="${escapeHtml(r.postUrl)}" target="_blank" style="color:#2b6cb0; text-decoration:none; font-weight:600;" title="${escapeHtml(r.title || '')}">${escapeHtml((r.title || '포스팅').slice(0, 22))} ↗</a>`
         : escapeHtml((r.title || '포스팅').slice(0, 22));
 
+      const review = r.trainingReview || null;
+      const reviewLabel = review?.decision === 'accepted' ? '승인됨'
+        : review?.decision === 'edited' ? '수정 승인'
+          : review?.decision === 'rejected' ? '거절됨'
+            : review?.decision === 'skip' ? 'SKIP 승인' : '검수 전';
+      const reviewClass = ['accepted', 'edited'].includes(review?.decision) ? 'success'
+        : review?.decision === 'rejected' ? 'danger'
+          : review?.decision === 'skip' ? 'warning' : '';
+      const reviewHtml = r.commented && r.commentText ? `
+        <div class="training-review-cell" data-record-id="${escapeHtml(r.id)}">
+          <textarea class="training-comment-editor" rows="2" maxlength="120" aria-label="학습용 최종 댓글">${escapeHtml(review?.finalComment || r.commentText)}</textarea>
+          <div class="training-review-actions">
+            <button type="button" class="training-review-btn accept" data-training-decision="accepted">✓ 그대로</button>
+            <button type="button" class="training-review-btn edit" data-training-decision="edited">✎ 수정 저장</button>
+            <button type="button" class="training-review-btn reject" data-training-decision="rejected">× 거절</button>
+          </div>
+          <span class="training-review-state ${reviewClass}">${reviewLabel}</span>
+        </div>` : '<span class="training-review-state">댓글 없음</span>';
+
       return `
         <tr>
           <td>${escapeHtml(r.timestamp?.slice(5, 16)?.replace('T', ' ') || '')}</td>
@@ -1218,15 +1237,58 @@ async function loadEngagementHistory(query = '') {
           <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${postTitleLink}</td>
           <td>${reactionHtml}</td>
           <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.commentText || '')}">${escapeHtml(r.commentText || '-')}</td>
+          <td>${reviewHtml}</td>
           <td>${neighborHtml}</td>
           <td><span class="pill pill-green">${escapeHtml(r.status === 'success' ? '완료' : r.status)}</span></td>
         </tr>
       `;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#e53e3e;">이력 로드 실패: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#e53e3e;">이력 로드 실패: ${escapeHtml(err.message)}</td></tr>`;
+  }
+  await refreshTrainingReviewSummary();
+}
+
+async function refreshTrainingReviewSummary() {
+  const target = $('#trainingReviewSummary');
+  if (!target) return;
+  try {
+    const summary = await api('/api/engagement/training-summary');
+    target.innerHTML = `
+      <span class="training-stat"><strong>${Number(summary.reviewed || 0)}</strong> 검수</span>
+      <span class="training-stat success"><strong>${Number(summary.trainingReady || 0)}</strong> 학습 준비</span>
+      <span class="training-stat danger"><strong>${Number(summary.byDecision?.rejected || 0)}</strong> 거절</span>
+      <span class="training-review-hint">본문 근거가 저장된 신규 댓글만 SFT/DPO 내보내기에 포함됩니다.</span>`;
+  } catch {
+    target.innerHTML = '<span class="training-review-hint">학습 검수 현황을 불러오지 못했습니다.</span>';
   }
 }
+
+$('#engHistoryTableBody')?.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-training-decision]');
+  if (!button) return;
+  const cell = button.closest('.training-review-cell');
+  const recordId = cell?.dataset.recordId;
+  const decision = button.dataset.trainingDecision;
+  const finalComment = cell?.querySelector('.training-comment-editor')?.value?.trim() || '';
+  if (!recordId) return;
+  if (decision === 'edited' && (finalComment.length < 15 || finalComment.length > 120)) {
+    toast('수정 댓글은 15~120자로 입력해주세요.', true);
+    return;
+  }
+  button.disabled = true;
+  try {
+    await api('/api/engagement/training-review', {
+      method: 'POST',
+      body: JSON.stringify({ recordId, decision, finalComment, reasonCodes: decision === 'rejected' ? ['human_rejected'] : [] })
+    });
+    toast(decision === 'rejected' ? '학습 제외 대상으로 저장했습니다.' : '학습 검수를 저장했습니다.');
+    await loadEngagementHistory($('#engHistorySearchInput')?.value?.trim() || '');
+  } catch (err) {
+    button.disabled = false;
+    toast(err.message, true);
+  }
+});
 
 $('#engHistoryModalBtn')?.addEventListener('click', () => {
   engHistoryModal?.classList.remove('hidden');
@@ -1254,6 +1316,14 @@ $('#engHistorySearchInput')?.addEventListener('keydown', (e) => {
 
 $('#exportEngCsvBtn')?.addEventListener('click', () => {
   window.open('/api/engagement/history/csv', '_blank');
+});
+
+$('#exportTrainingSftBtn')?.addEventListener('click', () => {
+  window.open('/api/engagement/training-export?format=sft', '_blank');
+});
+
+$('#exportTrainingDpoBtn')?.addEventListener('click', () => {
+  window.open('/api/engagement/training-export?format=dpo', '_blank');
 });
 
 $('#clearEngHistoryBtn')?.addEventListener('click', async () => {
