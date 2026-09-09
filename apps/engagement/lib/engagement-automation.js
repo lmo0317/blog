@@ -410,6 +410,16 @@ export class EngagementAutomationManager extends EventEmitter {
             doComment: doCommentForPost && !!generatedComment
           });
 
+          // A comment run can be skipped before reaching Naver when the local
+          // model returns no usable text. Keep that distinct from a Naver
+          // permission error so the user can act on the real cause.
+          if (doCommentForPost && !generatedComment) {
+            result.commentReason = this.embeddedLlama?.lastCommentFailure || 'AI 댓글 생성·검증에 실패해 등록하지 않았습니다.';
+            result.message = result.liked
+              ? `공감(❤️) 완료 (댓글 미작성: ${result.commentReason})`
+              : `반응 불가 (사유: ${result.commentReason}${result.likeReason ? ` / ${result.likeReason}` : ''})`;
+          }
+
           const restrictionText = `${result.likeReason || ''} ${result.commentReason || ''} ${result.message || ''}`;
           if (/자동입력 방지|캡차|보안 문자|보호조치|추가 인증|로그인이 필요/i.test(restrictionText)) {
             if (doLikeForPost) blockedActions.add('like');
@@ -427,7 +437,7 @@ export class EngagementAutomationManager extends EventEmitter {
           } else if (result.liked && !result.commented) {
             this.stats.likeSuccessCount += 1;
             const commentReason = result.commentReason || '작성자가 댓글 비허용 또는 작성 권한 없음';
-            this.log(`⚠️ [부분 완료] @${post.blogId} 공감(❤️) 완료 (※ 댓글 미등록 사유: ${commentReason})`, 'warn');
+            this.log(`❌ [댓글 등록 실패] @${post.blogId} 공감(❤️) 완료 · 댓글 미등록 사유: ${commentReason}`, 'error');
           } else if (!result.liked && result.commented) {
             this.stats.commentSuccessCount += 1;
             const likeReason = result.likeReason || '작성자가 공감 비허용';
@@ -435,7 +445,7 @@ export class EngagementAutomationManager extends EventEmitter {
           } else {
             this.stats.skippedCount += 1;
             const reasonDetail = [result.likeReason, result.commentReason].filter(Boolean).join(' / ') || '공감 및 댓글 모두 비허용된 포스팅';
-            this.log(`⏩ [스킵] @${post.blogId} 포스팅에 반응 불가 (사유: ${reasonDetail})`, 'warn');
+            this.log(`❌ [소통 실패] @${post.blogId} 포스팅에 반응 불가 · 사유: ${reasonDetail}`, 'error');
           }
 
           // 4. Send Neighbor Request if requested
@@ -513,7 +523,7 @@ export class EngagementAutomationManager extends EventEmitter {
           }
         } catch (postErr) {
           this.stats.failedCount += 1;
-          this.log(`⚠️ @${post.blogId} 처리 중 오류: ${postErr.message}`, 'warn');
+          this.log(`❌ [처리 실패] @${post.blogId} 처리 중 오류: ${postErr.message}`, 'error');
         }
 
         sessionProcessed += 1;

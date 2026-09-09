@@ -66,6 +66,23 @@ const neighborCleanerManager = new NeighborCleanerManager({
 const licenseClient = new LicenseClientManager({
   cachePath: path.join(__dirname, '.data', 'license-cache.json')
 });
+
+async function startActiveEmbeddedModel() {
+  const activeModel = await modelManager.getActiveModel();
+  if (!activeModel) return { status: 'no_model', message: '다운로드된 로컬 AI 모델이 없습니다.' };
+  const result = await embeddedLlama.restartWithModel(activeModel.id);
+  if (result.status !== 'running') throw new Error(result.message || '로컬 AI 서버를 시작하지 못했습니다.');
+  return result;
+}
+
+modelManager.on('download_complete', async ({ modelId }) => {
+  try {
+    const runtime = await startActiveEmbeddedModel();
+    modelManager.emit('runtime_ready', { modelId, ...runtime });
+  } catch (error) {
+    modelManager.emit('runtime_error', { modelId, error: error.message });
+  }
+});
 licenseClient.startHeartbeat();
 
 async function resolveActiveLlmEndpoint() {
@@ -375,10 +392,14 @@ app.get('/api/models/list', async (_req, res, next) => {
   try {
     const models = await modelManager.getInstalledModels();
     const active = await modelManager.getActiveModel();
-    res.json({ models, activeModel: active, serverStatus: embeddedLlama.status });
+    res.json({ models, activeModel: active, serverStatus: embeddedLlama.status, runtime: embeddedLlama.getRuntimeStatus() });
   } catch (error) {
     next(error);
   }
+});
+
+app.get('/api/models/runtime', (_req, res) => {
+  res.json(embeddedLlama.getRuntimeStatus());
 });
 
 app.post('/api/models/download', async (req, res, next) => {
@@ -411,10 +432,10 @@ app.post('/api/models/select', async (req, res, next) => {
     const engineMode = 'local_gpu';
     llmClient.model = modelId;
     llmClient.baseUrl = `http://${embeddedLlama.host}:${embeddedLlama.port}`;
-    // Restart embedded llama-server with new model
-    embeddedLlama.restartWithModel(modelId).catch(() => {});
+    // Selecting a model means it must be ready for comments before returning.
+    const runtime = await startActiveEmbeddedModel();
     const activeEndpoint = await resolveActiveLlmEndpoint();
-    res.json({ ok: true, model: selected, engineMode, activeEndpoint });
+    res.json({ ok: true, model: selected, engineMode, activeEndpoint, runtime });
   } catch (error) {
     next(error);
   }
@@ -437,10 +458,11 @@ app.get('/api/settings', async (_req, res, next) => {
   try {
     const activeModel = await modelManager.getActiveModel();
     const installedModels = await modelManager.getInstalledModels();
-    let activeEndpoint = null;
-    try {
-      activeEndpoint = await resolveActiveLlmEndpoint();
-    } catch {}
+    // Status screens must render immediately while the engine installs or
+    // loads; never hold the UI hostage on a potentially long first startup.
+    const activeEndpoint = embeddedLlama.status === 'running'
+      ? { type: 'local_gpu', label: `내 PC 로컬 GPU (${activeModel?.name || 'Gemma'})`, baseUrl: `http://${embeddedLlama.host}:${embeddedLlama.port}`, model: activeModel?.id || '' }
+      : null;
     res.json({
       connected: browserSession.connected,
       accountLabel: browserSession.accountLabel || '',
@@ -448,6 +470,7 @@ app.get('/api/settings', async (_req, res, next) => {
       activeModel,
       installedCount: installedModels.filter((m) => m.isInstalled).length,
       activeEndpoint,
+      runtime: embeddedLlama.getRuntimeStatus(),
       neighborGroupState: browserSession.getNeighborGroupState(),
       activeNeighborGroup: browserSession.getActiveNeighborGroupName()
     });
@@ -474,15 +497,25 @@ app.get('/api/models/events', (req, res) => {
   const onError = (data) => {
     res.write(`event: error\ndata: ${JSON.stringify(data)}\n\n`);
   };
+  const onRuntimeReady = (data) => {
+    res.write(`event: runtime_ready\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  const onRuntimeError = (data) => {
+    res.write(`event: runtime_error\ndata: ${JSON.stringify(data)}\n\n`);
+  };
 
   modelManager.on('download_progress', onProgress);
   modelManager.on('download_complete', onComplete);
   modelManager.on('download_error', onError);
+  modelManager.on('runtime_ready', onRuntimeReady);
+  modelManager.on('runtime_error', onRuntimeError);
 
   req.on('close', () => {
     modelManager.off('download_progress', onProgress);
     modelManager.off('download_complete', onComplete);
     modelManager.off('download_error', onError);
+    modelManager.off('runtime_ready', onRuntimeReady);
+    modelManager.off('runtime_error', onRuntimeError);
   });
 });
 
@@ -1505,6 +1538,9 @@ export function startServer(customPort = port) {
         const addr = server.address();
         const actualPort = (addr && typeof addr === 'object' && addr.port) ? addr.port : Number(customPort);
         console.log(`NeighborMate Desktop Backend: http://127.0.0.1:${actualPort}`);
+        // An installed model is a ready-to-use feature: prepare its runtime
+        // in the background as soon as the desktop app opens.
+        startActiveEmbeddedModel().catch((error) => console.warn(`Local AI startup deferred: ${error.message}`));
         resolve({ server, port: actualPort });
       });
 

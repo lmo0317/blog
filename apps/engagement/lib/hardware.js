@@ -58,7 +58,10 @@ export async function detectGpuSpecs() {
     gpus: [],
     primaryGpu: null,
     totalVramMb: 0,
-    vramFormatted: '0 MB'
+    vramFormatted: '0 MB',
+    sharedMemoryMb: 0,
+    sharedMemoryFormatted: '0 MB',
+    isIntegrated: false
   };
 
   // 1. Try nvidia-smi first (Most accurate for NVIDIA GPUs)
@@ -110,7 +113,14 @@ export async function detectGpuSpecs() {
     result.gpus.sort((a, b) => b.vramMb - a.vramMb);
     result.primaryGpu = result.gpus[0];
     result.totalVramMb = result.primaryGpu.vramMb;
-    result.hasDedicatedGpu = result.totalVramMb >= 1024 || /GeForce|Radeon RX|RTX|GTX|Arc/i.test(result.primaryGpu.name);
+    result.isIntegrated = result.primaryGpu.vendor === 'Intel' && /Iris|UHD|Graphics/i.test(result.primaryGpu.name);
+    // Task Manager's shared GPU memory is system RAM, so show it separately
+    // and never mistake it for dedicated VRAM for model offloading.
+    result.sharedMemoryMb = result.isIntegrated ? Math.floor(os.totalmem() / (1024 * 1024 * 2)) : 0;
+    result.sharedMemoryFormatted = result.sharedMemoryMb >= 1024
+      ? `${(result.sharedMemoryMb / 1024).toFixed(1)} GB`
+      : `${result.sharedMemoryMb} MB`;
+    result.hasDedicatedGpu = !result.isIntegrated && (result.totalVramMb >= 1024 || /GeForce|Radeon RX|RTX|GTX|Arc/i.test(result.primaryGpu.name));
     result.vramFormatted = result.totalVramMb >= 1024 
       ? `${(result.totalVramMb / 1024).toFixed(1)} GB` 
       : `${result.totalVramMb} MB`;

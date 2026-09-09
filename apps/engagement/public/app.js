@@ -1354,27 +1354,43 @@ function escapeHtml(value) {
 let currentHardwareSpecs = null;
 let currentModelsList = [];
 let activeModelId = null;
+let runtimeStatusTimer = null;
 
-function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
+function updateLocalAiSummaryUI(activeModel, activeEndpoint, runtime = null) {
   const globalStatus = $('#globalEngineStatusText');
   const summaryModel = $('#summaryModelName');
   const summaryEndpoint = $('#summaryEndpointUrl');
   const currentBadge = $('#currentEngineBadge');
+  const summaryEngine = $('#summaryEngineType');
+
+  const setup = runtime?.setup;
+  const isReady = runtime?.status === 'running';
+  const acceleration = runtime?.acceleration === 'GPU' ? 'GPU' : 'CPU';
+  if (summaryEngine) summaryEngine.textContent = acceleration === 'GPU' ? '⚡ 내 PC 로컬 GPU (VRAM 가속)' : '🖥️ 내 PC 로컬 CPU (안정 실행)';
+  const setupBox = $('#localAiSetupProgress');
+  if (setupBox && setup && activeModel && !isReady) {
+    setupBox.classList.remove('hidden');
+    $('#localAiSetupText').textContent = setup.message || '로컬 AI를 준비하고 있습니다.';
+    $('#localAiSetupPercent').textContent = `${setup.progress || 0}%`;
+    $('#localAiSetupBar').style.width = `${Math.max(4, setup.progress || 0)}%`;
+  } else if (setupBox) {
+    setupBox.classList.add('hidden');
+  }
 
   if (activeModel) {
-    if (summaryModel) summaryModel.textContent = `${activeModel.name} (${activeModel.sizeFormatted || ''})`;
-    if (summaryEndpoint) summaryEndpoint.textContent = activeEndpoint?.baseUrl || 'http://127.0.0.1:8089';
+    if (summaryModel) summaryModel.textContent = isReady ? `${activeModel.name} (${activeModel.sizeFormatted || ''})` : `${activeModel.name} · AI 준비 중`;
+    if (summaryEndpoint) summaryEndpoint.textContent = isReady ? (activeEndpoint?.baseUrl || 'http://127.0.0.1:8089') : 'AI 엔진 준비 중';
     if (globalStatus) {
-      globalStatus.textContent = `⚡ 내 PC 로컬 GPU (${activeModel.name})`;
-      globalStatus.style.color = '#234e52';
+      globalStatus.textContent = isReady ? `${acceleration === 'GPU' ? '⚡ 내 PC 로컬 GPU' : '🖥️ 내 PC 로컬 CPU'} (${activeModel.name})` : `⏳ ${setup?.message || '로컬 AI 준비 중'}`;
+      globalStatus.style.color = isReady ? '#234e52' : '#2563eb';
     }
     if (currentBadge) {
       currentBadge.className = 'pill pill-green';
-      currentBadge.textContent = `⚡ ${activeModel.name}`;
+      currentBadge.textContent = `${acceleration === 'GPU' ? '⚡' : '🖥️'} ${activeModel.name}`;
     }
     if ($('#llmStatus')) {
-      $('#llmStatus').className = 'status online';
-      $('#llmStatus').innerHTML = `<i></i> ⚡ 로컬 GPU (${escapeHtml(activeModel.name)})`;
+      $('#llmStatus').className = isReady ? 'status online' : 'status';
+      $('#llmStatus').innerHTML = isReady ? `<i></i> ${acceleration === 'GPU' ? '⚡ 로컬 GPU' : '🖥️ 로컬 CPU'} (${escapeHtml(activeModel.name)})` : `<i></i> ⏳ AI 준비 중`;
     }
   } else {
     if (summaryModel) summaryModel.textContent = '미설치 (Gemma 모델 다운로드 필요)';
@@ -1392,6 +1408,24 @@ function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
       $('#llmStatus').innerHTML = `<i></i> ⚠️ 모델 설치 필요`;
     }
   }
+}
+
+async function refreshRuntimeStatus() {
+  const runtime = await api('/api/models/runtime').catch(() => null);
+  if (!runtime) return;
+  const activeModel = currentModelsList.find((model) => model.id === activeModelId) || null;
+  updateLocalAiSummaryUI(activeModel, runtime.status === 'running' ? { baseUrl: 'http://127.0.0.1:8089' } : null, runtime);
+  const preparing = Boolean(activeModel) && (['starting', 'stopped'].includes(runtime.status) || ['checking_runtime', 'installing_runtime', 'downloading_runtime', 'extracting_runtime', 'runtime_installed', 'loading_model'].includes(runtime.setup?.phase));
+  if (!preparing && runtimeStatusTimer) {
+    clearInterval(runtimeStatusTimer);
+    runtimeStatusTimer = null;
+  }
+}
+
+function startRuntimeStatusPolling() {
+  if (runtimeStatusTimer) return;
+  refreshRuntimeStatus();
+  runtimeStatusTimer = setInterval(refreshRuntimeStatus, 900);
 }
 
 function initSettingsController() {
@@ -1418,6 +1452,8 @@ function initSettingsController() {
 
 async function initAiHardwareAndModels() {
   try {
+    initModelEvents();
+    startRuntimeStatusPolling();
     const settings = await api('/api/settings').catch(() => null);
 
     const specs = await api('/api/hardware/specs');
@@ -1425,10 +1461,13 @@ async function initAiHardwareAndModels() {
     
     // Update GPU badges & text
     const gpuNameText = specs.gpu?.primaryGpu ? `${specs.gpu.primaryGpu.name} (${specs.gpu.vramFormatted})` : '시스템 GPU';
+    const memoryLabel = specs.gpu?.isIntegrated
+      ? `공유 GPU 메모리 최대 ${specs.gpu?.sharedMemoryFormatted || '-'} (전용 ${specs.gpu?.vramFormatted || '-'})`
+      : `전용 VRAM ${specs.gpu?.vramFormatted || '-'}`;
     if ($('#gpuSpecBadge')) $('#gpuSpecBadge').innerHTML = `🎮 ${escapeHtml(gpuNameText)}`;
-    if ($('#localGpuSummaryText')) $('#localGpuSummaryText').textContent = `🎮 내 그래픽: ${gpuNameText} · 전용 VRAM ${specs.gpu?.vramFormatted || '8GB'}`;
+    if ($('#localGpuSummaryText')) $('#localGpuSummaryText').textContent = `🎮 내 그래픽: ${gpuNameText} · ${memoryLabel}`;
 
-    const summaryHtml = `내 컴퓨터 사양(<strong>${escapeHtml(specs.gpu?.primaryGpu?.name || 'GPU')}</strong> / <strong>${escapeHtml(specs.gpu?.vramFormatted || '8GB')}</strong>)에 맞는 <strong>[${escapeHtml(specs.recommendedModel?.modelInfo?.name || '로컬 AI')}]</strong> 모델을 추천합니다. 실제 설치된 모델만 선택해 글과 댓글을 생성합니다.`;
+    const summaryHtml = `내 컴퓨터 사양(<strong>${escapeHtml(specs.gpu?.primaryGpu?.name || 'GPU')}</strong> / <strong>${escapeHtml(memoryLabel)}</strong>)에 맞는 <strong>[${escapeHtml(specs.recommendedModel?.modelInfo?.name || '로컬 AI')}]</strong> 모델을 추천합니다. 공유 메모리는 전용 VRAM과 구분해 CPU 안정 모드로 실행합니다.`;
 
     if ($('#hardwareRecommendText')) $('#hardwareRecommendText').innerHTML = summaryHtml;
 
@@ -1439,7 +1478,7 @@ async function initAiHardwareAndModels() {
       
       renderModelCards(modelsRes.models, activeModelId, specs.recommendedModel?.id, '#settingsAiModelCardsGrid');
       
-      updateLocalAiSummaryUI(modelsRes.activeModel, settings?.activeEndpoint);
+      updateLocalAiSummaryUI(modelsRes.activeModel, settings?.activeEndpoint, settings?.runtime || modelsRes.runtime);
 
       // Synchronize global select dropdowns
       $$('.ai-model-global-select').forEach((sel) => {
@@ -1470,7 +1509,19 @@ function initModelEvents() {
 
     modelEventSource.addEventListener('complete', (e) => {
       const data = JSON.parse(e.data || '{}');
-      toast(`✨ [${data.meta?.name || data.modelId}] 다운로드가 완료되어 내 PC GPU 활성 모델로 설정되었습니다!`);
+      toast(`✨ [${data.meta?.name || data.modelId}] 다운로드 완료! AI 엔진을 자동으로 준비합니다.`);
+      initAiHardwareAndModels();
+    });
+
+    modelEventSource.addEventListener('runtime_ready', (e) => {
+      const data = JSON.parse(e.data || '{}');
+      toast(`✅ 로컬 AI가 준비되었습니다. 이제 AI 댓글을 바로 작성할 수 있습니다.`);
+      initAiHardwareAndModels();
+    });
+
+    modelEventSource.addEventListener('runtime_error', (e) => {
+      const data = JSON.parse(e.data || '{}');
+      toast(`AI 실행 엔진 준비 실패: ${data.error || '다시 시도해주세요.'}`, true);
       initAiHardwareAndModels();
     });
 
@@ -1894,7 +1945,7 @@ function appendEngagementLog(entry) {
   if (!container || !entry) return;
 
   const line = document.createElement('div');
-  line.className = `terminal-line ${escapeHtml(entry.type || 'info')}`;
+  line.className = `terminal-line ${escapeHtml(entry.type || entry.level || 'info')}`;
   line.innerHTML = `<span class="terminal-time">[${escapeHtml(entry.time || '')}]</span> <span class="terminal-msg">${escapeHtml(entry.message || '')}</span>`;
   container.appendChild(line);
 
@@ -2238,7 +2289,7 @@ function updateFeedDashboard(statusData) {
       const chronological = [...logs].reverse();
       container.innerHTML = chronological.map((log) => {
         const time = escapeHtml(log.time || '');
-        const type = escapeHtml(log.level || log.type || 'info');
+        const type = escapeHtml(log.type || log.level || 'info');
         const msg = escapeHtml(log.message || '');
         return `<div class="terminal-line ${type}">[${time}] ${msg}</div>`;
       }).join('');

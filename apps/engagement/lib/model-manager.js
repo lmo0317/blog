@@ -189,11 +189,10 @@ export class ModelManager extends EventEmitter {
       }
       await fs.promises.rename(tempPath, targetPath);
 
-      // Auto-set as active if no active model exists
-      if (!this.activeModelId) {
-        this.activeModelId = modelId;
-        await this.saveConfig();
-      }
+      // A download button is also the user's model-selection action. Make the
+      // newly installed model active so it can immediately be served locally.
+      this.activeModelId = modelId;
+      await this.saveConfig();
 
       this.activeDownloads.delete(modelId);
       const completeData = { modelId, meta, path: targetPath };

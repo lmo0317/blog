@@ -306,6 +306,8 @@ export class FeedEngagementManager {
   log(message, level = 'info') {
     const entry = {
       time: formatKoreanTime(),
+      // The UI consumes `type`; keep `level` too for any older consumers.
+      type: level,
       level,
       message
     };
@@ -542,6 +544,13 @@ export class FeedEngagementManager {
             doComment: this.config.doComment && Boolean(generatedComment)
           });
 
+          if (this.config.doComment && !generatedComment) {
+            result.commentReason = this.embeddedLlama?.lastCommentFailure || 'AI 댓글 생성·검증에 실패해 등록하지 않았습니다.';
+            result.message = result.liked
+              ? `공감(❤️) 완료 (댓글 미작성: ${result.commentReason})`
+              : `반응 불가 (사유: ${result.commentReason}${result.likeReason ? ` / ${result.likeReason}` : ''})`;
+          }
+
           // Check security restrictions
           const restrictionText = `${result.likeReason || ''} ${result.commentReason || ''} ${result.message || ''}`;
           if (/자동입력 방지|캡차|보안 문자|보호조치|추가 인증|로그인이 필요/i.test(restrictionText)) {
@@ -565,9 +574,13 @@ export class FeedEngagementManager {
             this.currentPost.commented = result.commented;
 
             const actions = [result.liked ? '공감(❤️)' : '', result.commented ? 'AI 댓글(💬)' : ''].filter(Boolean).join(' 및 ');
-            this.log(`✅ [새글 소통 완료] ${postLabel} ${actions} 등록 완료! (누적 성공: ${this.stats.successCount}/${this.config.targetCount})`, 'success');
+            if (this.config.doComment && !result.commented) {
+              this.log(`❌ [댓글 등록 실패] ${postLabel} ${actions || '공감'} 완료 · 댓글 미등록 사유: ${result.commentReason || '확인되지 않은 오류'}`, 'error');
+            } else {
+              this.log(`✅ [새글 소통 완료] ${postLabel} ${actions} 등록 완료! (누적 성공: ${this.stats.successCount}/${this.config.targetCount})`, 'success');
+            }
           } else {
-            this.log(`ℹ️ [부분 완료] ${postLabel}: ${result.message || '소통 가능한 영역 없음'}`, 'info');
+            this.log(`❌ [소통 실패] ${postLabel}: ${result.message || result.commentReason || '소통 가능한 영역 없음'}`, 'error');
           }
 
           // Save in history store
@@ -606,7 +619,7 @@ export class FeedEngagementManager {
             }
           }
         } catch (postError) {
-          this.log(`⚠️ ${postLabel} 처리 중 오류: ${postError.message}`, 'warn');
+          this.log(`❌ [처리 실패] ${postLabel} 처리 중 오류: ${postError.message}`, 'error');
         }
       }
 

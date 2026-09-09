@@ -24,6 +24,20 @@ export class EmbeddedLlamaServer extends EventEmitter {
     this.currentModelPath = null;
     this.currentModelId = null;
     this.logs = [];
+    this.runtimeInstallPromise = null;
+    this.startPromise = null;
+    this.lastCommentFailure = '';
+    this.acceleration = 'CPU';
+    this.setup = { phase: 'idle', message: '로컬 AI 준비 대기 중', progress: 0, updatedAt: Date.now() };
+  }
+
+  setSetup(phase, message, progress) {
+    this.setup = { phase, message, progress: Math.max(0, Math.min(Number(progress) || 0, 100)), updatedAt: Date.now() };
+    this.emit('setup', this.getRuntimeStatus());
+  }
+
+  getRuntimeStatus() {
+    return { status: this.status, modelId: this.currentModelId, hasRuntime: this.hasLocalBinary(), acceleration: this.acceleration, setup: { ...this.setup } };
   }
 
   getBinaryPath() {
@@ -39,10 +53,114 @@ export class EmbeddedLlamaServer extends EventEmitter {
   hasLocalBinary() {
     const isWin = process.platform === 'win32';
     const localBin = path.join(this.binDir, isWin ? 'llama-server.exe' : 'llama-server');
-    return fs.existsSync(localBin);
+    // Current llama.cpp Windows packages use a small EXE launcher plus a
+    // large implementation DLL. Both are required for a usable runtime.
+    const implementation = path.join(this.binDir, isWin ? 'llama-server-impl.dll' : 'llama-server');
+    try { return fs.existsSync(localBin) && fs.statSync(implementation).size >= 1024 * 1024; } catch { return false; }
+  }
+
+  async ensureRuntime() {
+    if (this.hasLocalBinary()) return { ok: true, installed: false };
+    if (this.runtimeInstallPromise) return this.runtimeInstallPromise;
+
+    this.runtimeInstallPromise = (async () => {
+      if (process.platform !== 'win32') {
+        throw new Error('내장 AI 실행 파일을 찾지 못했습니다. 이 배포판은 Windows 자동 설치만 지원합니다.');
+      }
+
+      this.addLog('로컬 AI 실행 엔진을 자동 설치하고 있습니다...', 'info');
+      this.setSetup('installing_runtime', 'AI 실행 엔진 정보를 확인하고 있습니다.', 12);
+      const releaseResponse = await fetch('https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10', {
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'NeighborMate-AI/1.0' },
+        signal: AbortSignal.timeout(20000)
+      });
+      if (!releaseResponse.ok) throw new Error(`AI 실행 엔진 정보를 불러오지 못했습니다 (HTTP ${releaseResponse.status}).`);
+      const releases = await releaseResponse.json();
+      // The GitHub "latest" release can temporarily be source-only. Pick the
+      // newest official release that actually ships the universal Windows x64
+      // runtime instead of making the one-click setup depend on that timing.
+      const asset = (Array.isArray(releases) ? releases : []).flatMap((release) => release.assets || [])
+        .find((item) => /bin-win-cpu-x64\.zip$/i.test(item.name || ''));
+      if (!asset?.browser_download_url || !String(asset.browser_download_url).startsWith('https://github.com/')) {
+        throw new Error('안전한 Windows용 AI 실행 엔진 파일을 찾지 못했습니다.');
+      }
+
+      const tempRoot = path.join(this.binDir, `.llama-runtime-${Date.now()}`);
+      const archivePath = path.join(tempRoot, 'llama-runtime.zip');
+      try {
+        await fs.promises.mkdir(tempRoot, { recursive: true });
+        this.setSetup('downloading_runtime', 'AI 실행 엔진을 내려받고 있습니다.', 25);
+        const archiveResponse = await fetch(asset.browser_download_url, {
+          headers: { 'User-Agent': 'NeighborMate-AI/1.0' },
+          signal: AbortSignal.timeout(120000)
+        });
+        if (!archiveResponse.ok) throw new Error(`AI 실행 엔진 다운로드에 실패했습니다 (HTTP ${archiveResponse.status}).`);
+        const archive = Buffer.from(await archiveResponse.arrayBuffer());
+        if (archive.length < 1024 * 1024) throw new Error('내려받은 AI 실행 엔진 파일이 비정상적으로 작습니다.');
+        await fs.promises.writeFile(archivePath, archive);
+
+        const extractDir = path.join(tempRoot, 'extract');
+        this.setSetup('extracting_runtime', 'AI 실행 엔진을 안전하게 설치하고 있습니다.', 60);
+        const quotePowerShell = (value) => `'${String(value).replace(/'/g, "''")}'`;
+        await new Promise((resolve, reject) => {
+          const child = spawn('powershell.exe', [
+            '-NoProfile', '-NonInteractive', '-Command',
+            `Expand-Archive -LiteralPath ${quotePowerShell(archivePath)} -DestinationPath ${quotePowerShell(extractDir)} -Force`
+          ], { windowsHide: true, stdio: 'ignore' });
+          child.once('error', reject);
+          child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`AI 실행 엔진 압축 해제 실패 (코드 ${code})`)));
+        });
+
+        const findBinary = async (directory) => {
+          const entries = await fs.promises.readdir(directory, { withFileTypes: true });
+          for (const entry of entries) {
+            const candidate = path.join(directory, entry.name);
+            if (entry.isFile() && entry.name.toLowerCase() === 'llama-server.exe') return candidate;
+            if (entry.isDirectory()) {
+              const found = await findBinary(candidate);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const extractedBinary = await findBinary(extractDir);
+        if (!extractedBinary) throw new Error('압축 파일에서 llama-server.exe를 찾지 못했습니다.');
+        await fs.promises.mkdir(this.binDir, { recursive: true });
+        // llama-server needs its sibling DLLs. Copy the complete official
+        // runtime folder, not just the executable, or Windows exits before it
+        // can open the local API port.
+        const runtimeDir = path.dirname(extractedBinary);
+        const runtimeFiles = await fs.promises.readdir(runtimeDir, { withFileTypes: true });
+        await Promise.all(runtimeFiles.map((entry) => fs.promises.cp(
+          path.join(runtimeDir, entry.name), path.join(this.binDir, entry.name), { recursive: entry.isDirectory(), force: true }
+        )));
+        this.addLog('로컬 AI 실행 엔진 설치가 완료되었습니다.', 'info');
+        this.setSetup('runtime_installed', 'AI 실행 엔진 설치를 마쳤습니다. 모델을 불러옵니다.', 72);
+        return { ok: true, installed: true };
+      } finally {
+        await fs.promises.rm(tempRoot, { recursive: true, force: true }).catch(() => {});
+      }
+    })();
+
+    try {
+      return await this.runtimeInstallPromise;
+    } finally {
+      this.runtimeInstallPromise = null;
+    }
   }
 
   async start() {
+    if (this.status === 'running') return { status: 'running', port: this.port };
+    if (this.startPromise) return this.startPromise;
+    this.startPromise = this._start();
+    try {
+      return await this.startPromise;
+    } finally {
+      this.startPromise = null;
+    }
+  }
+
+  async _start() {
     if (this.status === 'running') return { status: 'running', port: this.port };
 
     try {
@@ -54,17 +172,34 @@ export class EmbeddedLlamaServer extends EventEmitter {
       }
     } catch {}
 
+    if (!this.modelManager?.getActiveModel) {
+      this.status = 'stopped';
+      return { status: 'no_model', message: '로컬 AI 모델 관리자가 준비되지 않았습니다.' };
+    }
     const activeModel = await this.modelManager.getActiveModel();
     if (!activeModel || !activeModel.actualPath) {
       this.status = 'stopped';
       return { status: 'no_model', message: '다운로드된 로컬 AI 모델이 없습니다.' };
     }
 
+    this.setSetup('checking_runtime', '로컬 AI 실행 환경을 확인하고 있습니다.', 5);
+
+    try {
+      await this.ensureRuntime();
+    } catch (error) {
+      this.status = 'error';
+      const message = `로컬 AI 실행 엔진 준비 실패: ${error.message}`;
+      this.addLog(message, 'error');
+      return { status: 'error', message };
+    }
+
     const binPath = this.getBinaryPath();
     const gpuSpecs = await detectGpuSpecs();
     const gpuLayers = gpuSpecs.totalVramMb >= 3000 ? 99 : 0; // Offload to GPU if VRAM >= 3GB
+    this.acceleration = gpuLayers > 0 ? 'GPU' : 'CPU';
 
     this.status = 'starting';
+    this.setSetup('loading_model', `${activeModel.name} 모델을 메모리에 불러오고 있습니다.`, 78);
     this.currentModelPath = activeModel.actualPath;
     this.currentModelId = activeModel.id;
 
@@ -112,6 +247,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
       const isReady = await this.waitForReady(120000);
       if (isReady) {
         this.status = 'running';
+        this.setSetup('ready', '로컬 AI가 준비되었습니다. 이제 AI 댓글을 작성할 수 있습니다.', 100);
         this.emit('ready', { port: this.port, modelId: this.currentModelId });
         return { status: 'running', port: this.port, modelId: this.currentModelId };
       } else {
@@ -132,6 +268,8 @@ export class EmbeddedLlamaServer extends EventEmitter {
         const res = await fetch(`http://${this.host}:${this.port}/health`, { signal: AbortSignal.timeout(1000) });
         if (res.ok) return true;
       } catch {}
+      const elapsedRatio = Math.min((Date.now() - start) / timeoutMs, 0.95);
+      this.setSetup('loading_model', 'Gemma 모델을 메모리에 불러오고 있습니다. 처음에는 조금 걸릴 수 있어요.', 78 + Math.round(elapsedRatio * 17));
       await new Promise((r) => setTimeout(r, 500));
     }
     return false;
@@ -209,7 +347,25 @@ export class EmbeddedLlamaServer extends EventEmitter {
   }
 
   async generateBlogComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
-    const messages = buildBlogCommentMessages({ title, contentSnippet, imageSummary, tone, recentComments });
+    const cpuMode = this.acceleration !== 'GPU';
+    // Integrated graphics uses the CPU runtime. Keep its prompt compact and
+    // give the first-token generation enough time on ordinary laptops.
+    const commentContext = String(contentSnippet || '').slice(0, cpuMode ? 360 : 500);
+    const messages = buildBlogCommentMessages({ title, contentSnippet: commentContext, imageSummary, tone, recentComments });
+    const timeoutMs = cpuMode ? 60000 : 25000;
+    const maxTokens = cpuMode ? 90 : 150;
+    this.lastCommentFailure = '';
+
+    // Comments are a one-click feature. If the application just opened or a
+    // model was downloaded moments ago, prepare the local engine here instead
+    // of silently falling through to an empty result.
+    if (this.status !== 'running' && this.modelManager?.getActiveModel) {
+      const startup = await this.start();
+      if (startup.status !== 'running') {
+        this.lastCommentFailure = startup.message || `로컬 AI 준비 상태: ${startup.status}`;
+        this.addLog(`댓글 AI 준비 실패: ${this.lastCommentFailure}`, 'warn');
+      }
+    }
 
     // 1. Try local embedded llama-server first
     if (this.status === 'running') {
@@ -220,24 +376,30 @@ export class EmbeddedLlamaServer extends EventEmitter {
           body: JSON.stringify({
             messages,
             temperature: 0.7,
-            max_tokens: 150
+            max_tokens: maxTokens
           }),
-          signal: AbortSignal.timeout(10000)
+          signal: AbortSignal.timeout(timeoutMs)
         });
 
         if (response.ok) {
           const data = await response.json();
           const text = data.choices?.[0]?.message?.content?.trim();
-          if (text && text !== 'SKIP') { const checked = validateBlogComment(text, { title, contentSnippet, imageSummary }, recentComments); if (checked.ok) return checked.text; this.addLog(`Comment rejected: ${checked.reasons.join(', ')}`, 'warn'); }
+          if (text && text !== 'SKIP') { const checked = validateBlogComment(text, { title, contentSnippet: commentContext, imageSummary }, recentComments); if (checked.ok) return checked.text; this.lastCommentFailure = `AI 응답이 안전성 검증에서 제외됨 (${checked.reasons.join(', ')})`; this.addLog(`Comment rejected: ${checked.reasons.join(', ')}`, 'warn'); }
+          else if (!text) this.lastCommentFailure = '로컬 AI가 빈 응답을 반환했습니다.';
+        } else {
+          this.lastCommentFailure = `로컬 AI 응답 오류 (HTTP ${response.status})`;
         }
       } catch (err) {
+        this.lastCommentFailure = `로컬 AI 추론 요청 실패 (${Math.round(timeoutMs / 1000)}초 대기): ${err.message}`;
         this.addLog(`Local inference failed, falling back: ${err.message}`, 'warn');
       }
     }
 
     // 2. Smart Template Fallback if local LLM is still loading
-    const fallback = this.generateSmartTemplateComment({ title, contentSnippet, imageSummary, tone, recentComments });
-    return validateBlogComment(fallback, { title, contentSnippet, imageSummary }, recentComments).ok ? fallback : '';
+    const fallback = this.generateSmartTemplateComment({ title, contentSnippet: commentContext, imageSummary, tone, recentComments });
+    const fallbackCheck = validateBlogComment(fallback, { title, contentSnippet: commentContext, imageSummary }, recentComments);
+    if (!fallbackCheck.ok && !this.lastCommentFailure) this.lastCommentFailure = `대체 댓글이 검증에서 제외됨 (${fallbackCheck.reasons.join(', ')})`;
+    return fallbackCheck.ok ? fallback : '';
   }
 
   cleanCommentOutput(text) {
@@ -248,13 +410,14 @@ export class EmbeddedLlamaServer extends EventEmitter {
     const cleanTitle = title.replace(/[\[\(][^\]\)]*[\]\)]/g, '').trim();
     const topic = contentKeywords({ title: cleanTitle, contentSnippet, imageSummary })[0] || '';
     if (!topic) return '';
-    const templates = [
-      `포스팅 글 재미있게 잘 읽고 가요! ${cleanTitle ? `'${cleanTitle}' 관련해서 ` : ''}유익한 꿀팁 많이 얻어갑니다 ㅎㅎ 좋은 하루 되세요 :)`,
-      `사진이랑 글 설명이 너무 알차서 집중해서 봤어요! 정성스러운 포스팅 감사히 보고 갑니다 😊`,
-      `오 유용한 정보네요! 저도 관심 있던 주제인데 덕분에 도움 많이 되었습니다. 자주 소통해요! 👍`,
-      `포스팅 내용이 너무 유익하고 정리가 잘 되어 있네요 ㅎㅎ 이웃 맺고 자주 들릴게요 :)`
+    const grounded = [
+      `${topic}에 관해 직접 정리해 주신 부분이 특히 눈에 들어왔어요. 차분하게 잘 읽었습니다.`,
+      `${topic} 이야기를 구체적으로 풀어주셔서 흐름을 이해하기 좋았어요. 정성스러운 글 잘 봤습니다.`,
+      `${topic} 부분이 궁금했는데 글에서 짚어주신 내용이 인상적이네요. 공유해 주셔서 감사합니다.`,
+      `${topic}를 중심으로 핵심을 정리해 주셔서 내용을 따라가기 편했어요. 유익하게 읽고 갑니다.`,
+      `${topic}와 관련된 설명이 명확해서 도움이 됐어요. 다음 글도 기대하며 잘 보고 갑니다.`,
+      `${topic}에 대한 관점을 차분히 풀어주셔서 인상 깊었습니다. 좋은 정보 감사해요.`
     ];
-    const grounded = [`${topic}에 관해 직접 정리해 주신 부분이 특히 눈에 들어왔어요. 차분하게 잘 읽었습니다.`, `${topic} 이야기를 구체적으로 풀어주셔서 흐름을 이해하기 좋았어요. 정성스러운 글 잘 봤습니다.`, `${topic} 부분이 궁금했는데 글에서 짚어주신 내용이 인상적이네요. 공유해 주셔서 감사합니다.`];
     return grounded.find((candidate) => !recentComments.some((previous) => commentSimilarity(candidate, previous) >= 0.72)) || '';
   }
 
