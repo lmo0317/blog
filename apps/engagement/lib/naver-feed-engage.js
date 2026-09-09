@@ -317,6 +317,7 @@ export class FeedEngagementManager {
   }
 
   getState() {
+    const recentRecords = this.historyStore?.data?.records?.slice(0, 50) || [];
     return {
       state: this.state,
       stats: {
@@ -326,6 +327,7 @@ export class FeedEngagementManager {
       },
       config: { ...this.config },
       currentPost: this.currentPost ? { ...this.currentPost } : null,
+      recentRecords,
       logs: this.logs.slice(0, 50)
     };
   }
@@ -367,6 +369,7 @@ export class FeedEngagementManager {
     doLike = true,
     doComment = true,
     commentTone = 'friendly',
+    tone = '',
     minDelaySec = 25,
     maxDelaySec = 45
   } = {}) {
@@ -383,7 +386,7 @@ export class FeedEngagementManager {
       targetCount: boundTarget,
       doLike: Boolean(doLike),
       doComment: Boolean(doComment),
-      commentTone: commentTone || 'friendly',
+      commentTone: commentTone || tone || 'friendly',
       minDelaySec: minDelaySec !== undefined ? Math.max(0, Number(minDelaySec)) : 25,
       maxDelaySec: maxDelaySec !== undefined ? Math.max(0, Number(maxDelaySec)) : 45
     };
@@ -602,15 +605,28 @@ export class FeedEngagementManager {
             const baseDelay = this.config.minDelaySec;
             const jitter = Math.floor(Math.random() * Math.max(1, this.config.maxDelaySec - this.config.minDelaySec));
             const totalDelaySec = baseDelay + jitter;
-            this.log(`⏳ 다음 이웃 새글까지 ${totalDelaySec}초간 대기합니다 (계정 보호 랜덤 딜레이 +${jitter}s)...`, 'info');
+            const nextPost = feedPosts[i + 1];
+            const nextAuthor = nextPost ? `@${nextPost.author || nextPost.blogId}` : '다음 글';
+            this.log(`⏳ 다음 이웃 새글(${nextAuthor})까지 ${totalDelaySec}초간 안전 대기합니다 (네이버 계정 보호 모드)...`, 'info');
 
-            this.currentPost.step = 'waiting';
-            this.currentPost.stepLabel = '⏳ 다음 새글 대기 중...';
-            this.currentPost.countdown = totalDelaySec;
+            this.currentPost = {
+              logNo: post.logNo,
+              blogId: post.blogId,
+              author: post.author,
+              title: post.title,
+              nextAuthor,
+              nextTitle: nextPost ? nextPost.title : '',
+              step: 'waiting',
+              stepLabel: `🛡️ [계정 보호 안전 대기] ${totalDelaySec}초 후 ${nextAuthor} 님 글로 이동`,
+              totalDelaySec,
+              countdown: totalDelaySec
+            };
 
             let elapsed = 0;
             while (elapsed < totalDelaySec * 1000 && !this.shouldStop) {
-              this.currentPost.countdown = Math.max(0, Math.ceil((totalDelaySec * 1000 - elapsed) / 1000));
+              const remainingSec = Math.max(0, Math.ceil((totalDelaySec * 1000 - elapsed) / 1000));
+              this.currentPost.countdown = remainingSec;
+              this.currentPost.stepLabel = `🛡️ [계정 보호 안전 대기] ${remainingSec}초 후 ${nextAuthor} 님 글로 이동`;
               await sleep(500);
               elapsed += 500;
               while (this.isPaused && !this.shouldStop) {

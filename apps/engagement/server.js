@@ -778,7 +778,11 @@ app.get('/api/feed/status', (_req, res) => {
 
 app.post('/api/feed/start', async (req, res, next) => {
   try {
-    const result = await feedManager.start(req.body || {});
+    const payload = req.body || {};
+    const result = await feedManager.start({
+      ...payload,
+      commentTone: payload.commentTone || payload.tone || 'friendly'
+    });
     res.json(result);
   } catch (error) {
     next(error);

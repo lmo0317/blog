@@ -100,15 +100,16 @@ When the user asks "트렌드글 포스팅 해줘", "트렌드 분석해서 글 
 
 ## Naver category routing
 
-Classify the finished article by its primary reader purpose before opening the final publish settings:
+발행 전 포스팅 목적에 맞춰 정확한 네이버 블로그 카테고리를 분류하여 지정합니다:
 
-- Select the exact Naver category `건강` when the article's main purpose is health knowledge or health behavior, including exercise, sleep, blood pressure, oral health, hygiene, medicine safety, symptoms, prevention, nutrition, or medical-care guidance.
-- Select the exact Naver category `생활` when the article's main purpose is a practical household or everyday-life tip, including cleaning, organizing, cooking technique, storage, home maintenance, saving time, digital-life tips, or consumer know-how without a health-centered claim.
-- Select the exact Naver category `자동화` when the article's main purpose is development, productivity tools, bot creation, local AI setup, scripting, or automation workflows.
-- When multiple apply, choose the category that aligns closest with the article's core claim.
-- If the user explicitly requests a specific category, follow that choice.
+- **`IT`**: 모든 인공지능(AI), 생성형 AI, 테크 트렌드, IT 기기, 소프트웨어, 프롬프트 엔지니어링, 디지털 생산성 툴, 코딩 가이드, 로컬 LLM 관련 주제는 **반드시 `IT` 카테고리로 지정**합니다.
+- **`건강`**: 질병 증상, 의학 정보, 영양제, 운동, 수면, 위생, 건강 생활 습관 등 건강 지식 관련 주제.
+- **`생활`**: 살림 꿀팁, 청소, 정리수납, 식재료 손질 및 레시피, 분리배출, 다이소 등 일상생활 노하우 관련 주제.
+- **⚠️ [절대 사용 금지 / 보호 카테고리] `자동화`, `개발`**:
+  - `자동화`와 `개발` 카테고리는 블로그 소유자의 자체 프로그램 개발 로그 전용 카테고리입니다.
+  - **자동 포스팅 시스템에서는 절대로 `자동화`나 `개발` 카테고리에 글을 발행하거나 건드리지 않아야 합니다.** (모든 AI/테크/자동화 관련 글은 무조건 **`IT`**로 분류)
 
-The category must be selected in Naver's final publish settings. A similarly named tag does not count. Confirm the selected category immediately before the final publish click and include it in the completion report.
+네이버 발행 설정 창에서 지정된 카테고리를 정확히 선택하고 확인한 뒤 최종 발행 버튼을 누릅니다. 태그 이름만 지정하는 것은 카테고리 설정으로 인정되지 않습니다.
 
 ## Image creation and placement (Gemini Imagen)
 

@@ -2933,15 +2933,29 @@ input[type="radio"] {
   background: #dcfce7;
   padding: 3px 9px;
   border-radius: 9999px;
+  transition: all 0.3s ease;
+}
+
+.feed-active-badge.waiting-mode {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
 }
 
 .feed-active-countdown {
   font-size: 11.5px;
   font-weight: 700;
-  color: #d97706;
+  color: #b45309;
   background: #fef3c7;
+  border: 1px solid #fde68a;
   padding: 3px 9px;
   border-radius: 9999px;
+  animation: feedPulseCountdown 1.2s infinite ease-in-out;
+}
+
+@keyframes feedPulseCountdown {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.04); opacity: 0.9; }
 }
 
 .feed-active-body {

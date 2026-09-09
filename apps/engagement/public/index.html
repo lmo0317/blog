@@ -918,6 +918,21 @@
                 </select>
               </div>
 
+              <div class="form-group" style="margin-top: 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <label for="feedSpeedMode" style="margin-bottom:0;"><strong>소통 간격 (계정 보호 딜레이)</strong></label>
+                  <span style="font-size:11px; color:#10b981; font-weight:600;">🛡️ 어뷰징 자동 방지</span>
+                </div>
+                <select id="feedSpeedMode" class="desktop-select">
+                  <option value="safe" selected>🛡️ 안전 모드 (25~40초 대기 - 네이버 매크로 제재 완전 차단 권장)</option>
+                  <option value="balanced">⚡ 표준 모드 (15~25초 대기 - 빠른 소통과 안정성 균형)</option>
+                  <option value="fast">🚀 빠른 모드 (8~15초 대기 - 빠른 피드 순환)</option>
+                </select>
+                <span class="field-help" style="font-size: 11.5px; color: var(--text-muted, #64748b); margin-top: 5px; display: block; line-height: 1.4;">
+                  💡 글 작성 후 다음 글까지 자연스러운 인간 체류 시간을 두어 계정을 안전하게 보호합니다.
+                </span>
+              </div>
+
               <!-- Action Toolbar -->
               <div class="action-command-toolbar" style="margin-top: 18px;">
                 <button type="button" class="feed-cta-btn" id="startFeedBtn">

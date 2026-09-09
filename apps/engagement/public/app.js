@@ -2034,7 +2034,7 @@ function renderFeedPosts() {
     return;
   }
 
-  container.innerHTML = filtered.map((post) => {
+  const cardsHtml = filtered.map((post) => {
     const isCurrentActive = Boolean(
       activeFeedCurrentPost &&
       (activeFeedCurrentPost.logNo === post.logNo || (activeFeedCurrentPost.url && post.url && activeFeedCurrentPost.url.includes(post.logNo)))
@@ -2249,13 +2249,17 @@ function updateFeedDashboard(statusData) {
     if (progressBar) progressBar.style.width = `${percent}%`;
     if (progressPercent) progressPercent.textContent = `${percent}% (${successCount}/${targetCount})`;
     if (progressText) {
-      progressText.textContent = isRunning
-        ? '실시간 소통 진행 중...'
-        : isPaused
-        ? '소통 일시정지됨'
-        : isCompleted
-        ? '회차 목표 달성 완료!'
-        : '소통 준비 중';
+      if (currentPost && currentPost.step === 'waiting') {
+        progressText.textContent = `🛡️ 안전 대기 중 (${currentPost.countdown || 0}초 후 다음 글로 이동)`;
+      } else {
+        progressText.textContent = isRunning
+          ? '실시간 소통 진행 중...'
+          : isPaused
+          ? '소통 일시정지됨'
+          : isCompleted
+          ? '회차 목표 달성 완료!'
+          : '소통 준비 중';
+      }
     }
   }
 
@@ -2264,9 +2268,22 @@ function updateFeedDashboard(statusData) {
   if (activeCard) {
     if (currentPost && (isRunning || isPaused)) {
       activeCard.style.display = 'block';
+      const isWaiting = currentPost.step === 'waiting';
+
+      const badgeEl = activeCard.querySelector('.feed-active-badge');
+      if (badgeEl) {
+        if (isWaiting) {
+          badgeEl.className = 'feed-active-badge waiting-mode';
+          badgeEl.textContent = '🛡️ 계정 보호 안전 대기 중';
+        } else {
+          badgeEl.className = 'feed-active-badge';
+          badgeEl.textContent = '⚡ 현재 소통 진행 중';
+        }
+      }
+
       if ($('#feedActiveAuthor')) $('#feedActiveAuthor').textContent = `👤 @${currentPost.author || currentPost.blogId}`;
       if ($('#feedActiveTitle')) $('#feedActiveTitle').textContent = currentPost.title || '새글 분석 중...';
-      if ($('#feedActiveStepLabel')) $('#feedActiveStepLabel').textContent = currentPost.stepLabel || '분석 중...';
+      if ($('#feedActiveStepLabel')) $('#feedActiveStepLabel').textContent = currentPost.stepLabel || (isWaiting ? '계정 보호를 위해 잠시 대기 중...' : '분석 중...');
 
       const countdownEl = $('#feedActiveCountdown');
       if (countdownEl) {
@@ -2297,27 +2314,48 @@ function updateFeedDashboard(statusData) {
     }
   }
 
-  // Dynamically update cached posts if currentPost newly completed or skipped
+  // Dynamically update cached posts from statusData.recentRecords or currentPost
   if (cachedFeedPosts && cachedFeedPosts.length > 0) {
-    if (currentPost && (currentPost.step === 'done' || currentPost.step === 'skipped')) {
-      const cached = cachedFeedPosts.find((p) => p.logNo === currentPost.logNo);
+    let hasChanges = false;
+    const records = Array.isArray(statusData.recentRecords) ? statusData.recentRecords : [];
+
+    // 1. Sync recent records from historyStore
+    for (const rec of records) {
+      const cached = cachedFeedPosts.find((p) => p.logNo === rec.logNo);
       if (cached) {
-        if (currentPost.step === 'done') {
+        const isEngaged = Boolean(rec.liked || rec.commented || rec.status === 'success');
+        const isSkipped = Boolean(rec.status === 'skipped');
+        if (cached.engaged !== isEngaged || cached.skipped !== isSkipped || !cached.engagementRecord) {
+          cached.engaged = isEngaged;
+          cached.skipped = isSkipped;
+          cached.engagementRecord = rec;
+          hasChanges = true;
+        }
+      }
+    }
+
+    // 2. Immediate reflect from current completed/waiting post
+    if (currentPost && (currentPost.step === 'done' || currentPost.step === 'waiting' || currentPost.step === 'skipped')) {
+      const cached = cachedFeedPosts.find((p) => p.logNo === currentPost.logNo);
+      if (cached && (currentPost.liked || currentPost.commented)) {
+        if (!cached.engaged) {
           cached.engaged = true;
           cached.skipped = false;
           cached.engagementRecord = {
             liked: currentPost.liked,
             commented: currentPost.commented,
-            commentText: currentPost.commentText,
+            commentText: currentPost.commentText || '',
             timestamp: new Date().toISOString(),
             status: 'success'
           };
-        } else if (currentPost.step === 'skipped') {
-          cached.skipped = true;
+          hasChanges = true;
         }
       }
     }
-    renderFeedPosts();
+
+    if (hasChanges) {
+      renderFeedPosts();
+    }
   }
 }
 
@@ -2529,6 +2567,17 @@ function initFeedEngagement() {
 
     const targetCount = Number($('#feedTargetCount')?.value) || 10;
     const tone = $('#feedCommentTone')?.value || 'friendly';
+    const speedMode = $('#feedSpeedMode')?.value || 'safe';
+
+    let minDelaySec = 25;
+    let maxDelaySec = 40;
+    if (speedMode === 'balanced') {
+      minDelaySec = 15;
+      maxDelaySec = 25;
+    } else if (speedMode === 'fast') {
+      minDelaySec = 8;
+      maxDelaySec = 15;
+    }
 
     const startBtn = $('#startFeedBtn');
     try {
@@ -2539,7 +2588,7 @@ function initFeedEngagement() {
 
       await api('/api/feed/start', {
         method: 'POST',
-        body: JSON.stringify({ targetCount, doLike, doComment, tone })
+        body: JSON.stringify({ targetCount, doLike, doComment, tone, commentTone: tone, minDelaySec, maxDelaySec })
       });
 
       toast(`이웃 새글 실시간 자동 소통을 시작합니다. (목표: ${targetCount}건)`);
