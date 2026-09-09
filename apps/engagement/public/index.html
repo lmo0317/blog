@@ -877,64 +877,8 @@
                 내 네이버 블로그 이웃들의 최신 새글 피드를 실시간으로 탐색하여 <strong>공감(❤️)</strong>을 누르고 <strong>온디바이스 AI 맞춤형 찐이웃 댓글(💬)</strong>을 전자동으로 작성합니다.
               </p>
 
-              <!-- Option Selectors -->
-              <div class="form-group" style="margin-top: 14px;">
-                <label><strong>소통 목표 건수</strong></label>
-                <div class="quick-counts eng-quick-counts" id="feedQuickCounts" style="display:flex; gap:6px; margin-bottom:8px;">
-                  <button type="button" class="chip" data-val="5">5건</button>
-                  <button type="button" class="chip active" data-val="10">10건</button>
-                  <button type="button" class="chip" data-val="20">20건</button>
-                  <button type="button" class="chip" data-val="30">30건</button>
-                </div>
-                <input type="number" id="feedTargetCount" min="1" max="50" value="10" class="desktop-input" style="max-width:140px;">
-              </div>
-
-              <div class="form-group" style="margin-top: 14px;">
-                <label><strong>작업 항목 선택</strong></label>
-                <div class="feed-options-grid">
-                  <div class="feed-option-card checked" id="cardFeedDoLike">
-                    <input type="checkbox" id="feedDoLike" checked>
-                    <div class="feed-option-content">
-                      <div class="feed-option-title">❤️ 공감(좋아요) 누르기</div>
-                      <div class="feed-option-desc">이웃 글에 하트를 눌러 친밀도를 높입니다.</div>
-                    </div>
-                  </div>
-                  <div class="feed-option-card checked" id="cardFeedDoComment">
-                    <input type="checkbox" id="feedDoComment" checked>
-                    <div class="feed-option-content">
-                      <div class="feed-option-title">💬 AI 맞춤 댓글 작성</div>
-                      <div class="feed-option-desc">본문과 사진을 분석해 찐이웃 댓글을 남깁니다.</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="form-group" style="margin-top: 14px;">
-                <label for="feedCommentTone"><strong>AI 댓글 말투</strong></label>
-                <select id="feedCommentTone" class="desktop-select">
-                  <option value="friendly" selected>친근한 이웃체 (~해요! 넘 정성 가득한 글이네요 😊)</option>
-                  <option value="informative">정중하고 차분한 소통체 (좋은 정보 유익하게 잘 읽고 갑니다.)</option>
-                  <option value="warm">따뜻한 공감체 (공감 꾹 누르고 가요! 늘 응원합니다 ✨)</option>
-                </select>
-              </div>
-
-              <div class="form-group" style="margin-top: 14px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                  <label for="feedSpeedMode" style="margin-bottom:0;"><strong>소통 간격 (계정 보호 딜레이)</strong></label>
-                  <span style="font-size:11px; color:#10b981; font-weight:600;">🛡️ 어뷰징 자동 방지</span>
-                </div>
-                <select id="feedSpeedMode" class="desktop-select">
-                  <option value="safe" selected>🛡️ 안전 모드 (25~40초 대기 - 네이버 매크로 제재 완전 차단 권장)</option>
-                  <option value="balanced">⚡ 표준 모드 (15~25초 대기 - 빠른 소통과 안정성 균형)</option>
-                  <option value="fast">🚀 빠른 모드 (8~15초 대기 - 빠른 피드 순환)</option>
-                </select>
-                <span class="field-help" style="font-size: 11.5px; color: var(--text-muted, #64748b); margin-top: 5px; display: block; line-height: 1.4;">
-                  💡 글 작성 후 다음 글까지 자연스러운 인간 체류 시간을 두어 계정을 안전하게 보호합니다.
-                </span>
-              </div>
-
-              <!-- Action Toolbar -->
-              <div class="action-command-toolbar" style="margin-top: 18px;">
+              <!-- Main Execution Toolbar (Top CTA) -->
+              <div class="action-command-toolbar" style="margin-top: 14px; margin-bottom: 14px;">
                 <button type="button" class="feed-cta-btn" id="startFeedBtn">
                   <span>🚀</span> <strong>이웃 새글 자동 소통 시작</strong>
                 </button>
@@ -948,6 +892,59 @@
                   <button type="button" class="button danger medium full-width hidden" id="stopFeedBtn">
                     <span class="btn-icon">⏹️</span> 작업 중단
                   </button>
+                </div>
+              </div>
+
+              <!-- Quick Target Goal Chips -->
+              <div class="form-group" style="margin-top: 10px;">
+                <label style="margin-bottom: 6px;"><strong>소통 목표 건수</strong></label>
+                <div class="quick-counts eng-quick-counts" id="feedQuickCounts" style="display:flex; gap:6px; margin-bottom:6px;">
+                  <button type="button" class="chip" data-val="5">5건</button>
+                  <button type="button" class="chip active" data-val="10">10건 (권장)</button>
+                  <button type="button" class="chip" data-val="20">20건</button>
+                  <button type="button" class="chip" data-val="30">30건</button>
+                </div>
+                <input type="number" id="feedTargetCount" min="1" max="50" value="10" class="desktop-input" style="max-width:140px; display:none;">
+              </div>
+
+              <!-- Compact Mode Toggles -->
+              <div class="form-group" style="margin-top: 10px;">
+                <label style="margin-bottom: 6px;"><strong>소통 항목</strong></label>
+                <div style="display:flex; gap:8px;">
+                  <label class="feed-option-card checked" id="cardFeedDoLike" style="flex:1; display:flex; align-items:center; gap:8px; padding:9px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; cursor:pointer; font-size:12.5px; font-weight:700; color:#15803d; user-select:none;">
+                    <input type="checkbox" id="feedDoLike" checked style="width:16px!important; height:16px!important; margin:0!important; accent-color:#03c75a!important;">
+                    <span>❤️ 공감(좋아요)</span>
+                  </label>
+                  <label class="feed-option-card checked" id="cardFeedDoComment" style="flex:1; display:flex; align-items:center; gap:8px; padding:9px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; cursor:pointer; font-size:12.5px; font-weight:700; color:#1d4ed8; user-select:none;">
+                    <input type="checkbox" id="feedDoComment" checked style="width:16px!important; height:16px!important; margin:0!important; accent-color:#2563eb!important;">
+                    <span>💬 AI 맞춤 댓글</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Collapsible Advanced Settings (Drawer) -->
+              <button type="button" class="feed-advanced-toggle" id="toggleFeedAdvancedBtn" style="display:flex; justify-content:space-between; align-items:center; width:100%; padding:9px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-size:12px; font-weight:600; color:#475569; margin-top:10px; transition:all 0.15s ease;">
+                <span>⚙️ <strong>상세 옵션</strong> <small style="color:#94a3b8; font-weight:normal;">(말투 · 딜레이 속도)</small></span>
+                <span id="feedAdvancedArrow" style="font-size:11px; transition:transform 0.2s ease;">▼</span>
+              </button>
+
+              <div class="feed-advanced-drawer hidden" id="feedAdvancedSettings" style="margin-top:8px; padding:12px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; display:flex; flex-direction:column; gap:10px;">
+                <div class="form-group">
+                  <label for="feedCommentTone" style="font-size:12px;"><strong>AI 댓글 말투</strong></label>
+                  <select id="feedCommentTone" class="desktop-select" style="font-size:12px; padding:6px 10px;">
+                    <option value="friendly" selected>친근한 이웃체 (~해요! 넘 정성 가득 글이네요 😊)</option>
+                    <option value="informative">정중한 소통체 (좋은 정보 유익하게 잘 읽고 갑니다.)</option>
+                    <option value="warm">따뜻한 공감체 (공감 꾹 누르고 가요! 늘 응원합니다 ✨)</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="margin-top: 4px;">
+                  <label for="feedSpeedMode" style="font-size:12px;"><strong>소통 간격 (계정 보호 딜레이)</strong></label>
+                  <select id="feedSpeedMode" class="desktop-select" style="font-size:12px; padding:6px 10px;">
+                    <option value="safe" selected>🛡️ 안전 모드 (25~40초 대기 - 네이버 제재 100% 방지 권장)</option>
+                    <option value="balanced">⚡ 표준 모드 (15~25초 대기 - 빠른 소통과 안정성 균형)</option>
+                    <option value="fast">🚀 빠른 모드 (8~15초 대기 - 빠른 피드 순환)</option>
+                  </select>
                 </div>
               </div>
 
@@ -1041,9 +1038,11 @@
                 <h3>📰 내 이웃 새글 피드 목록</h3>
                 <span class="feed-count-chip" id="feedFoundCountBadge">0개 발견</span>
               </div>
-              <button type="button" class="button secondary small" id="refreshFeedPreviewBtn">
-                🔄 피드 새로고침
-              </button>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button type="button" class="button secondary small" id="refreshFeedPreviewBtn">
+                  🔄 피드 새로고침
+                </button>
+              </div>
             </div>
             <div class="desktop-card-body" style="padding-top: 12px;">
               <!-- Feed Filter Tabs & Search Filter -->
@@ -1057,6 +1056,22 @@
                 <div class="feed-search-wrap">
                   <span class="feed-search-icon">🔍</span>
                   <input type="text" id="feedSearchInput" placeholder="이웃 닉네임 또는 글 제목 검색..." class="feed-search-input">
+                </div>
+              </div>
+
+              <!-- Multi-selection & Batch Action Bar -->
+              <div class="feed-batch-toolbar" id="feedBatchToolbar" style="display:flex; justify-content:space-between; align-items:center; padding:7px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; font-size:12px;">
+                <label style="display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; font-weight:600; color:#334155; user-select:none;">
+                  <input type="checkbox" id="feedSelectAllCheckbox" style="width:16px!important; height:16px!important; margin:0!important; accent-color:#03c75a!important; cursor:pointer;">
+                  <span>소통 대기 글 전체 선택</span>
+                </label>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div id="feedSelectionStatus" style="color:#64748b; font-size:11.5px;">
+                    <span>원하는 글을 선택하거나, 카드의 [⚡ 바로 소통]을 누르세요.</span>
+                  </div>
+                  <button type="button" id="feedEngageSelectedBtn" class="button primary small" style="display:none; padding:4px 12px; font-size:11.5px; border-radius:6px; font-weight:700; cursor:pointer; background:#03c75a; color:#fff; border:none;">
+                    ⚡ 선택한 0개 글 소통 시작
+                  </button>
                 </div>
               </div>
 

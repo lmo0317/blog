@@ -364,6 +364,108 @@ export class FeedEngagementManager {
     this.log('⏹️ 사용자에 의해 이웃 새글 소통 작업이 중단되었습니다.', 'warn');
   }
 
+  async engageSinglePost({
+    postUrl,
+    logNo,
+    blogId,
+    author = '',
+    title = '',
+    doLike = true,
+    doComment = true,
+    commentTone = 'friendly',
+    tone = ''
+  } = {}) {
+    if (!this.browserSession || !this.browserSession.connected) {
+      throw new Error('네이버 계정이 연결되어 있지 않습니다. 먼저 네이버 로그인을 완료해주세요.');
+    }
+
+    const finalTone = commentTone || tone || 'friendly';
+    const targetUrl = postUrl || `https://m.blog.naver.com/${blogId}/${logNo}`;
+    const authorName = author || blogId;
+    const postLabel = `@${authorName} ('${(title || '').slice(0, 24)}...')`;
+
+    this.log(`⚡ [즉시 소통] ${postLabel} 분석 및 소통을 시작합니다.`, 'info');
+
+    // 1. Inspect post
+    const inspection = await this.browserSession.inspectPostForEngagement(targetUrl);
+    if (inspection.alreadyCommented) {
+      await this.historyStore.addRecord({
+        blogId,
+        logNo,
+        author: authorName,
+        title,
+        url: targetUrl,
+        liked: false,
+        commented: false,
+        status: 'skipped',
+        statusMessage: '이미 작성한 댓글 존재'
+      });
+      this.log(`⏩ [중복 댓글 제외] ${postLabel} 이미 내 댓글이 확인된 포스팅입니다.`, 'warn');
+      return {
+        ok: true,
+        liked: false,
+        commented: false,
+        status: 'skipped',
+        statusMessage: '이미 작성한 댓글 존재'
+      };
+    }
+
+    // 2. Generate comment
+    let generatedComment = '';
+    if (doComment && inspection.canComment) {
+      this.log('🤖 AI가 이웃 글 내용과 사진을 읽고 맞춤 댓글을 생성하고 있습니다...', 'info');
+      const imageSummary = inspection.firstImage?.alt || (inspection.images.length > 0 ? `${inspection.images.length}장의 본문 사진 포함` : '');
+      const recentComments = await this.historyStore.getRecentComments(30);
+      if (this.embeddedLlama) {
+        generatedComment = await this.embeddedLlama.generateBlogComment({
+          title: inspection.title || title,
+          contentSnippet: inspection.snippet || '',
+          imageSummary,
+          tone: finalTone,
+          recentComments
+        }).catch(() => '');
+      }
+      if (generatedComment) {
+        this.log(`💬 검증된 찐이웃 댓글: "${generatedComment}"`, 'info');
+      }
+    }
+
+    // 3. Like & Comment
+    const result = await this.browserSession.likeAndCommentPost({
+      postUrl: targetUrl,
+      commentText: generatedComment,
+      doLike: Boolean(doLike),
+      doComment: Boolean(doComment) && Boolean(generatedComment)
+    });
+
+    // 4. Save record
+    const savedRecord = await this.historyStore.addRecord({
+      blogId,
+      logNo,
+      author: authorName,
+      title: inspection.title || title,
+      url: targetUrl,
+      liked: result.liked,
+      commented: result.commented,
+      commentText: generatedComment,
+      status: result.status,
+      statusMessage: result.message
+    });
+
+    const actions = [result.liked ? '공감(❤️)' : '', result.commented ? 'AI 댓글(💬)' : ''].filter(Boolean).join(' 및 ');
+    this.log(`✅ [즉시 소통 완료] ${postLabel} ${actions} 등록 완료!`, 'success');
+
+    return {
+      ok: true,
+      liked: result.liked,
+      commented: result.commented,
+      commentText: generatedComment,
+      status: result.status,
+      statusMessage: result.message,
+      record: savedRecord
+    };
+  }
+
   async start({
     targetCount = 10,
     doLike = true,
@@ -371,7 +473,8 @@ export class FeedEngagementManager {
     commentTone = 'friendly',
     tone = '',
     minDelaySec = 25,
-    maxDelaySec = 45
+    maxDelaySec = 45,
+    selectedPosts = null
   } = {}) {
     if (this.state === 'running') {
       throw new Error('이미 이웃 새글 자동 소통 작업이 실행 중입니다.');
@@ -381,7 +484,10 @@ export class FeedEngagementManager {
       throw new Error('네이버 계정이 연결되어 있지 않습니다. 먼저 네이버 로그인을 완료해주세요.');
     }
 
-    const boundTarget = Math.max(1, Math.min(Number(targetCount) || 10, 50));
+    this.selectedPosts = Array.isArray(selectedPosts) && selectedPosts.length > 0 ? selectedPosts : null;
+    const defaultTarget = this.selectedPosts ? this.selectedPosts.length : 10;
+    const boundTarget = Math.max(1, Math.min(Number(targetCount) || defaultTarget, 50));
+
     this.config = {
       targetCount: boundTarget,
       doLike: Boolean(doLike),
@@ -405,7 +511,10 @@ export class FeedEngagementManager {
       protectionTriggered: false
     };
 
-    this.log(`🚀 이웃 새글 피드 자동 소통을 시작합니다. (목표: ${boundTarget}건, 공감: ${this.config.doLike ? 'ON' : 'OFF'}, AI 댓글: ${this.config.doComment ? 'ON' : 'OFF'})`, 'info');
+    const runDesc = this.selectedPosts
+      ? `선택한 ${this.selectedPosts.length}개 새글`
+      : `목표: ${boundTarget}건`;
+    this.log(`🚀 이웃 새글 피드 자동 소통을 시작합니다. (${runDesc}, 공감: ${this.config.doLike ? 'ON' : 'OFF'}, AI 댓글: ${this.config.doComment ? 'ON' : 'OFF'})`, 'info');
 
     // Run in background without blocking caller
     this._runLoop().catch((err) => {
@@ -419,26 +528,33 @@ export class FeedEngagementManager {
   async _runLoop() {
     let feedPage = null;
     try {
-      if (!this.browserSession.context) {
+      if (!this.selectedPosts && !this.browserSession.context) {
         throw new Error('브라우저 세션 컨텍스트가 유효하지 않습니다.');
       }
 
-      feedPage = await this.browserSession.context.newPage();
-      this.log('🔍 네이버 모바일 이웃 피드(FeedList.naver)에서 최신 새글을 탐색합니다...', 'info');
+      let feedPosts = [];
+      if (this.selectedPosts && this.selectedPosts.length > 0) {
+        feedPosts = this.selectedPosts;
+        this.stats.totalFound = feedPosts.length;
+        this.log(`🎯 사용자가 직접 선택한 ${feedPosts.length}개의 이웃 새글을 순차적으로 소통합니다.`, 'info');
+      } else {
+        feedPage = await this.browserSession.context.newPage();
+        this.log('🔍 네이버 모바일 이웃 피드(FeedList.naver)에서 최신 새글을 탐색합니다...', 'info');
 
-      const maxFetch = Math.max(this.config.targetCount * 3, 30);
-      const feedPosts = await fetchNeighborFeedPosts(feedPage, {
-        maxItems: maxFetch,
-        maxScrolls: Math.max(5, Math.ceil(maxFetch / 10))
-      });
-      await feedPage.close().catch(() => {});
-      feedPage = null;
+        const maxFetch = Math.max(this.config.targetCount * 3, 30);
+        feedPosts = await fetchNeighborFeedPosts(feedPage, {
+          maxItems: maxFetch,
+          maxScrolls: Math.max(5, Math.ceil(maxFetch / 10))
+        });
+        await feedPage.close().catch(() => {});
+        feedPage = null;
 
-      this.stats.totalFound = feedPosts.length;
-      this.log(`📰 총 ${feedPosts.length}개의 이웃 새글을 발견했습니다. 순차적으로 소통을 시작합니다.`, 'info');
+        this.stats.totalFound = feedPosts.length;
+        this.log(`📰 총 ${feedPosts.length}개의 이웃 새글을 발견했습니다. 순차적으로 소통을 시작합니다.`, 'info');
+      }
 
       if (!feedPosts.length) {
-        this.log('⚠️ 현재 새롭게 등록된 이웃 새글이 없습니다.', 'warn');
+        this.log('⚠️ 현재 소통할 이웃 새글이 없습니다.', 'warn');
         this.state = 'completed';
         return;
       }

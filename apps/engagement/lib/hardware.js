@@ -21,6 +21,23 @@ export const MODEL_CATALOG = {
     downloadUrl: 'https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/main/gemma-4-E2B_q4_0-it.gguf',
     sourceUrl: 'https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf'
   },
+  'gemma-4-e2b-blog-comment-v2': {
+    id: 'gemma-4-e2b-blog-comment-v2',
+    name: 'Gemma 4 E2B 블로그 댓글 v2',
+    category: 'trained',
+    minVramMb: 4096,
+    recommendedVramMb: 6144,
+    sizeBytes: 48345056,
+    sizeFormatted: '46.1 MB + 기본 E2B',
+    description: '외부 문맥 250건으로 QLoRA 학습한 한국어 맞춤 댓글용 연구 모델입니다. 기본 E2B와 함께 설치됩니다.',
+    filename: 'gemma-4-e2b-blog-comment-v2-lora-f16.gguf',
+    downloadUrl: 'https://huggingface.co/lmo0317/gemma-4-e2b-blog-comment-v2-lora-gguf/resolve/main/gemma-4-e2b-blog-comment-v2-lora-f16.gguf',
+    sourceUrl: 'https://huggingface.co/lmo0317/gemma-4-e2b-blog-comment-v2-lora-gguf',
+    requiresModelId: 'gemma-4-e2b-it-qat-q4-0',
+    adapter: true,
+    researchOnly: true,
+    sha256: '8dd19dc78218177ce9f8c93ce42f275349bb8d3b16f411ca8e65b08a4343f24c'
+  },
   'gemma-4-e4b-it-qat-q4-0': {
     id: 'gemma-4-e4b-it-qat-q4-0',
     name: 'Gemma 4 E4B',

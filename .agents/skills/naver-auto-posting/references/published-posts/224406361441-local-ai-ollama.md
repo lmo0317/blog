@@ -1,7 +1,7 @@
 ---
 logNo: "224406361441"
 title: "로컬 PC에서 비용 0원으로 돌리는 나만의 AI! Ollama와 오픈소스 LLM 설치부터 실전 활용 가이드"
-category: "자동화"
+category: "IT"
 url: "https://blog.naver.com/lmo0317/224406361441"
 publishedAt: "2026-09-09 20:33"
 tags: ["로컬AI","온디바이스AI","Ollama","올라마","오픈소스LLM","Llama3","Gemma2","Qwen2","무료AI","업무자동화"]
@@ -12,7 +12,7 @@ charCount: 4012
 # 로컬 PC에서 비용 0원으로 돌리는 나만의 AI! Ollama와 오픈소스 LLM 설치부터 실전 활용 가이드
 
 - **발행일**: 2026-09-09 20:33
-- **카테고리**: 자동화
+- **카테고리**: IT
 - **URL**: [https://blog.naver.com/lmo0317/224406361441](https://blog.naver.com/lmo0317/224406361441)
 - **글자수 (공백제외)**: 4012자
 - **이미지**: 3장 (로컬 PC 온디바이스 AI 데스크톱 환경, 오픈소스 경량 AI 모델 터미널 대시보드, 오프라인 안전 비공개 환경에서 AI를 활용하는 모습)

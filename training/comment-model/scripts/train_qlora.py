@@ -14,9 +14,9 @@ from transformers import (
     AutoModelForImageTextToText,
     AutoProcessor,
     BitsAndBytesConfig,
+    DataCollatorForSeq2Seq,
     Trainer,
     TrainingArguments,
-    default_data_collator,
     set_seed,
 )
 
@@ -122,7 +122,14 @@ def main():
     from peft import get_peft_model
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
-    trainer = Trainer(model=model, args=training_args, train_dataset=dataset, data_collator=default_data_collator)
+    data_collator = DataCollatorForSeq2Seq(
+        tokenizer=processor.tokenizer,
+        model=None,
+        padding=True,
+        label_pad_token_id=-100,
+        pad_to_multiple_of=8,
+    )
+    trainer = Trainer(model=model, args=training_args, train_dataset=dataset, data_collator=data_collator)
     result = trainer.train()
     model.save_pretrained(output_dir / "adapter")
     processor.save_pretrained(output_dir / "adapter")

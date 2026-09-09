@@ -179,3 +179,130 @@ test('FeedEngagementManager validates connection and executes feed engagement up
   await rm(testDbPath, { force: true }).catch(() => {});
 });
 
+test('FeedEngagementManager engageSinglePost performs 1-click single post engagement', async () => {
+  const testDbPath = path.join(process.cwd(), '.data', 'test-feed-single.json');
+  await rm(testDbPath, { force: true }).catch(() => {});
+  const store = new FeedEngagementHistoryStore(testDbPath);
+
+  const mockSession = {
+    connected: true,
+    async inspectPostForEngagement() {
+      return {
+        title: '단일 테스트 글',
+        snippet: '단일 소통 글 요약',
+        images: [],
+        alreadyCommented: false,
+        canComment: true
+      };
+    },
+    async likeAndCommentPost({ postUrl, commentText, doLike, doComment }) {
+      return {
+        postUrl,
+        liked: doLike,
+        commented: doComment,
+        status: 'success',
+        message: '등록 완료'
+      };
+    }
+  };
+
+  const mockLlama = {
+    async generateBlogComment() {
+      return '단일 맞춤 댓글입니다!';
+    }
+  };
+
+  const manager = new FeedEngagementManager({
+    browserSession: mockSession,
+    embeddedLlama: mockLlama,
+    historyStore: store
+  });
+
+  const res = await manager.engageSinglePost({
+    postUrl: 'https://m.blog.naver.com/singleUser/55555',
+    logNo: '55555',
+    blogId: 'singleUser',
+    author: '싱글이웃',
+    title: '단일 테스트 글',
+    doLike: true,
+    doComment: true
+  });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.status, 'success');
+  assert.equal(res.liked, true);
+  assert.equal(res.commented, true);
+  assert.equal(res.commentText, '단일 맞춤 댓글입니다!');
+  assert.equal(await store.hasEngaged('55555'), true);
+
+  await rm(testDbPath, { force: true }).catch(() => {});
+});
+
+test('FeedEngagementManager start with selectedPosts engages only specified posts', async () => {
+  const testDbPath = path.join(process.cwd(), '.data', 'test-feed-batch.json');
+  await rm(testDbPath, { force: true }).catch(() => {});
+  const store = new FeedEngagementHistoryStore(testDbPath);
+
+  const processedUrls = [];
+  const mockSession = {
+    connected: true,
+    async inspectPostForEngagement(url) {
+      processedUrls.push(url);
+      return {
+        title: '선택 글',
+        snippet: '선택 글 본문',
+        images: [],
+        alreadyCommented: false,
+        canComment: true
+      };
+    },
+    async likeAndCommentPost({ postUrl }) {
+      return {
+        postUrl,
+        liked: true,
+        commented: true,
+        status: 'success',
+        message: '등록 완료'
+      };
+    }
+  };
+
+  const mockLlama = {
+    async generateBlogComment() {
+      return '선택 글 댓글!';
+    }
+  };
+
+  const manager = new FeedEngagementManager({
+    browserSession: mockSession,
+    embeddedLlama: mockLlama,
+    historyStore: store
+  });
+
+  const selectedPosts = [
+    { blogId: 'selectedA', logNo: '7771', author: '선택1', title: '제목1', url: 'https://m.blog.naver.com/selectedA/7771' },
+    { blogId: 'selectedB', logNo: '7772', author: '선택2', title: '제목2', url: 'https://m.blog.naver.com/selectedB/7772' }
+  ];
+
+  await manager.start({
+    targetCount: 2,
+    doLike: true,
+    doComment: true,
+    minDelaySec: 0,
+    maxDelaySec: 0,
+    selectedPosts
+  });
+
+  while (manager.state === 'running') {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+
+  assert.equal(manager.state, 'completed');
+  assert.equal(manager.stats.successCount, 2);
+  assert.equal(processedUrls.length, 2);
+  assert.equal(processedUrls[0], 'https://m.blog.naver.com/selectedA/7771');
+  assert.equal(processedUrls[1], 'https://m.blog.naver.com/selectedB/7772');
+
+  await rm(testDbPath, { force: true }).catch(() => {});
+});
+

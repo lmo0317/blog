@@ -18,4 +18,4 @@
 {"id":"long-invalid-001","category":"생활","title":"서랍 정리","contentSnippet":"자주 쓰는 물건을 앞쪽에 배치했다.","imageSummary":"칸막이로 나눈 서랍","recentComments":[],"candidate":"서랍 안에 칸막이를 넣고 자주 사용하는 물건을 앞쪽에 배치하신 방법이 정말 구체적이고 유용해서 저도 집에 있는 모든 서랍을 하나씩 꺼내 같은 순서로 정리하고 물건마다 이름표까지 붙여 오래 유지할 수 있도록 꼭 실천해 보고 싶다는 생각이 들었어요.","expected":{"ok":false,"reasons":["length"]}}
 {"id":"emoji-valid-001","category":"카페","title":"제주 귤 디저트 카페","contentSnippet":"귤 타르트의 산뜻한 맛과 바삭한 타르트지를 소개했다.","imageSummary":"귤 타르트","recentComments":[],"candidate":"귤 타르트의 산뜻함과 바삭한 타르트지 조합이 잘 느껴져요. 제주 카페 선택에 참고할게요 😊","expected":{"ok":true}}
 {"id":"duplicate-structure-invalid-001","category":"IT","title":"노트북 발열 관리","contentSnippet":"받침대로 바닥을 띄우니 통풍에 도움이 됐다.","imageSummary":"노트북 받침대","recentComments":["노트북 받침대로 바닥을 띄워 통풍을 만든 부분이 특히 도움이 됐어요."],"candidate":"노트북 받침대로 바닥을 띄워 통풍을 만든 부분이 특히 도움이 됐어요!","expected":{"ok":false,"reasons":["duplicate"]}}
-
+{"id":"reader-context-invalid-001","category":"카페","title":"충무로 섹터커피","contentSnippet":"충무로역 3번 출구 인근에 있으며 크림 라떼를 판매한다.","imageSummary":"크림 라떼","recentComments":[],"candidate":"저도 충무로에서 갈 카페를 찾고 있었는데 섹터커피 위치가 괜찮네요.","expected":{"ok":false,"reasons":["unsupported_reader_context"]}}

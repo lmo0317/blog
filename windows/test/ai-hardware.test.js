@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { rm } from 'node:fs/promises';
+import { rm, mkdir, writeFile } from 'node:fs/promises';
 import { detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG } from '../lib/hardware.js';
 import { ModelManager } from '../lib/model-manager.js';
 import { EmbeddedLlamaServer, normalizeCommentText, validateBlogComment } from '../lib/embedded-llama.js';
@@ -15,7 +15,7 @@ test('detectGpuSpecs and getSystemHardwareSummary return valid system metrics an
   assert.ok(summary.ram.totalGb > 0);
   assert.ok(summary.recommendedModel.id in MODEL_CATALOG);
   assert.ok(Array.isArray(summary.catalog));
-  assert.equal(summary.catalog.length, 3);
+  assert.equal(summary.catalog.length, 4);
 });
 
 test('ModelManager handles local models catalog and active model selection', async () => {
@@ -28,8 +28,23 @@ test('ModelManager handles local models catalog and active model selection', asy
   await manager.init();
 
   const installed = await manager.getInstalledModels();
-  assert.equal(installed.length, 3);
+  assert.equal(installed.length, 4);
   assert.equal(installed.every((m) => m.isInstalled === false), true);
+
+  const trained = MODEL_CATALOG['gemma-4-e2b-blog-comment-v2'];
+  const base = MODEL_CATALOG[trained.requiresModelId];
+  await mkdir(testModelsDir, { recursive: true });
+  await writeFile(path.join(testModelsDir, trained.filename), 'adapter');
+  let models = await manager.getInstalledModels();
+  assert.equal(models.find((model) => model.id === trained.id).isPartiallyInstalled, true);
+  await writeFile(path.join(testModelsDir, base.filename), 'base');
+  models = await manager.getInstalledModels();
+  const ready = models.find((model) => model.id === trained.id);
+  assert.equal(ready.isInstalled, true);
+  assert.equal(ready.actualPath, path.join(testModelsDir, base.filename));
+  assert.equal(ready.adapterPath, path.join(testModelsDir, trained.filename));
+  await manager.setActiveModel(trained.id);
+  assert.equal((await manager.getActiveModel()).id, trained.id);
 
   await rm(testModelsDir, { recursive: true, force: true }).catch(() => {});
   await rm(testConfigPath, { force: true }).catch(() => {});

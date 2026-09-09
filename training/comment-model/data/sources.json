@@ -1,25 +1,13 @@
 {
-  "updatedAt": "2026-09-08",
+  "updatedAt": "2026-09-09",
   "policy": {
-    "naverThirdPartyScraping": "excluded",
-    "privateHistory": "anonymized_review_candidates_only",
-    "publicData": "license_metadata_recorded_review_before_training"
+    "trainingOrigin": "external_public_sources_only",
+    "naverThirdPartyFullTextScraping": "excluded",
+    "privateHistory": "excluded",
+    "publicData": "pinned_revision_and_license_recorded_before_download",
+    "blogSftRule": "auxiliary_corpora_are_never_direct_blog_comment_answers"
   },
   "sources": [
-    {
-      "id": "local-engagement-history",
-      "kind": "private",
-      "license": "user-controlled application history",
-      "usage": "weak_unverified",
-      "note": "본문 요약이 없어 SFT 정답으로 직접 사용 금지"
-    },
-    {
-      "id": "local-comment-replies",
-      "kind": "private",
-      "license": "user-controlled application history",
-      "usage": "review_required",
-      "note": "작성자 식별값 제거 후 사람 검수 필요"
-    },
     {
       "id": "heegyu/open-korean-instructions",
       "url": "https://huggingface.co/datasets/heegyu/open-korean-instructions",
@@ -48,7 +36,45 @@
       "license": "cc-by-2.0",
       "usage": "Korean conversation auxiliary with attribution",
       "files": ["ko_lima_vicuna.json"]
+    },
+    {
+      "id": "mkd-chanwoo/keural-conversation-ko",
+      "url": "https://huggingface.co/datasets/mkd-chanwoo/keural-conversation-ko",
+      "revision": "fcb975654651d55ff1a642455d620045b6d3f741",
+      "kind": "public_synthetic_auxiliary",
+      "license": "cc-by-4.0",
+      "usage": "Korean natural-response style auxiliary only",
+      "rows": 191093,
+      "files": ["data/train-00000-of-00001.parquet"],
+      "note": "Gemma 4 26B 생성 합성 대화. 블로그 본문 근거 댓글 정답으로 직접 사용 금지"
+    },
+    {
+      "id": "Bingsu/KcBERT_Pre-Training_Corpus",
+      "url": "https://huggingface.co/datasets/Bingsu/KcBERT_Pre-Training_Corpus",
+      "revision": "183fa71f5416ad2ab1b50b6be69769ad1508581a",
+      "kind": "public_negative_style_candidate",
+      "license": "cc-by-sa-4.0",
+      "usage": "spam_and_low_quality_classifier_research_only",
+      "rows": 86246285,
+      "download": "deferred",
+      "note": "본문-댓글 페어가 아니며 품질 편차와 공유조건 때문에 생성 SFT 정답에서 제외"
+    },
+    {
+      "id": "Jaime-Choi/KoDetox",
+      "url": "https://huggingface.co/datasets/Jaime-Choi/KoDetox",
+      "revision": "b55ac1f0dc9d9d8e2e7cbd2d56a32f4fe5417e88",
+      "kind": "public_safety_candidate",
+      "license": "cc-by-4.0",
+      "usage": "blocked_pending_terms_review",
+      "note": "카드는 CC BY 4.0이나 설명에 academic and research use 문구가 있어 제품 학습에는 보류"
+    },
+    {
+      "id": "chaannwooff/CC-korean",
+      "url": "https://huggingface.co/datasets/chaannwooff/CC-korean",
+      "kind": "public_web_corpus",
+      "license": "common-crawl/original-rights-retained",
+      "usage": "excluded",
+      "note": "원저작권자의 상업 이용 허락이 필요하다고 명시되어 제외"
     }
   ]
 }
-

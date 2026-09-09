@@ -57,9 +57,13 @@ export class ModelManager extends EventEmitter {
 
     for (const [id, meta] of Object.entries(MODEL_CATALOG)) {
       const targetPath = path.join(this.modelsDir, meta.filename);
-      const isInstalled = files.includes(meta.filename);
+      const artifactInstalled = files.includes(meta.filename);
+      const dependency = meta.requiresModelId ? MODEL_CATALOG[meta.requiresModelId] : null;
+      const dependencyPath = dependency ? path.join(this.modelsDir, dependency.filename) : null;
+      const dependencyInstalled = !dependency || files.includes(dependency.filename);
+      const isInstalled = artifactInstalled && dependencyInstalled;
       let fileSizeBytes = 0;
-      if (isInstalled) {
+      if (artifactInstalled) {
         try {
           const stats = await stat(targetPath);
           fileSizeBytes = stats.size;
@@ -71,7 +75,10 @@ export class ModelManager extends EventEmitter {
         isInstalled,
         isActive: this.activeModelId === id,
         fileSizeBytes,
-        actualPath: isInstalled ? targetPath : null,
+        actualPath: isInstalled ? (dependencyPath || targetPath) : null,
+        adapterPath: isInstalled && meta.adapter ? targetPath : null,
+        dependencyInstalled,
+        isPartiallyInstalled: artifactInstalled && !dependencyInstalled,
         isDownloading: this.activeDownloads.has(id)
       });
     }
@@ -101,6 +108,13 @@ export class ModelManager extends EventEmitter {
     if (!fs.existsSync(targetPath)) {
       throw new Error(`모델 파일이 다운로드되어 있지 않습니다: ${meta.filename}`);
     }
+    if (meta.requiresModelId) {
+      const dependency = MODEL_CATALOG[meta.requiresModelId];
+      const dependencyPath = dependency && path.join(this.modelsDir, dependency.filename);
+      if (!dependency || !fs.existsSync(dependencyPath)) {
+        throw new Error(`학습 모델 실행에 필요한 기본 모델이 없습니다: ${dependency?.name || meta.requiresModelId}`);
+      }
+    }
 
     this.activeModelId = modelId;
     await this.saveConfig();
@@ -114,6 +128,13 @@ export class ModelManager extends EventEmitter {
 
     if (this.activeDownloads.has(modelId)) {
       throw new Error('해당 모델은 이미 다운로드가 진행 중입니다.');
+    }
+
+    if (meta.requiresModelId) {
+      const dependency = MODEL_CATALOG[meta.requiresModelId];
+      const dependencyPath = dependency && path.join(this.modelsDir, dependency.filename);
+      if (!dependency) throw new Error(`필수 기본 모델 정보를 찾을 수 없습니다: ${meta.requiresModelId}`);
+      if (!fs.existsSync(dependencyPath)) await this.downloadModel(meta.requiresModelId, onProgress);
     }
 
     await mkdir(this.modelsDir, { recursive: true }).catch(() => {});
@@ -181,6 +202,20 @@ export class ModelManager extends EventEmitter {
 
       if (meta.sizeBytes && downloadedBytes < meta.sizeBytes * 0.94) {
         throw new Error(`다운로드 파일 크기가 예상보다 작습니다 (${downloadedBytes} / ${meta.sizeBytes} bytes). 모델 파일을 저장하지 않았습니다.`);
+      }
+      if (meta.sha256) {
+        const { createHash } = await import('node:crypto');
+        const digest = createHash('sha256');
+        await new Promise((resolve, reject) => {
+          const stream = fs.createReadStream(tempPath);
+          stream.on('data', (chunk) => digest.update(chunk));
+          stream.on('end', resolve);
+          stream.on('error', reject);
+        });
+        const actualSha256 = digest.digest('hex');
+        if (actualSha256 !== meta.sha256.toLowerCase()) {
+          throw new Error('다운로드한 학습 모델의 SHA-256 검증에 실패했습니다.');
+        }
       }
 
       // Rename .download to actual .gguf

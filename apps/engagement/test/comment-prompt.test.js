@@ -16,6 +16,33 @@ test('comment validator rejects unsupported personal experience', () => {
   assert.ok(result.reasons.includes('unsupported_experience'));
 });
 
+test('comment validator rejects fabricated reader circumstances', () => {
+  const result = validateBlogComment('저도 충무로에서 갈 카페를 찾고 있었는데 섹터커피 위치가 괜찮네요.', {
+    title: '충무로 섹터커피',
+    contentSnippet: '충무로역 3번 출구 인근에 있으며 크림 라떼를 판매한다.'
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.reasons.includes('unsupported_reader_context'));
+});
+
+test('comment validator rejects implied first-person context without a pronoun', () => {
+  const context = { title: '여름 바디스프레이', contentSnippet: '가벼운 향의 바디스프레이 사용법을 소개했다.' };
+  for (const comment of [
+    '여름에 쓸 향을 찾고 있었는데 가벼운 바디스프레이가 괜찮아 보이네요.',
+    '향수보다 가벼운 바디스프레이가 훨씬 좋더라고요. 사용법도 유용하네요.'
+  ]) {
+    const result = validateBlogComment(comment, context);
+    assert.ok(result.reasons.includes('unsupported_reader_context'));
+  }
+});
+
+test('comment validator rejects unsupported hearsay', () => {
+  const result = validateBlogComment('섹터커피 크림 라떼가 유명하다고 들었는데 한번 마셔보고 싶네요.', {
+    title: '충무로 섹터커피', contentSnippet: '충무로역 인근에서 크림 라떼를 판매한다.'
+  });
+  assert.ok(result.reasons.includes('unsupported_hearsay'));
+});
+
 test('comment validator treats exact SKIP as a valid abstention', () => {
   assert.deepEqual(validateBlogComment('SKIP').action, 'skip');
   assert.equal(validateBlogComment('SKIP').ok, true);

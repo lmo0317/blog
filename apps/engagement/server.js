@@ -789,6 +789,16 @@ app.post('/api/feed/start', async (req, res, next) => {
   }
 });
 
+app.post('/api/feed/engage-single', async (req, res, next) => {
+  try {
+    const payload = req.body || {};
+    const result = await feedManager.engageSinglePost(payload);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/feed/pause', (_req, res) => {
   feedManager.pause();
   res.json({ ok: true, state: feedManager.state });

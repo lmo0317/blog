@@ -1594,6 +1594,7 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
 
     const tierPills = {
       'gemma-4-e2b-it-qat-q4-0': '<span class="model-tier-pill">경량</span>',
+      'gemma-4-e2b-blog-comment-v2': '<span class="model-tier-pill pill-trained">댓글 학습</span>',
       'gemma-4-e4b-it-qat-q4-0': '<span class="model-tier-pill pill-gold">균형</span>',
       'gemma-4-12b-it-qat-q4-0': '<span class="model-tier-pill pill-purple">고성능</span>'
     };
@@ -1611,6 +1612,7 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
           </div>
         </div>
         <p class="model-card-desc">${escapeHtml(m.description || '')}</p>
+        ${m.researchOnly ? '<div class="model-research-note">⚠️ 연구용 v2 · 자동 게시 전 댓글 검증기를 함께 사용합니다.</div>' : ''}
         <div class="model-card-footer">
           <span class="model-vram-hint">💡 최소 VRAM: ${(m.minVramMb / 1024).toFixed(1)}GB</span>
           ${btnHtml}
@@ -1967,6 +1969,39 @@ let cachedFeedPosts = [];
 let activeFeedFilter = 'all'; // 'all' | 'pending' | 'engaged' | 'skipped'
 let feedSearchQuery = '';
 let activeFeedCurrentPost = null;
+const selectedFeedPostLogNos = new Set();
+const engagingSingleLogNos = new Set();
+
+function updateFeedSelectionToolbar() {
+  const pendingPosts = cachedFeedPosts.filter((p) => !p.engaged && !p.skipped);
+  const selectedCount = pendingPosts.filter((p) => selectedFeedPostLogNos.has(p.logNo)).length;
+
+  const selectAllCb = $('#feedSelectAllCheckbox');
+  if (selectAllCb) {
+    selectAllCb.checked = pendingPosts.length > 0 && selectedCount === pendingPosts.length;
+    selectAllCb.indeterminate = selectedCount > 0 && selectedCount < pendingPosts.length;
+    selectAllCb.disabled = pendingPosts.length === 0;
+  }
+
+  const statusEl = $('#feedSelectionStatus');
+  const engageBtn = $('#feedEngageSelectedBtn');
+  if (selectedCount > 0) {
+    if (statusEl) {
+      statusEl.innerHTML = `<span style="color:#03c75a; font-weight:700;">${selectedCount}개 글 선택됨</span>`;
+    }
+    if (engageBtn) {
+      engageBtn.style.display = 'inline-block';
+      engageBtn.textContent = `⚡ 선택한 ${selectedCount}개 글 소통 시작`;
+    }
+  } else {
+    if (statusEl) {
+      statusEl.innerHTML = `<span>원하는 글을 선택하거나, 카드의 [⚡ 바로 소통]을 누르세요.</span>`;
+    }
+    if (engageBtn) {
+      engageBtn.style.display = 'none';
+    }
+  }
+}
 
 function renderFeedPosts() {
   const container = $('#feedPostsContainer');
@@ -1978,6 +2013,7 @@ function renderFeedPosts() {
         <span>표시할 이웃 새글이 없습니다. [🔄 피드 새로고침] 버튼을 눌러주세요.</span>
       </div>
     `;
+    updateFeedSelectionToolbar();
     return;
   }
 
@@ -2031,6 +2067,7 @@ function renderFeedPosts() {
         <span style="font-size:12px; color:#64748b;">현재 [${filterLabel}] 상태에 해당하는 이웃 새글이 없습니다.</span>
       </div>
     `;
+    updateFeedSelectionToolbar();
     return;
   }
 
@@ -2043,6 +2080,8 @@ function renderFeedPosts() {
     const isEngaged = Boolean(post.engaged);
     const isSkipped = Boolean(post.skipped || post.engagementRecord?.status === 'skipped');
     const isPending = !isEngaged && !isSkipped;
+    const isSelected = isPending && selectedFeedPostLogNos.has(post.logNo);
+    const isSingleEngaging = engagingSingleLogNos.has(post.logNo);
 
     const cardClass = isCurrentActive
       ? 'is-processing'
@@ -2062,6 +2101,7 @@ function renderFeedPosts() {
     );
 
     let statusBadgesHtml = '';
+    let actionBtnHtml = '';
     if (isCurrentActive) {
       statusBadgesHtml = `<span class="feed-status-badge processing">⚡ 실시간 소통 중</span>`;
     } else if (isEngaged) {
@@ -2077,6 +2117,11 @@ function renderFeedPosts() {
       statusBadgesHtml = `<span class="feed-status-badge skipped">⏩ ${escapeHtml(msg)}</span>`;
     } else {
       statusBadgesHtml = `<span class="feed-status-badge pending">⏳ 소통 대기</span>`;
+      if (isSingleEngaging) {
+        actionBtnHtml = `<button type="button" class="feed-single-action-btn" disabled><span>⏳</span> 소통 중...</button>`;
+      } else {
+        actionBtnHtml = `<button type="button" class="feed-single-action-btn" data-logno="${escapeHtml(post.logNo)}" title="이 글만 즉시 AI 맞춤 댓글 및 공감 남기기">⚡ 바로 소통</button>`;
+      }
     }
 
     const hasThumb = Boolean(post.thumbnail);
@@ -2115,6 +2160,11 @@ function renderFeedPosts() {
       <article class="feed-post-card ${cardClass}" data-logno="${post.logNo}">
         <div class="feed-card-header">
           <div class="feed-card-author-row">
+            ${isPending ? `
+              <label class="feed-card-check-wrap" style="display:inline-flex; align-items:center; margin:0; cursor:pointer;" onclick="event.stopPropagation();" title="선택하여 일괄 소통">
+                <input type="checkbox" class="feed-post-check" data-logno="${escapeHtml(post.logNo)}" ${isSelected ? 'checked' : ''}>
+              </label>
+            ` : ''}
             <span class="feed-author-badge">
               <span class="feed-author-avatar">👤</span>
               <strong class="feed-author-name">${escapeHtml(post.author || post.blogId)}</strong>
@@ -2127,8 +2177,9 @@ function renderFeedPosts() {
               </span>
             ` : ''}
           </div>
-          <div class="feed-status-badges">
+          <div class="feed-status-badges" style="display:inline-flex; align-items:center; gap:6px;">
             ${statusBadgesHtml}
+            ${actionBtnHtml}
           </div>
         </div>
 
@@ -2166,6 +2217,8 @@ function renderFeedPosts() {
   $('#feedLoadMoreBtn')?.addEventListener('click', () => {
     loadFeedPreview(true);
   });
+
+  updateFeedSelectionToolbar();
 }
 
 function updateFeedDashboard(statusData) {
@@ -2431,6 +2484,7 @@ async function loadFeedPreview(more = false) {
   const targetLimit = more ? Math.min((cachedFeedPosts.length || 30) + 20, 100) : 30;
 
   if (!more) {
+    selectedFeedPostLogNos.clear();
     container.innerHTML = `
       <div style="text-align:center; padding: 40px 20px; color: var(--text-muted, #64748b);">
         <div class="desktop-spinner" style="margin: 0 auto 12px auto;"></div>
@@ -2647,11 +2701,212 @@ function initFeedEngagement() {
     if (container) container.innerHTML = '<div class="terminal-line info">[로그 초기화됨]</div>';
   });
 
+  // Advanced Settings Drawer Toggle
+  $('#toggleFeedAdvancedBtn')?.addEventListener('click', () => {
+    const toggleBtn = $('#toggleFeedAdvancedBtn');
+    const drawer = $('#feedAdvancedSettings');
+    if (drawer) {
+      const isHidden = drawer.classList.toggle('hidden');
+      if (toggleBtn) {
+        toggleBtn.classList.toggle('open', !isHidden);
+      }
+    }
+  });
+
+  // Select all pending posts
+  $('#feedSelectAllCheckbox')?.addEventListener('change', (e) => {
+    const isChecked = e.target.checked;
+    const pendingPosts = cachedFeedPosts.filter((p) => !p.engaged && !p.skipped);
+    if (isChecked) {
+      pendingPosts.forEach((p) => selectedFeedPostLogNos.add(p.logNo));
+    } else {
+      pendingPosts.forEach((p) => selectedFeedPostLogNos.delete(p.logNo));
+    }
+    $$('#feedPostsContainer .feed-post-check').forEach((cb) => {
+      cb.checked = isChecked;
+    });
+    updateFeedSelectionToolbar();
+  });
+
+  // Batch engage selected posts
+  $('#feedEngageSelectedBtn')?.addEventListener('click', async (e) => {
+    e?.preventDefault();
+
+    if (!state.connected) {
+      toast('⚠️ 네이버 계정이 연결되어 있지 않습니다. 먼저 계정을 연결해주세요.', true);
+      setActiveTab('settings', true);
+      return;
+    }
+
+    const selectedPosts = cachedFeedPosts.filter((p) => selectedFeedPostLogNos.has(p.logNo) && !p.engaged && !p.skipped);
+    if (selectedPosts.length === 0) {
+      return toast('선택된 소통 대기 글이 없습니다.', true);
+    }
+
+    const doLike = $('#feedDoLike')?.checked ?? true;
+    const doComment = $('#feedDoComment')?.checked ?? true;
+    if (!doLike && !doComment) {
+      return toast('공감(❤️) 또는 AI 맞춤 댓글(💬) 중 최소 1개 이상을 선택해주세요.', true);
+    }
+
+    const targetCount = selectedPosts.length;
+    const tone = $('#feedCommentTone')?.value || 'friendly';
+    const speedMode = $('#feedSpeedMode')?.value || 'safe';
+
+    let minDelaySec = 25;
+    let maxDelaySec = 40;
+    if (speedMode === 'balanced') {
+      minDelaySec = 15;
+      maxDelaySec = 25;
+    } else if (speedMode === 'fast') {
+      minDelaySec = 8;
+      maxDelaySec = 15;
+    }
+
+    const engageBtn = $('#feedEngageSelectedBtn');
+    try {
+      if (engageBtn) {
+        engageBtn.disabled = true;
+        engageBtn.textContent = '⏳ 작업 시작 중...';
+      }
+
+      await api('/api/feed/start', {
+        method: 'POST',
+        body: JSON.stringify({
+          targetCount,
+          doLike,
+          doComment,
+          tone,
+          commentTone: tone,
+          minDelaySec,
+          maxDelaySec,
+          selectedPosts
+        })
+      });
+
+      toast(`선택한 ${selectedPosts.length}개 이웃 글에 대해 자동 소통을 시작합니다.`);
+      selectedFeedPostLogNos.clear();
+      updateFeedSelectionToolbar();
+      renderFeedPosts();
+      startFeedPolling();
+    } catch (err) {
+      toast(`선택 소통 시작 실패: ${err.message}`, true);
+      if (engageBtn) {
+        engageBtn.disabled = false;
+        engageBtn.textContent = `⚡ 선택한 ${selectedPosts.length}개 글 소통 시작`;
+      }
+    }
+  });
+
+  // Event Delegation on feedPostsContainer: Checkbox and Single Action Button
+  const feedContainer = $('#feedPostsContainer');
+  feedContainer?.addEventListener('change', (e) => {
+    const check = e.target.closest('.feed-post-check');
+    if (!check) return;
+    const logNo = check.dataset.logno;
+    if (!logNo) return;
+    if (check.checked) {
+      selectedFeedPostLogNos.add(logNo);
+    } else {
+      selectedFeedPostLogNos.delete(logNo);
+    }
+    updateFeedSelectionToolbar();
+  });
+
+  feedContainer?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.feed-single-action-btn');
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const logNo = btn.dataset.logno;
+    if (logNo) {
+      handleSinglePostEngage(logNo, btn);
+    }
+  });
+
   $('#refreshFeedPreviewBtn')?.addEventListener('click', () => {
     loadFeedPreview();
   });
 
   refreshFeedSummary();
+}
+
+async function handleSinglePostEngage(logNo, buttonEl) {
+  if (!state.connected) {
+    toast('⚠️ 네이버 계정이 연결되어 있지 않습니다. 먼저 계정을 연결해주세요.', true);
+    setActiveTab('settings', true);
+    return;
+  }
+
+  const post = cachedFeedPosts.find((p) => String(p.logNo) === String(logNo));
+  if (!post) return;
+  if (engagingSingleLogNos.has(post.logNo)) return;
+
+  const doLike = $('#feedDoLike')?.checked ?? true;
+  const doComment = $('#feedDoComment')?.checked ?? true;
+  if (!doLike && !doComment) {
+    return toast('공감(❤️) 또는 AI 맞춤 댓글(💬) 중 최소 1개 이상을 선택해주세요.', true);
+  }
+
+  const tone = $('#feedCommentTone')?.value || 'friendly';
+
+  engagingSingleLogNos.add(post.logNo);
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.innerHTML = '<span>⏳</span> 소통 중...';
+  }
+
+  try {
+    toast(`@${post.author || post.blogId} 님의 글에 즉시 소통을 진행합니다...`);
+    const res = await api('/api/feed/engage-single', {
+      method: 'POST',
+      body: JSON.stringify({
+        postUrl: post.url,
+        logNo: post.logNo,
+        blogId: post.blogId,
+        author: post.author,
+        title: post.title,
+        doLike,
+        doComment,
+        tone,
+        commentTone: tone
+      })
+    });
+
+    if (res.status === 'success' || res.liked || res.commented) {
+      post.engaged = true;
+      post.skipped = false;
+      post.engagementRecord = res.record || {
+        liked: res.liked,
+        commented: res.commented,
+        commentText: res.commentText,
+        timestamp: new Date().toISOString(),
+        status: 'success'
+      };
+      selectedFeedPostLogNos.delete(post.logNo);
+      toast(`✅ @${post.author || post.blogId} 님의 글에 소통을 완료했습니다!`);
+    } else if (res.status === 'skipped') {
+      post.skipped = true;
+      post.engagementRecord = res.record || {
+        status: 'skipped',
+        statusMessage: res.statusMessage || res.reason || '기작성 댓글 감지'
+      };
+      selectedFeedPostLogNos.delete(post.logNo);
+      toast(`⏩ @${post.author || post.blogId} 님의 글: ${res.statusMessage || res.reason || '제외되었습니다.'}`);
+    } else {
+      toast(`⚠️ 소통 처리 완료 (${res.statusMessage || '완료'})`);
+    }
+    refreshFeedSummary();
+    renderFeedPosts();
+  } catch (err) {
+    toast(`단일 소통 실패: ${err.message}`, true);
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.innerHTML = '⚡ 바로 소통';
+    }
+  } finally {
+    engagingSingleLogNos.delete(post.logNo);
+  }
 }
 
 // ---------------------------------------------------------------------------

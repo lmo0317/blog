@@ -1388,6 +1388,7 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
 
     const tierPills = {
       'gemma-4-e2b-it-qat-q4-0': '<span class="model-tier-pill">경량</span>',
+      'gemma-4-e2b-blog-comment-v2': '<span class="model-tier-pill pill-trained">댓글 학습</span>',
       'gemma-4-e4b-it-qat-q4-0': '<span class="model-tier-pill pill-gold">균형</span>',
       'gemma-4-12b-it-qat-q4-0': '<span class="model-tier-pill pill-purple">고성능</span>'
     };
@@ -1405,6 +1406,7 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
           </div>
         </div>
         <p class="model-card-desc">${escapeHtml(m.description || '')}</p>
+        ${m.researchOnly ? '<div class="model-research-note">⚠️ 연구용 v2 · 자동 게시 전 댓글 검증기를 함께 사용합니다.</div>' : ''}
         <div class="model-card-footer">
           <span class="model-vram-hint">💡 최소 VRAM: ${(m.minVramMb / 1024).toFixed(1)}GB</span>
           ${btnHtml}

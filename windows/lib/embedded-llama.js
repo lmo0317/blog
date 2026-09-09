@@ -108,6 +108,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
       '-c', '4096', // Context window
       '-ngl', String(gpuLayers)
     ];
+    if (activeModel.adapterPath) args.push('--lora', activeModel.adapterPath);
 
     try {
       this.serverProcess = spawn(binPath, args, {

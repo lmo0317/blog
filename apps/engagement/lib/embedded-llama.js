@@ -213,6 +213,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
       '--reasoning-budget', '0',
       '--chat-template-kwargs', '{"enable_thinking":false}'
     ];
+    if (activeModel.adapterPath) args.push('--lora', activeModel.adapterPath);
 
     try {
       this.serverProcess = spawn(binPath, args, {

@@ -1,0 +1,18 @@
+{
+  "model_id": "google/gemma-4-E2B-it",
+  "revision": "3e22461f65e89153144f8adb70e3b8c2cc9845a7",
+  "dataset": "training/comment-model/data/processed/external-context-research-v1.jsonl",
+  "output_dir": "training/comment-model/artifacts/external-context-research-v1",
+  "max_length": 640,
+  "epochs": 1,
+  "learning_rate": 0.0001,
+  "batch_size": 1,
+  "gradient_accumulation_steps": 16,
+  "lora_rank": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.05,
+  "seed": 20260909,
+  "max_steps": -1,
+  "smoke_only": true,
+  "research_only": true
+}

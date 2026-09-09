@@ -3,7 +3,7 @@
 이 폴더의 실제 데이터 파일은 개인정보와 대용량 원천 파일을 포함할 수 있어 Git에서 제외한다.
 
 - `raw/public/`: 라이선스가 확인된 공개 원천 데이터
-- `private/`: 홍보 프로그램 이력에서 익명화한 검수 후보
+- `private/`: 이전 실험 파일 보관 영역. 현재 외부 데이터 학습에는 사용하지 않음
 - `processed/`: 사람이 승인한 SFT/DPO 데이터
 - `reports/`: 수집 수량, 중복, 품질 플래그 보고서
 
@@ -16,6 +16,8 @@ node training/comment-model/scripts/collect-local-history.mjs
 & training/comment-model/scripts/download-public-data.ps1
 node training/comment-model/scripts/prepare-public-auxiliary.mjs
 ```
+
+현재 학습 정책은 `external_public_sources_only`다. `collect-local-history.mjs`는 과거 재현용이며 새 학습 실행에 포함하지 않는다.
 
 ## 2026-09-08 수집 스냅샷
 

@@ -43,6 +43,8 @@ export function validateBlogComment(comment, context = {}, recentComments = []) 
   if (/[<>\[\]{}]|https?:\/\/|www\.|```|\b(?:system|assistant|user)\b/i.test(raw)) reasons.push('artifact');
   if (/([!?.ㅋㅎㅠㅜ])\1{3,}/.test(text)) reasons.push('noise');
   if (/(?:제가|저도).*?(?:가봤|다녀왔|먹어봤|써봤|구매했|사용해봤)/.test(text) && !/(?:다녀왔|방문했|먹어봤|구매했|사용했)/.test(String(context.contentSnippet || ''))) reasons.push('unsupported_experience');
+  if (/(?:제가|저는|저도).*?(?:찾고 있었|고민하고 있었|궁금했|필요했|사려고 했|구매하려 했|가려고 했|해보려고 했)|(?:찾고|고민하고?) 있었는데|고민이었는데|(?:써|사용해|먹어|가|다녀)보니|(?:좋|편하|유용하)더라고요/.test(text)) reasons.push('unsupported_reader_context');
+  if (/(?:유명|좋|맛있|괜찮|효과적).*?(?:다고|라고) 들었/.test(text)) reasons.push('unsupported_hearsay');
   const keywords = contentKeywords(context);
   if (keywords.length && !keywords.slice(0, 30).some((word) => text.toLowerCase().includes(word.toLowerCase()))) reasons.push('irrelevant');
   if (recentComments.some((previous) => commentSimilarity(text, previous) >= COMMENT_DUPLICATE_THRESHOLD)) reasons.push('duplicate');
