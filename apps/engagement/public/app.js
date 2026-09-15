@@ -13,7 +13,29 @@ const state = {
 };
 
 let commentAutoTimer = null;
+const commentReplyProgress = { phase: 'idle', total: 0, completed: 0, failed: 0, current: '' };
 let engagementNeighborQuotaTimer = null;
+
+function updateCommentReplyProgress(next = {}) {
+  Object.assign(commentReplyProgress, next);
+  const { phase, total, completed, failed, current } = commentReplyProgress;
+  const handled = completed + failed;
+  const remaining = Math.max(total - handled, 0);
+  const percent = total ? Math.min(Math.round((handled / total) * 100), 100) : 0;
+  const status = $('#commentReplyProgressStatus');
+  const currentEl = $('#commentReplyProgressCurrent');
+  if ($('#commentReplyProgressCount')) $('#commentReplyProgressCount').textContent = `${handled} / ${total}건`;
+  if ($('#commentReplyProgressCompleted')) $('#commentReplyProgressCompleted').textContent = String(completed);
+  if ($('#commentReplyProgressFailed')) $('#commentReplyProgressFailed').textContent = String(failed);
+  if ($('#commentReplyProgressRemaining')) $('#commentReplyProgressRemaining').textContent = String(remaining);
+  if ($('#commentReplyProgressBar')) $('#commentReplyProgressBar').style.width = `${percent}%`;
+  if (currentEl) currentEl.textContent = current || (phase === 'done' ? '처리가 완료되었습니다.' : '처리할 댓글을 선택해주세요.');
+  if (status) {
+    const labels = { running: '처리 중', done: '처리 완료', error: '오류', idle: '대기 중' };
+    status.className = `status ${phase === 'running' ? 'loading' : phase === 'done' ? 'online' : phase === 'error' ? 'error' : ''}`;
+    status.innerHTML = `<i></i> ${labels[phase] || labels.idle}`;
+  }
+}
 
 function getNextKoreaMidnight(nowMs = Date.now()) {
   const koreaOffsetMs = 9 * 60 * 60 * 1000;
@@ -145,7 +167,7 @@ const selectionBar = $('#selectionBar');
 const confirmReview = $('#confirmReview');
 const openButton = $('#openButton');
 const manualLoginButton = $('#manualLoginButton');
-const workspaceTabs = [...document.querySelectorAll('[role="tab"]')].filter((tab) => !tab.classList.contains('hidden'));
+const workspaceTabs = [...document.querySelectorAll('.workspace-tabs > [role="tab"]')].filter((tab) => !tab.classList.contains('hidden'));
 const fetchDealsButton = $('#fetchDealsButton');
 const dealsResults = $('#dealsResults');
 const draftForm = $('#draftForm');
@@ -155,6 +177,44 @@ const publishConfirm = $('#publishConfirm');
 const publishButton = $('#publishButton');
 const imageSearchButton = $('#imageSearchButton');
 const imageResults = $('#imageResults');
+
+function organizeCommentCategory() {
+  const feedWorkspace = $('#feedWorkspace');
+  const feedMount = $('#neighborFeedCommentMount');
+  const ownPostPanel = $('#subtabCommentInbox');
+  const ownPostMount = $('#ownPostReplyMount');
+
+  if (feedWorkspace && feedMount) {
+    feedWorkspace.classList.remove('workspace-panel', 'hidden');
+    feedWorkspace.removeAttribute('role');
+    feedWorkspace.removeAttribute('aria-labelledby');
+    feedWorkspace.removeAttribute('data-tab-panel');
+    feedMount.append(feedWorkspace);
+  }
+  if (ownPostPanel && ownPostMount) {
+    ownPostPanel.classList.remove('cleaner-subtab-panel');
+    ownPostPanel.classList.remove('hidden');
+    ownPostMount.append(ownPostPanel);
+  }
+
+  $$('.category-mode-tab').forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.commentMode;
+      $$('.category-mode-tab').forEach((item) => {
+        const active = item === button;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-selected', String(active));
+      });
+      feedMount?.classList.toggle('hidden', mode !== 'neighbor-feed');
+      ownPostMount?.classList.toggle('hidden', mode !== 'own-post-reply');
+      if (mode === 'neighbor-feed') {
+        if (typeof refreshFeedSummary === 'function') refreshFeedSummary();
+      }
+    });
+  });
+}
+
+organizeCommentCategory();
 
 function setActiveTab(tabName, moveFocus = false) {
   workspaceTabs.forEach((tab) => {
@@ -167,15 +227,10 @@ function setActiveTab(tabName, moveFocus = false) {
   document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
     panel.classList.toggle('hidden', panel.dataset.tabPanel !== tabName);
   });
-  if (tabName === 'feed') {
-    if (typeof refreshFeedSummary === 'function') refreshFeedSummary();
-    if (state.connected && $('#feedPostsContainer')?.querySelector('.empty-state')) {
-      if (typeof loadFeedPreview === 'function') loadFeedPreview();
-    }
-  }
-  if (tabName === 'comment-management') {
-    if (state.connected && $('#receivedRequestsContainer')?.querySelector('.empty-state')) {
-      if (typeof loadReceivedCleanerList === 'function') loadReceivedCleanerList();
+  if (tabName === 'comments') {
+    const feedModeActive = $('.category-mode-tab[data-comment-mode="neighbor-feed"]')?.classList.contains('active');
+    if (feedModeActive) {
+      if (typeof refreshFeedSummary === 'function') refreshFeedSummary();
     }
   }
 }
@@ -207,10 +262,9 @@ function renderManagedComments() {
     body.innerHTML = `<tr>
       <td colspan="5" class="comment-empty-cell">
         <div class="comment-empty-state">
-          <span class="empty-icon">💬</span>
           <div class="empty-text">
             <strong>새로 처리할 댓글이 없습니다</strong>
-            <small>'새 댓글 스캔' 버튼을 눌러 최근 댓글을 확인하세요.</small>
+            <small>목록 조회를 눌러 최근 댓글을 확인하세요.</small>
           </div>
         </div>
       </td>
@@ -247,7 +301,7 @@ async function loadCommentManagementHistory() {
   container.innerHTML = records.length ? records.map((item) => {
     const authorInitial = escapeHtml((item.authorName || item.authorId || '?').slice(0, 1));
     const isCompleted = item.status === 'completed';
-    const neighborText = item.neighborMessage || item.neighborStatus || '';
+    const neighborText = friendlyUiMessage(item.neighborMessage || item.neighborStatus || '', '');
     const isNeighborOk = neighborText.includes('완료') || neighborText.includes('확인') || neighborText.includes('성공');
     const timeFormatted = item.repliedAt ? new Date(item.repliedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     return `<div class="managed-history-card">
@@ -260,30 +314,29 @@ async function loadCommentManagementHistory() {
           </div>
         </div>
         <span class="mhc-status-pill ${isCompleted ? 'pill-success' : 'pill-danger'}">
-          ${isCompleted ? '✓ 완료' : '⚠️ 실패'}
+          ${isCompleted ? '완료' : '실패'}
         </span>
       </div>
       <div class="mhc-body">
         <div class="mhc-quote received">
-          <span class="quote-label">💬 받은 댓글</span>
+          <span class="quote-label">받은 댓글</span>
           <div class="quote-text">${escapeHtml(item.text || '')}</div>
         </div>
         <div class="mhc-quote reply">
-          <span class="quote-label">✨ 작성된 AI 대댓글</span>
-          <div class="quote-text">${escapeHtml(item.replyText || item.error || '-')}</div>
+          <span class="quote-label">작성된 AI 대댓글</span>
+          <div class="quote-text">${escapeHtml(friendlyUiMessage(item.replyText || item.error || '-'))}</div>
         </div>
       </div>
       ${neighborText ? `<div class="mhc-footer">
         <span class="neighbor-badge ${isNeighborOk ? 'neighbor-ok' : ''}">
-          🤝 서로이웃: ${escapeHtml(neighborText)}
+          서로이웃: ${escapeHtml(neighborText)}
         </span>
       </div>` : ''}
     </div>`;
   }).join('') : `<div class="comment-empty-state">
-    <span class="empty-icon">📋</span>
     <div class="empty-text">
       <strong>처리 기록이 없습니다</strong>
-      <small>댓글 처리가 진행되면 AI 대댓글과 서로이웃 신청 내역이 여기에 표시됩니다.</small>
+      <small>AI 대댓글과 서로이웃 신청 결과가 여기에 표시됩니다.</small>
     </div>
   </div>`;
 }
@@ -293,16 +346,23 @@ async function scanManagedComments({ processAll = false } = {}) {
   const button = $('#scanMyCommentsBtn');
   const status = $('#commentManagementStatus');
   if (button) button.disabled = true;
-  if (status) { status.className = 'status'; status.innerHTML = '<i></i> 새 댓글 확인 중'; }
+  $('#commentManagementSummaryStrip')?.classList.remove('hidden');
+  if (status) { status.className = 'status loading'; status.innerHTML = '<i></i> 목록 조회 중'; }
+  if ($('#commentManagementSummary')) $('#commentManagementSummary').textContent = '내 글의 댓글 목록을 조회하고 있습니다. 잠시만 기다려주세요.';
   try {
     const limit = Math.min(Math.max(Number($('#commentPostLimit')?.value) || 10, 1), 30);
     const data = await api(`/api/comment-management/scan?postLimit=${limit}`);
     state.managedComments = data.comments || [];
     renderManagedComments();
-    if ($('#commentManagementSummary')) $('#commentManagementSummary').textContent = `최근 글 ${data.scannedPosts || 0}개에서 새 댓글 ${state.managedComments.length}개를 찾았습니다.`;
+    updateCommentReplyProgress({ phase: 'idle', total: 0, completed: 0, failed: 0, current: state.managedComments.length ? '처리할 댓글을 선택해주세요.' : '새 댓글이 없습니다.' });
+    if ($('#commentManagementSummary')) $('#commentManagementSummary').textContent = `조회 완료 · 최근 글 ${data.scannedPosts || 0}개에서 새 댓글 ${state.managedComments.length}개를 찾았습니다.`;
     if (status) { status.className = `status ${state.managedComments.length ? 'online' : ''}`; status.innerHTML = `<i></i> ${state.managedComments.length}개 대기`; }
     if (processAll && state.managedComments.length) await processManagedComments(state.managedComments);
     return data;
+  } catch (error) {
+    if (status) { status.className = 'status error'; status.innerHTML = '<i></i> 조회 실패'; }
+    if ($('#commentManagementSummary')) $('#commentManagementSummary').textContent = `조회 실패 · ${error.message}`;
+    throw error;
   } finally { if (button) button.disabled = false; }
 }
 
@@ -315,20 +375,23 @@ async function processManagedComments(items = null) {
   const requestNeighbor = $('#commentRequestNeighbor')?.checked !== false;
 
   if (button) button.disabled = true;
+  $('#commentManagementSummaryStrip')?.classList.remove('hidden');
 
   let completedCount = 0;
   let failedCount = 0;
+  updateCommentReplyProgress({ phase: 'running', total: selected.length, completed: 0, failed: 0, current: '대댓글 처리를 준비하고 있습니다.' });
 
   try {
     for (let i = 0; i < selected.length; i++) {
       const item = selected[i];
       const authorLabel = item.authorName || item.authorId || '작성자';
-      const progressText = `AI 대댓글·이웃 처리 중 (${i + 1}/${selected.length})`;
+      const progressText = `AI 대댓글 작성 중 (${i + 1}/${selected.length})`;
 
       if (button) button.textContent = progressText;
       if (summary) {
-        summary.innerHTML = `<span style="color: #03c75a; font-weight: 700;">[${i + 1}/${selected.length}]</span> <strong>${escapeHtml(authorLabel)}</strong> 님의 댓글에 AI 대댓글 및 이웃 처리 진행 중...`;
+        summary.innerHTML = `<span style="color: #03c75a; font-weight: 700;">[${i + 1}/${selected.length}]</span> <strong>${escapeHtml(authorLabel)}</strong> 님의 댓글에 AI 대댓글을 작성 중입니다.${requestNeighbor ? ' 작성 후 서로이웃 신청도 확인합니다.' : ''}`;
       }
+      updateCommentReplyProgress({ current: `${authorLabel} 님의 대댓글을 작성 중입니다.` });
 
       try {
         const data = await api('/api/comment-management/process', {
@@ -342,6 +405,7 @@ async function processManagedComments(items = null) {
         } else {
           failedCount++;
         }
+        updateCommentReplyProgress({ completed: completedCount, failed: failedCount, current: `${authorLabel} 님 처리 결과를 반영했습니다.` });
 
         // Immediately update state and table so this comment disappears from inbox
         state.managedComments = state.managedComments.filter((c) => c.commentId !== item.commentId);
@@ -351,6 +415,7 @@ async function processManagedComments(items = null) {
         await loadCommentManagementHistory();
       } catch (err) {
         failedCount++;
+        updateCommentReplyProgress({ completed: completedCount, failed: failedCount, current: `${authorLabel} 님 처리에 실패했습니다.` });
         toast(`'${authorLabel}' 댓글 처리 실패: ${err.message}`, true);
       }
     }
@@ -358,10 +423,11 @@ async function processManagedComments(items = null) {
     if (summary) {
       summary.textContent = `처리가 완료되었습니다. (성공: ${completedCount}건${failedCount > 0 ? `, 실패: ${failedCount}건` : ''})`;
     }
+    updateCommentReplyProgress({ phase: 'done', completed: completedCount, failed: failedCount, current: `처리가 완료되었습니다. 성공 ${completedCount}건, 실패 ${failedCount}건` });
     toast(`${completedCount}개 댓글 처리를 완료했습니다.${failedCount > 0 ? ` (${failedCount}개 실패)` : ''}`);
   } finally {
     if (button) {
-      button.textContent = '✨ 선택 댓글 AI 대댓글 & 이웃 처리';
+      button.textContent = '선택한 댓글에 AI 대댓글 달기';
       button.disabled = !state.managedComments.length;
     }
   }
@@ -375,10 +441,10 @@ function initCommentManagement() {
   $('#toggleCommentAutoBtn')?.addEventListener('click', async (event) => {
     if (commentAutoTimer) {
       clearInterval(commentAutoTimer); commentAutoTimer = null;
-      event.currentTarget.textContent = '⏱️ 5분 자동 관리 시작';
-      return toast('자동 이웃 관리를 멈췄습니다.');
+      event.currentTarget.textContent = '5분마다 새 댓글 확인 시작';
+      return toast('자동 댓글 확인을 멈췄습니다.');
     }
-    event.currentTarget.textContent = '⏹ 자동관리 중지';
+    event.currentTarget.textContent = '자동 댓글 확인 중지';
     const run = () => scanManagedComments({ processAll: true }).catch((error) => toast(error.message, true));
     await run();
     commentAutoTimer = setInterval(run, 5 * 60 * 1000);
@@ -1178,38 +1244,38 @@ $('#clearHistoryBtn')?.addEventListener('click', async () => {
 const engHistoryModal = $('#engHistoryModal');
 
 async function loadEngagementHistory(query = '') {
-  const tbody = $('#engHistoryTableBody');
-  if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px;">소통 이력을 불러오는 중...</td></tr>';
+  const list = $('#engHistoryTableBody');
+  if (!list) return;
+  list.innerHTML = '<div class="eng-history-empty">소통 이력을 불러오는 중...</div>';
 
   try {
     const data = await api(`/api/engagement/history?limit=100&keyword=${encodeURIComponent(query)}`);
     const records = data.items || [];
     if (records.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px; color:#a0aec0;">공감/댓글 소통 이력이 없습니다.</td></tr>';
+      list.innerHTML = '<div class="eng-history-empty"><strong>아직 소통 이력이 없습니다</strong><span>소통을 완료하면 처리한 글과 댓글이 여기에 표시됩니다.</span></div>';
       return;
     }
 
-    tbody.innerHTML = records.map((r) => {
+    list.innerHTML = records.map((r) => {
       const reactions = [];
-      if (r.liked) reactions.push('<span class="pill pill-pink" style="background:#fed7e2; color:#b83280; font-weight:700;">❤️ 공감</span>');
-      if (r.commented) reactions.push('<span class="pill pill-purple" style="background:#e9d8fd; color:#6b46c1; font-weight:700;">💬 댓글</span>');
-      const reactionHtml = reactions.length > 0 ? reactions.join(' ') : '<span class="pill">확인필요</span>';
+      if (r.liked) reactions.push('<span class="eng-history-tag success">공감</span>');
+      if (r.commented) reactions.push('<span class="eng-history-tag info">댓글</span>');
+      const reactionHtml = reactions.length > 0 ? reactions.join('') : '<span class="eng-history-tag">반응 확인 필요</span>';
 
-      let neighborHtml = '<span class="pill" style="background:#edf2f7; color:#718096;">-</span>';
+      let neighborHtml = '';
       if (r.neighborRequested) {
         if (r.neighborStatus === 'requested' || r.neighborStatus === 'added') {
-          neighborHtml = '<span class="pill" style="background:#bee3f8; color:#2b6cb0; font-weight:700;">👥 신청완료</span>';
+          neighborHtml = '<span class="eng-history-tag info">서로이웃 신청</span>';
         } else if (r.neighborStatus === 'already_mutual' || r.neighborStatus === 'already_added') {
-          neighborHtml = '<span class="pill">기존이웃</span>';
+          neighborHtml = '<span class="eng-history-tag">기존 이웃</span>';
         } else {
-          neighborHtml = `<span class="pill" style="background:#feebc8; color:#c05621;">${escapeHtml(r.neighborStatus)}</span>`;
+          neighborHtml = `<span class="eng-history-tag warning">${escapeHtml(friendlyUiMessage(r.neighborStatus, '확인 필요'))}</span>`;
         }
       }
 
       const postTitleLink = r.postUrl 
-        ? `<a href="${escapeHtml(r.postUrl)}" target="_blank" style="color:#2b6cb0; text-decoration:none; font-weight:600;" title="${escapeHtml(r.title || '')}">${escapeHtml((r.title || '포스팅').slice(0, 22))} ↗</a>`
-        : escapeHtml((r.title || '포스팅').slice(0, 22));
+        ? `<a href="${escapeHtml(r.postUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(r.title || '')}">${escapeHtml(r.title || '제목 없는 글')} <span aria-hidden="true">↗</span></a>`
+        : escapeHtml(r.title || '제목 없는 글');
 
       const review = r.trainingReview || null;
       const reviewLabel = review?.decision === 'accepted' ? '승인됨'
@@ -1221,30 +1287,38 @@ async function loadEngagementHistory(query = '') {
           : review?.decision === 'skip' ? 'warning' : '';
       const reviewHtml = r.commented && r.commentText ? `
         <div class="training-review-cell" data-record-id="${escapeHtml(r.id)}">
+          <label class="eng-history-comment-label">작성한 AI 댓글</label>
           <textarea class="training-comment-editor" rows="2" maxlength="120" aria-label="학습용 최종 댓글">${escapeHtml(review?.finalComment || r.commentText)}</textarea>
-          <div class="training-review-actions">
-            <button type="button" class="training-review-btn accept" data-training-decision="accepted">✓ 그대로</button>
-            <button type="button" class="training-review-btn edit" data-training-decision="edited">✎ 수정 저장</button>
-            <button type="button" class="training-review-btn reject" data-training-decision="rejected">× 거절</button>
+          <div class="eng-history-review-row">
+            <span class="training-review-state ${reviewClass}">${reviewLabel}</span>
+            <div class="training-review-actions">
+              <button type="button" class="training-review-btn accept" data-training-decision="accepted">그대로 사용</button>
+              <button type="button" class="training-review-btn edit" data-training-decision="edited">수정 저장</button>
+              <button type="button" class="training-review-btn reject" data-training-decision="rejected">학습 제외</button>
+            </div>
           </div>
-          <span class="training-review-state ${reviewClass}">${reviewLabel}</span>
-        </div>` : '<span class="training-review-state">댓글 없음</span>';
+        </div>` : '<div class="eng-history-no-comment">작성한 댓글 없음</div>';
 
       return `
-        <tr>
-          <td>${escapeHtml(r.timestamp?.slice(5, 16)?.replace('T', ' ') || '')}</td>
-          <td><a href="https://blog.naver.com/${escapeHtml(r.blogId)}" target="_blank" style="color:#03c75a; font-weight:600; text-decoration:none;">@${escapeHtml(r.blogId)}</a></td>
-          <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${postTitleLink}</td>
-          <td>${reactionHtml}</td>
-          <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.commentText || '')}">${escapeHtml(r.commentText || '-')}</td>
-          <td>${reviewHtml}</td>
-          <td>${neighborHtml}</td>
-          <td><span class="pill pill-green">${escapeHtml(r.status === 'success' ? '완료' : r.status)}</span></td>
-        </tr>
+        <article class="eng-history-card">
+          <div class="eng-history-card-head">
+            <div class="eng-history-post">
+              <div class="eng-history-title">${postTitleLink}</div>
+              <div class="eng-history-meta">
+                <a href="https://blog.naver.com/${escapeHtml(r.blogId)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(r.blogId)}</a>
+                <span>${escapeHtml(r.timestamp?.slice(5, 16)?.replace('T', ' ') || '')}</span>
+                ${r.keyword ? `<span>${escapeHtml(r.keyword)}</span>` : ''}
+              </div>
+            </div>
+            <span class="eng-history-status ${r.status === 'success' ? 'success' : ''}">${escapeHtml(r.status === 'success' ? '완료' : friendlyUiMessage(r.status, '확인 필요'))}</span>
+          </div>
+          <div class="eng-history-tags">${reactionHtml}${neighborHtml}</div>
+          ${reviewHtml}
+        </article>
       `;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#e53e3e;">이력 로드 실패: ${escapeHtml(err.message)}</td></tr>`;
+    list.innerHTML = `<div class="eng-history-empty danger">이력을 불러오지 못했습니다. ${escapeHtml(friendlyUiMessage(err.message))}</div>`;
   }
   await refreshTrainingReviewSummary();
 }
@@ -1351,6 +1425,15 @@ function escapeHtml(value) {
   })[character]);
 }
 
+function friendlyUiMessage(value, fallback = '처리하지 못했습니다.') {
+  const message = String(value || '').trim();
+  if (!message) return fallback;
+  if (/locator\.|waitFor|Timeout\s*\d*ms|Call log|waiting for|selector/i.test(message)) {
+    return '네이버 응답이 없어 처리하지 못했습니다.';
+  }
+  return message;
+}
+
 let currentHardwareSpecs = null;
 let currentModelsList = [];
 let activeModelId = null;
@@ -1366,7 +1449,7 @@ function updateLocalAiSummaryUI(activeModel, activeEndpoint, runtime = null) {
   const setup = runtime?.setup;
   const isReady = runtime?.status === 'running';
   const acceleration = runtime?.acceleration === 'GPU' ? 'GPU' : 'CPU';
-  if (summaryEngine) summaryEngine.textContent = acceleration === 'GPU' ? '⚡ 내 PC 로컬 GPU (VRAM 가속)' : '🖥️ 내 PC 로컬 CPU (안정 실행)';
+  if (summaryEngine) summaryEngine.textContent = acceleration === 'GPU' ? '로컬 GPU' : '로컬 CPU';
   const setupBox = $('#localAiSetupProgress');
   if (setupBox && setup && activeModel && !isReady) {
     setupBox.classList.remove('hidden');
@@ -1381,22 +1464,22 @@ function updateLocalAiSummaryUI(activeModel, activeEndpoint, runtime = null) {
     if (summaryModel) summaryModel.textContent = isReady ? `${activeModel.name} (${activeModel.sizeFormatted || ''})` : `${activeModel.name} · AI 준비 중`;
     if (summaryEndpoint) summaryEndpoint.textContent = isReady ? (activeEndpoint?.baseUrl || 'http://127.0.0.1:8089') : 'AI 엔진 준비 중';
     if (globalStatus) {
-      globalStatus.textContent = isReady ? `${acceleration === 'GPU' ? '⚡ 내 PC 로컬 GPU' : '🖥️ 내 PC 로컬 CPU'} (${activeModel.name})` : `⏳ ${setup?.message || '로컬 AI 준비 중'}`;
+      globalStatus.textContent = isReady ? activeModel.name : (setup?.message || '로컬 AI 준비 중');
       globalStatus.style.color = isReady ? '#234e52' : '#2563eb';
     }
     if (currentBadge) {
       currentBadge.className = 'pill pill-green';
-      currentBadge.textContent = `${acceleration === 'GPU' ? '⚡' : '🖥️'} ${activeModel.name}`;
+      currentBadge.textContent = activeModel.name;
     }
     if ($('#llmStatus')) {
       $('#llmStatus').className = isReady ? 'status online' : 'status';
-      $('#llmStatus').innerHTML = isReady ? `<i></i> ${acceleration === 'GPU' ? '⚡ 로컬 GPU' : '🖥️ 로컬 CPU'} (${escapeHtml(activeModel.name)})` : `<i></i> ⏳ AI 준비 중`;
+      $('#llmStatus').innerHTML = isReady ? `<i></i> ${acceleration === 'GPU' ? '로컬 GPU' : '로컬 CPU'} (${escapeHtml(activeModel.name)})` : '<i></i> AI 준비 중';
     }
   } else {
     if (summaryModel) summaryModel.textContent = '미설치 (Gemma 모델 다운로드 필요)';
     if (summaryEndpoint) summaryEndpoint.textContent = '-';
     if (globalStatus) {
-      globalStatus.textContent = '⚠️ AI 모델 다운로드 필요';
+      globalStatus.textContent = 'AI 모델 설치 필요';
       globalStatus.style.color = '#c53030';
     }
     if (currentBadge) {
@@ -1405,7 +1488,7 @@ function updateLocalAiSummaryUI(activeModel, activeEndpoint, runtime = null) {
     }
     if ($('#llmStatus')) {
       $('#llmStatus').className = 'status offline';
-      $('#llmStatus').innerHTML = `<i></i> ⚠️ 모델 설치 필요`;
+      $('#llmStatus').innerHTML = '<i></i> 모델 설치 필요';
     }
   }
 }
@@ -1464,8 +1547,8 @@ async function initAiHardwareAndModels() {
     const memoryLabel = specs.gpu?.isIntegrated
       ? `공유 GPU 메모리 최대 ${specs.gpu?.sharedMemoryFormatted || '-'} (전용 ${specs.gpu?.vramFormatted || '-'})`
       : `전용 VRAM ${specs.gpu?.vramFormatted || '-'}`;
-    if ($('#gpuSpecBadge')) $('#gpuSpecBadge').innerHTML = `🎮 ${escapeHtml(gpuNameText)}`;
-    if ($('#localGpuSummaryText')) $('#localGpuSummaryText').textContent = `🎮 내 그래픽: ${gpuNameText} · ${memoryLabel}`;
+    if ($('#gpuSpecBadge')) $('#gpuSpecBadge').textContent = gpuNameText;
+    if ($('#localGpuSummaryText')) $('#localGpuSummaryText').textContent = `${gpuNameText} · ${memoryLabel}`;
 
     const summaryHtml = `내 컴퓨터 사양(<strong>${escapeHtml(specs.gpu?.primaryGpu?.name || 'GPU')}</strong> / <strong>${escapeHtml(memoryLabel)}</strong>)에 맞는 <strong>[${escapeHtml(specs.recommendedModel?.modelInfo?.name || '로컬 AI')}]</strong> 모델을 추천합니다. 공유 메모리는 전용 VRAM과 구분해 CPU 안정 모드로 실행합니다.`;
 
@@ -1582,11 +1665,11 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
     let statusPill = '';
 
     if (isActive) {
-      btnHtml = `<button type="button" class="button small model-select-btn" disabled style="background:#2b6cb0; color:#fff; font-weight:700;">✓ 사용 중 (내 PC GPU)</button>`;
-      statusPill = `<span class="pill pill-green" style="font-size:11px;">⚡ 내 PC GPU 활성</span>`;
+      btnHtml = '<button type="button" class="button small model-select-btn" disabled style="background:#2b6cb0; color:#fff; font-weight:700;">사용 중</button>';
+      statusPill = '<span class="pill pill-green" style="font-size:11px;">활성</span>';
     } else if (isInstalled) {
-      btnHtml = `<button type="button" class="button small model-select-btn" data-action="select" data-id="${escapeHtml(m.id)}">내 PC GPU로 전환</button>`;
-      statusPill = `<span class="pill" style="font-size:11px; background:#edf2f7; color:#4a5568;">💾 설치됨 (대기)</span>`;
+      btnHtml = `<button type="button" class="button small model-select-btn" data-action="select" data-id="${escapeHtml(m.id)}">이 모델 사용</button>`;
+      statusPill = '<span class="pill" style="font-size:11px; background:#edf2f7; color:#4a5568;">설치됨</span>';
     } else {
       btnHtml = `<button type="button" class="button small ghost model-select-btn" data-action="download" data-id="${escapeHtml(m.id)}">다운로드 (${escapeHtml(m.sizeFormatted)})</button>`;
       statusPill = `<span class="pill" style="font-size:11px; background:#fffaf0; color:#dd6b20; border:1px solid #feebc8;">미설치 (다운로드 필요)</span>`;
@@ -1612,9 +1695,9 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
           </div>
         </div>
         <p class="model-card-desc">${escapeHtml(m.description || '')}</p>
-        ${m.researchOnly ? '<div class="model-research-note">⚠️ 연구용 v2 · 자동 게시 전 댓글 검증기를 함께 사용합니다.</div>' : ''}
+        ${m.researchOnly ? '<div class="model-research-note">연구용 v2 · 댓글 검증과 함께 사용합니다.</div>' : ''}
         <div class="model-card-footer">
-          <span class="model-vram-hint">💡 최소 VRAM: ${(m.minVramMb / 1024).toFixed(1)}GB</span>
+          <span class="model-vram-hint">최소 VRAM ${(m.minVramMb / 1024).toFixed(1)}GB</span>
           ${btnHtml}
         </div>
       </div>
@@ -1761,7 +1844,7 @@ function initEngagementAutomation() {
     try {
       if (startBtn) {
         startBtn.disabled = true;
-        startBtn.innerHTML = '<span class="btn-icon">⏳</span> <strong>시작 준비 중...</strong>';
+        startBtn.innerHTML = '<strong>준비 중...</strong>';
       }
       const dashboard = $('#engDashboard');
       if (dashboard) dashboard.classList.remove('hidden');
@@ -1776,14 +1859,14 @@ function initEngagementAutomation() {
         })
       });
       const keywordCount = keyword.split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean).length;
-      toast(`${keywordCount}개 키워드를 순차 실행합니다. 전체 목표 ${Math.min(targetCount, 100)}건 · 하루 서로이웃 최대 ${Math.min(dailyNeighborLimit, 100)}명`);
+      toast(`${keywordCount}개 키워드를 순차 실행합니다. 전체 목표 ${Math.min(targetCount, 500)}건 · 서로이웃 ${Math.min(dailyNeighborLimit, 100)}명 도달 시 자동 종료`);
       initEngagementEvents();
     } catch (err) {
       toast(err.message, true);
     } finally {
       if (startBtn) {
         startBtn.disabled = false;
-        startBtn.innerHTML = '<span class="btn-icon">🚀</span> <strong>공감 & AI 맞춤 댓글 시작</strong>';
+        startBtn.innerHTML = '<strong>소통 시작</strong>';
       }
     }
   });
@@ -1889,15 +1972,15 @@ function updateEngagementDashboard(data) {
   // Status text
   const statusEl = $('#engDashboardStatusText');
   if (statusEl) {
-    if (isRunning) statusEl.textContent = stats.phase === 'searching' ? `🔍 '${stats.currentKeyword || ''}' 후보 검색 중...` : `🚀 '${stats.currentKeyword || ''}' 주제 소통 진행 중...`;
-    else if (isPaused) statusEl.textContent = '⏸️ 작업 일시정지됨';
+    if (isRunning) statusEl.textContent = stats.phase === 'searching' ? `'${stats.currentKeyword || ''}' 후보 검색 중...` : `'${stats.currentKeyword || ''}' 주제 소통 진행 중...`;
+    else if (isPaused) statusEl.textContent = '작업 일시정지됨';
     else if (state === 'completed') {
       statusEl.textContent = stats.targetReached
-        ? `🎉 목표 ${stats.targetCount || config.targetCount || 0}개 포스팅 소통 완료!`
-        : `⚠️ 후보 부족: ${stats.processedCount || 0} / ${stats.targetCount || config.targetCount || 0}개 포스팅 처리 완료`;
+        ? `목표 ${stats.targetCount || config.targetCount || 0}개 포스팅 소통 완료`
+        : `후보 부족 · ${stats.processedCount || 0} / ${stats.targetCount || config.targetCount || 0}개 포스팅 처리 완료`;
     }
-    else if (state === 'stopped') statusEl.textContent = '⏹️ 사용자에 의해 중단됨';
-    else if (state === 'error') statusEl.textContent = '⚠️ 오류로 인해 중단됨';
+    else if (state === 'stopped') statusEl.textContent = '사용자에 의해 중단됨';
+    else if (state === 'error') statusEl.textContent = '오류로 인해 중단됨';
     else statusEl.textContent = '대기 중 · 설정을 완료하고 시작 버튼을 누르세요';
   }
 
@@ -1969,6 +2052,7 @@ let cachedFeedPosts = [];
 let activeFeedFilter = 'all'; // 'all' | 'pending' | 'engaged' | 'skipped'
 let feedSearchQuery = '';
 let activeFeedCurrentPost = null;
+let activeFeedState = 'idle';
 const selectedFeedPostLogNos = new Set();
 const engagingSingleLogNos = new Set();
 
@@ -1990,16 +2074,24 @@ function updateFeedSelectionToolbar() {
       statusEl.innerHTML = `<span style="color:#03c75a; font-weight:700;">${selectedCount}개 글 선택됨</span>`;
     }
     if (engageBtn) {
-      engageBtn.style.display = 'inline-block';
-      engageBtn.textContent = `⚡ 선택한 ${selectedCount}개 글 소통 시작`;
+      engageBtn.disabled = false;
+      engageBtn.textContent = `선택한 ${selectedCount}개 글 소통 시작`;
     }
   } else {
     if (statusEl) {
-      statusEl.innerHTML = `<span>원하는 글을 선택하거나, 카드의 [⚡ 바로 소통]을 누르세요.</span>`;
+      statusEl.innerHTML = `<span>먼저 소통할 글을 선택해주세요.</span>`;
     }
     if (engageBtn) {
-      engageBtn.style.display = 'none';
+      engageBtn.disabled = true;
+      engageBtn.textContent = '✓ 글을 선택하세요';
     }
+  }
+
+  if (activeFeedState === 'idle' || activeFeedState === 'stopped') {
+    const targetInput = $('#feedTargetCount');
+    if (targetInput) targetInput.value = String(selectedCount);
+    if ($('#feedStatTarget')) $('#feedStatTarget').textContent = String(selectedCount);
+    if ($('#feedStatRemaining')) $('#feedStatRemaining').textContent = String(selectedCount);
   }
 }
 
@@ -2009,8 +2101,9 @@ function renderFeedPosts() {
 
   if (!cachedFeedPosts || cachedFeedPosts.length === 0) {
     container.innerHTML = `
-      <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted, #888);">
-        <span>표시할 이웃 새글이 없습니다. [🔄 피드 새로고침] 버튼을 눌러주세요.</span>
+      <div class="feed-empty-state">
+        <strong>조회된 이웃 새글이 없습니다</strong>
+        <p>잠시 후 목록 조회를 다시 눌러 확인하세요.</p>
       </div>
     `;
     updateFeedSelectionToolbar();
@@ -2081,8 +2174,6 @@ function renderFeedPosts() {
     const isSkipped = Boolean(post.skipped || post.engagementRecord?.status === 'skipped');
     const isPending = !isEngaged && !isSkipped;
     const isSelected = isPending && selectedFeedPostLogNos.has(post.logNo);
-    const isSingleEngaging = engagingSingleLogNos.has(post.logNo);
-
     const cardClass = isCurrentActive
       ? 'is-processing'
       : isEngaged
@@ -2101,33 +2192,27 @@ function renderFeedPosts() {
     );
 
     let statusBadgesHtml = '';
-    let actionBtnHtml = '';
     if (isCurrentActive) {
-      statusBadgesHtml = `<span class="feed-status-badge processing">⚡ 실시간 소통 중</span>`;
+      statusBadgesHtml = '<span class="feed-status-badge processing">소통 중</span>';
     } else if (isEngaged) {
-      statusBadgesHtml = `<span class="feed-status-badge done">✅ 내가 소통한 글</span>`;
+      statusBadgesHtml = '<span class="feed-status-badge done">소통 완료</span>';
       if (post.engagementRecord?.liked) {
-        statusBadgesHtml += ` <span class="feed-mini-action-badge">❤️ 공감</span>`;
+        statusBadgesHtml += ' <span class="feed-mini-action-badge">공감</span>';
       }
       if (post.engagementRecord?.commented) {
-        statusBadgesHtml += ` <span class="feed-mini-action-badge">💬 댓글</span>`;
+        statusBadgesHtml += ' <span class="feed-mini-action-badge">댓글</span>';
       }
     } else if (isSkipped) {
       const msg = post.engagementRecord?.statusMessage || '기작성 댓글 감지';
-      statusBadgesHtml = `<span class="feed-status-badge skipped">⏩ ${escapeHtml(msg)}</span>`;
+      statusBadgesHtml = `<span class="feed-status-badge skipped">${escapeHtml(msg)}</span>`;
     } else {
-      statusBadgesHtml = `<span class="feed-status-badge pending">⏳ 소통 대기</span>`;
-      if (isSingleEngaging) {
-        actionBtnHtml = `<button type="button" class="feed-single-action-btn" disabled><span>⏳</span> 소통 중...</button>`;
-      } else {
-        actionBtnHtml = `<button type="button" class="feed-single-action-btn" data-logno="${escapeHtml(post.logNo)}" title="이 글만 즉시 AI 맞춤 댓글 및 공감 남기기">⚡ 바로 소통</button>`;
-      }
+      statusBadgesHtml = '<span class="feed-status-badge pending">소통 대기</span>';
     }
 
     const hasThumb = Boolean(post.thumbnail);
     const thumbHtml = hasThumb
       ? `<img src="${escapeHtml(post.thumbnail)}" alt="썸네일" class="feed-card-thumb" onerror="this.onerror=null;this.parentElement.innerHTML='<div class=\\'feed-card-thumb-placeholder\\'>📝</div>';">`
-      : `<div class="feed-card-thumb-placeholder">📝</div>`;
+      : '<div class="feed-card-thumb-placeholder"></div>';
 
     let myCommentHtml = '';
     if (isEngaged && post.engagementRecord?.commentText) {
@@ -2137,8 +2222,8 @@ function renderFeedPosts() {
       myCommentHtml = `
         <div class="feed-my-comment-box">
           <div class="feed-comment-bubble-header">
-            <span>💬 내가 남긴 AI 맞춤 댓글</span>
-            ${recordDate ? `<span class="feed-comment-time">🕒 ${escapeHtml(recordDate)}</span>` : ''}
+            <span>내가 남긴 AI 맞춤 댓글</span>
+            ${recordDate ? `<span class="feed-comment-time">${escapeHtml(recordDate)}</span>` : ''}
           </div>
           <div class="feed-comment-bubble-text">"${escapeHtml(post.engagementRecord.commentText)}"</div>
         </div>
@@ -2149,7 +2234,6 @@ function renderFeedPosts() {
     if (isCurrentActive && activeFeedCurrentPost?.stepLabel) {
       liveStepHtml = `
         <div class="feed-live-step-strip">
-          <span>⚡</span>
           <span>${escapeHtml(activeFeedCurrentPost.stepLabel)}</span>
           ${activeFeedCurrentPost.countdown > 0 ? `<span style="margin-left:auto; color:#d97706; font-weight:700;">(${activeFeedCurrentPost.countdown}초)</span>` : ''}
         </div>
@@ -2157,7 +2241,7 @@ function renderFeedPosts() {
     }
 
     return `
-      <article class="feed-post-card ${cardClass}" data-logno="${post.logNo}">
+      <article class="feed-post-card ${cardClass}${isSelected ? ' is-selected' : ''}" data-logno="${post.logNo}" ${isPending ? `data-selectable="true" role="checkbox" aria-checked="${isSelected}" tabindex="0"` : ''}>
         <div class="feed-card-header">
           <div class="feed-card-author-row">
             ${isPending ? `
@@ -2166,7 +2250,7 @@ function renderFeedPosts() {
               </label>
             ` : ''}
             <span class="feed-author-badge">
-              <span class="feed-author-avatar">👤</span>
+              <span class="feed-author-avatar">${escapeHtml((post.author || post.blogId || '?').slice(0, 1))}</span>
               <strong class="feed-author-name">${escapeHtml(post.author || post.blogId)}</strong>
               <span class="feed-blog-id">@${escapeHtml(post.blogId)}</span>
             </span>
@@ -2179,7 +2263,6 @@ function renderFeedPosts() {
           </div>
           <div class="feed-status-badges" style="display:inline-flex; align-items:center; gap:6px;">
             ${statusBadgesHtml}
-            ${actionBtnHtml}
           </div>
         </div>
 
@@ -2224,6 +2307,7 @@ function renderFeedPosts() {
 function updateFeedDashboard(statusData) {
   if (!statusData) return;
   const { state: feedState, stats = {}, logs = [], currentPost = null } = statusData;
+  activeFeedState = feedState || 'idle';
   activeFeedCurrentPost = currentPost;
 
   const isRunning = feedState === 'running';
@@ -2267,7 +2351,11 @@ function updateFeedDashboard(statusData) {
   if (stopBtn) stopBtn.classList.toggle('hidden', isIdle);
 
   // Session Stats Grid (4 Cards)
-  const targetCount = stats.target || Number($('#feedTargetCount')?.value) || 10;
+  const selectedCount = cachedFeedPosts.filter((p) => selectedFeedPostLogNos.has(p.logNo) && !p.engaged && !p.skipped).length;
+  const isAwaitingSelection = feedState === 'idle' || feedState === 'stopped';
+  const targetCount = isAwaitingSelection
+    ? selectedCount
+    : Math.max(0, Number(stats.target ?? $('#feedTargetCount')?.value ?? 0));
   const successCount = stats.successCount || 0;
   const remainingCount = Math.max(0, targetCount - successCount);
   const skippedCount = stats.skippedCount || 0;
@@ -2291,8 +2379,7 @@ function updateFeedDashboard(statusData) {
   // Live Progress & In-Progress Highlight Banner
   const progressWidget = $('#feedLiveProgressWidget');
   if (progressWidget) {
-    const shouldShow = isRunning || isPaused || (isCompleted && successCount > 0);
-    progressWidget.style.display = shouldShow ? 'block' : 'none';
+    progressWidget.style.display = 'block';
 
     const percent = Math.min(100, Math.round((successCount / Math.max(1, targetCount)) * 100));
     const progressBar = $('#feedProgressBar');
@@ -2311,7 +2398,7 @@ function updateFeedDashboard(statusData) {
           ? '소통 일시정지됨'
           : isCompleted
           ? '회차 목표 달성 완료!'
-          : '소통 준비 중';
+          : '선택한 글을 기다리는 중';
       }
     }
   }
@@ -2330,7 +2417,7 @@ function updateFeedDashboard(statusData) {
           badgeEl.textContent = '🛡️ 계정 보호 안전 대기 중';
         } else {
           badgeEl.className = 'feed-active-badge';
-          badgeEl.textContent = '⚡ 현재 소통 진행 중';
+          badgeEl.textContent = '현재 소통 중';
         }
       }
 
@@ -2342,7 +2429,7 @@ function updateFeedDashboard(statusData) {
       if (countdownEl) {
         if (currentPost.countdown > 0) {
           countdownEl.style.display = 'inline-block';
-          countdownEl.textContent = `⏳ ${currentPost.countdown}초 후 다음 글`;
+          countdownEl.textContent = `${currentPost.countdown}초 후 다음 글`;
         } else {
           countdownEl.style.display = 'none';
         }
@@ -2439,7 +2526,6 @@ function startFeedPolling() {
       if (data.state !== 'running' && data.state !== 'paused') {
         stopFeedPolling();
         refreshFeedSummary();
-        loadFeedPreview();
       }
     } catch {
       stopFeedPolling();
@@ -2478,7 +2564,12 @@ async function loadFeedPreview(more = false) {
   isFeedPreviewLoading = true;
   if (refreshBtn) {
     refreshBtn.disabled = true;
-    refreshBtn.textContent = '🔄 불러오는 중...';
+    refreshBtn.textContent = '조회 중...';
+  }
+  const queryStatus = $('#feedPreviewQueryStatus');
+  if (queryStatus && !more) {
+    queryStatus.className = 'status loading';
+    queryStatus.innerHTML = '<i></i> 목록 조회 중';
   }
 
   const targetLimit = more ? Math.min((cachedFeedPosts.length || 30) + 20, 100) : 30;
@@ -2503,6 +2594,10 @@ async function loadFeedPreview(more = false) {
     const data = await api(`/api/feed/preview?limit=${targetLimit}`);
     cachedFeedPosts = data.posts || [];
     renderFeedPosts();
+    if (queryStatus && !more) {
+      queryStatus.className = `status ${cachedFeedPosts.length ? 'online' : ''}`;
+      queryStatus.innerHTML = `<i></i> ${cachedFeedPosts.length}개 조회`;
+    }
     if (more) {
       toast(`이웃 새글 피드를 총 ${cachedFeedPosts.length}개까지 추가로 불러왔습니다.`);
     }
@@ -2514,6 +2609,10 @@ async function loadFeedPreview(more = false) {
           <span style="font-size:12px; color:#64748b;">${escapeHtml(err.message)}</span>
         </div>
       `;
+      if (queryStatus) {
+        queryStatus.className = 'status error';
+        queryStatus.innerHTML = '<i></i> 조회 실패';
+      }
     } else {
       toast(`추가 피드 로딩 실패: ${err.message}`, true);
       const loadMoreBtn = $('#feedLoadMoreBtn');
@@ -2526,12 +2625,30 @@ async function loadFeedPreview(more = false) {
     isFeedPreviewLoading = false;
     if (refreshBtn) {
       refreshBtn.disabled = false;
-      refreshBtn.textContent = '🔄 피드 새로고침';
+      refreshBtn.textContent = '목록 조회';
     }
   }
 }
 
 function initFeedEngagement() {
+  // Keep one clear flow: choose posts on the left, monitor progress on the right.
+  const selectionOptionsSlot = $('#feedSelectionOptionsSlot');
+  const optionGroup = $('#cardFeedDoLike')?.closest('.form-group');
+  const advancedToggle = $('#toggleFeedAdvancedBtn');
+  const advancedDrawer = $('#feedAdvancedSettings');
+  if (selectionOptionsSlot) {
+    if (optionGroup) selectionOptionsSlot.appendChild(optionGroup);
+    if (advancedToggle) selectionOptionsSlot.appendChild(advancedToggle);
+    if (advancedDrawer) selectionOptionsSlot.appendChild(advancedDrawer);
+  }
+
+  const runControls = $('#pauseFeedBtn')?.parentElement;
+  const progressWidget = $('#feedLiveProgressWidget');
+  if (runControls && progressWidget) {
+    runControls.classList.add('feed-run-controls');
+    progressWidget.insertAdjacentElement('afterend', runControls);
+  }
+
   // Option Cards interactive toggle
   const cardDoLike = $('#cardFeedDoLike');
   const inputDoLike = $('#feedDoLike');
@@ -2709,7 +2826,10 @@ function initFeedEngagement() {
       const isHidden = drawer.classList.toggle('hidden');
       if (toggleBtn) {
         toggleBtn.classList.toggle('open', !isHidden);
+        toggleBtn.setAttribute('aria-expanded', String(!isHidden));
       }
+      const stateLabel = $('#feedAdvancedArrow');
+      if (stateLabel) stateLabel.textContent = isHidden ? '열기' : '닫기';
     }
   });
 
@@ -2784,6 +2904,7 @@ function initFeedEngagement() {
         })
       });
 
+      activeFeedState = 'running';
       toast(`선택한 ${selectedPosts.length}개 이웃 글에 대해 자동 소통을 시작합니다.`);
       selectedFeedPostLogNos.clear();
       updateFeedSelectionToolbar();
@@ -2793,12 +2914,12 @@ function initFeedEngagement() {
       toast(`선택 소통 시작 실패: ${err.message}`, true);
       if (engageBtn) {
         engageBtn.disabled = false;
-        engageBtn.textContent = `⚡ 선택한 ${selectedPosts.length}개 글 소통 시작`;
+        engageBtn.textContent = `선택한 ${selectedPosts.length}개 글 소통 시작`;
       }
     }
   });
 
-  // Event Delegation on feedPostsContainer: Checkbox and Single Action Button
+  // Event delegation: checkbox or card click selects a post.
   const feedContainer = $('#feedPostsContainer');
   feedContainer?.addEventListener('change', (e) => {
     const check = e.target.closest('.feed-post-check');
@@ -2811,17 +2932,25 @@ function initFeedEngagement() {
       selectedFeedPostLogNos.delete(logNo);
     }
     updateFeedSelectionToolbar();
+    renderFeedPosts();
   });
 
   feedContainer?.addEventListener('click', (e) => {
-    const btn = e.target.closest('.feed-single-action-btn');
-    if (!btn || btn.disabled) return;
+    if (e.target.closest('a, button, input, label')) return;
+    const card = e.target.closest('.feed-post-card[data-selectable="true"]');
+    if (!card) return;
+    const check = card.querySelector('.feed-post-check');
+    if (!check) return;
+    check.checked = !check.checked;
+    check.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  feedContainer?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest('.feed-post-card[data-selectable="true"]');
+    if (!card || e.target !== card) return;
     e.preventDefault();
-    e.stopPropagation();
-    const logNo = btn.dataset.logno;
-    if (logNo) {
-      handleSinglePostEngage(logNo, btn);
-    }
+    card.click();
   });
 
   $('#refreshFeedPreviewBtn')?.addEventListener('click', () => {
@@ -2941,7 +3070,16 @@ function updateCleanerDashboard(statusData) {
     const resumeBtn = $('#resumeReceivedCleanBtn');
     const stopBtn = $('#stopReceivedCleanBtn');
 
-    if (startBtn) startBtn.classList.toggle('hidden', !isIdle);
+    if (startBtn) {
+      startBtn.classList.toggle('hidden', !isIdle);
+      if (isIdle) {
+        startBtn.disabled = false;
+        const acceptAll = !($('#cleanerAcceptGenuine')?.checked ?? true) && !($('#cleanerRejectSpam')?.checked ?? true);
+        startBtn.innerHTML = acceptAll
+          ? '<strong>모든 신청 수락</strong>'
+          : '<strong>선별 처리 시작</strong>';
+      }
+    }
     if (pauseBtn) pauseBtn.classList.toggle('hidden', !isRunning);
     if (resumeBtn) resumeBtn.classList.toggle('hidden', !isPaused);
     if (stopBtn) stopBtn.classList.toggle('hidden', isIdle);
@@ -3022,26 +3160,37 @@ function stopCleanerPolling() {
   }
 }
 
+function renderCleanerEmptyState(title, description) {
+  return `
+    <div class="empty-state cleaner-empty-state">
+      <div class="cleaner-empty-icon" aria-hidden="true"></div>
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(description)}</p>
+    </div>
+  `;
+}
+
 async function loadReceivedCleanerList() {
   const container = $('#receivedRequestsContainer');
   const refreshBtn = $('#refreshReceivedListBtn');
+  const queryStatus = $('#receivedListStatus');
   if (!container || isCleanerLoading) return;
 
   if (!state.connected) {
-    container.innerHTML = `
-      <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
-        <p style="font-weight:600; margin-bottom:8px; color:#1e293b;">네이버 로그인이 필요합니다</p>
-        <span style="font-size:12.5px; color:#64748b;">받은 신청 목록을 불러오려면 먼저 네이버 계정을 연결해주세요.</span>
-      </div>
-    `;
+    container.innerHTML = renderCleanerEmptyState(
+      '네이버 로그인이 필요합니다',
+      '받은 신청 목록을 불러오려면 먼저 네이버 계정을 연결해주세요.'
+    );
+    if (queryStatus) { queryStatus.className = 'status error'; queryStatus.innerHTML = '<i></i> 로그인 필요'; }
     return;
   }
 
   isCleanerLoading = true;
   if (refreshBtn) {
     refreshBtn.disabled = true;
-    refreshBtn.textContent = '🔄 불러오는 중...';
+    refreshBtn.textContent = '조회 중...';
   }
+  if (queryStatus) { queryStatus.className = 'status loading'; queryStatus.innerHTML = '<i></i> 목록 조회 중'; }
 
   container.innerHTML = `
     <div style="text-align:center; padding:40px 20px; color:var(--text-muted, #64748b);">
@@ -3055,13 +3204,13 @@ async function loadReceivedCleanerList() {
     const requests = data.requests || [];
 
     if ($('#cleanerStatReceivedTotal')) $('#cleanerStatReceivedTotal').textContent = String(requests.length);
+    if (queryStatus) { queryStatus.className = `status ${requests.length ? 'online' : ''}`; queryStatus.innerHTML = `<i></i> ${requests.length}개 조회`; }
 
     if (!requests.length) {
-      container.innerHTML = `
-        <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
-          <span>✨ 현재 대기 중인 받은 서로이웃 신청이 없습니다.</span>
-        </div>
-      `;
+      container.innerHTML = renderCleanerEmptyState(
+        '대기 중인 신청이 없습니다',
+        '새로운 서로이웃 신청이 들어오면 이곳에 표시됩니다.'
+      );
       return;
     }
 
@@ -3075,7 +3224,7 @@ async function loadReceivedCleanerList() {
       const reason = escapeHtml(req.evaluation?.reason || '');
 
       return `
-        <article class="cleaner-request-card">
+        <article class="cleaner-request-card" data-received-blog-id="${escapeHtml(req.targetBlogId)}">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div style="display:flex; align-items:center; gap:8px;">
               <div style="width:32px; height:32px; border-radius:50%; background:#e0e7ff; color:#4338ca; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0;">
@@ -3099,15 +3248,19 @@ async function loadReceivedCleanerList() {
             💬 "${escapeHtml(req.message || '메시지 없음')}"
           </div>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-            <span style="${badgeStyle} padding:4px 10px; border-radius:9999px; font-size:11.5px; font-weight:700; display:inline-flex; align-items:center; gap:5px;">
+          <div class="cleaner-request-actions">
+            <span class="cleaner-evaluation-badge" style="${badgeStyle}">
               <span>${badgeIcon}</span> ${badgeLabel} <small style="font-weight:500; opacity:0.85;">· ${reason}</small>
             </span>
+            <button type="button" class="cleaner-single-accept-btn" data-blog-id="${escapeHtml(req.targetBlogId)}" data-nickname="${escapeHtml(req.nickname || req.targetBlogId)}">
+              <span>✓</span> 수락
+            </button>
           </div>
         </article>
       `;
     }).join('');
   } catch (err) {
+    if (queryStatus) { queryStatus.className = 'status error'; queryStatus.innerHTML = '<i></i> 조회 실패'; }
     container.innerHTML = `
       <div style="text-align:center; padding:40px 20px; color:#ef4444;">
         <p style="margin-bottom:8px; font-weight:600;">신청 목록을 불러오지 못했습니다.</p>
@@ -3118,7 +3271,7 @@ async function loadReceivedCleanerList() {
     isCleanerLoading = false;
     if (refreshBtn) {
       refreshBtn.disabled = false;
-      refreshBtn.textContent = '🔄 목록 새로고침';
+      refreshBtn.textContent = '목록 조회';
     }
   }
 }
@@ -3126,15 +3279,15 @@ async function loadReceivedCleanerList() {
 async function loadSentCleanerList() {
   const container = $('#sentRequestsContainer');
   const refreshBtn = $('#refreshSentListBtn');
+  const queryStatus = $('#sentListStatus');
   if (!container || isCleanerLoading) return;
 
   if (!state.connected) {
-    container.innerHTML = `
-      <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
-        <p style="font-weight:600; margin-bottom:8px; color:#1e293b;">네이버 로그인이 필요합니다</p>
-        <span style="font-size:12.5px; color:#64748b;">보낸 신청 목록을 불러오려면 먼저 네이버 계정을 연결해주세요.</span>
-      </div>
-    `;
+    container.innerHTML = renderCleanerEmptyState(
+      '네이버 로그인이 필요합니다',
+      '보낸 신청 목록을 불러오려면 먼저 네이버 계정을 연결해주세요.'
+    );
+    if (queryStatus) { queryStatus.className = 'status error'; queryStatus.innerHTML = '<i></i> 로그인 필요'; }
     return;
   }
 
@@ -3142,8 +3295,9 @@ async function loadSentCleanerList() {
   isCleanerLoading = true;
   if (refreshBtn) {
     refreshBtn.disabled = true;
-    refreshBtn.textContent = '🔄 불러오는 중...';
+    refreshBtn.textContent = '조회 중...';
   }
+  if (queryStatus) { queryStatus.className = 'status loading'; queryStatus.innerHTML = '<i></i> 목록 조회 중'; }
 
   container.innerHTML = `
     <div style="text-align:center; padding:40px 20px; color:var(--text-muted, #64748b);">
@@ -3157,13 +3311,13 @@ async function loadSentCleanerList() {
     const requests = data.requests || [];
 
     if ($('#cleanerStatSentTotal')) $('#cleanerStatSentTotal').textContent = String(requests.length);
+    if (queryStatus) { queryStatus.className = `status ${requests.length ? 'online' : ''}`; queryStatus.innerHTML = `<i></i> ${requests.length}개 조회`; }
 
     if (!requests.length) {
-      container.innerHTML = `
-        <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
-          <span>✨ ${olderThanDays}일 이상 경과한 미수락 보낸 신청이 없습니다.</span>
-        </div>
-      `;
+      container.innerHTML = renderCleanerEmptyState(
+        '정리할 보낸 신청이 없습니다',
+        `${olderThanDays}일 이상 지난 미수락 신청이 없습니다.`
+      );
       return;
     }
 
@@ -3188,6 +3342,7 @@ async function loadSentCleanerList() {
       `;
     }).join('');
   } catch (err) {
+    if (queryStatus) { queryStatus.className = 'status error'; queryStatus.innerHTML = '<i></i> 조회 실패'; }
     container.innerHTML = `
       <div style="text-align:center; padding:40px 20px; color:#ef4444;">
         <p style="margin-bottom:8px; font-weight:600;">보낸 신청 목록을 불러오지 못했습니다.</p>
@@ -3198,8 +3353,22 @@ async function loadSentCleanerList() {
     isCleanerLoading = false;
     if (refreshBtn) {
       refreshBtn.disabled = false;
-      refreshBtn.textContent = '🔄 목록 새로고침';
+      refreshBtn.textContent = '목록 조회';
     }
+  }
+}
+
+function resetSentCleanerListQuery() {
+  const container = $('#sentRequestsContainer');
+  const queryStatus = $('#sentListStatus');
+  const total = $('#cleanerStatSentTotal');
+  if (queryStatus) { queryStatus.className = 'status'; queryStatus.innerHTML = '<i></i> 조회 전'; }
+  if (total) total.textContent = '0';
+  if (container) {
+    container.innerHTML = renderCleanerEmptyState(
+      '보낸 신청을 확인하세요',
+      '목록 조회를 누르면 설정한 기간의 미수락 신청을 불러옵니다.'
+    );
   }
 }
 
@@ -3215,27 +3384,39 @@ function initNeighborCleaner() {
       const targetSubtab = btn.dataset.subtab;
       $('#subtabReceivedCleaner')?.classList.toggle('hidden', targetSubtab !== 'received-cleaner');
       $('#subtabSentCleaner')?.classList.toggle('hidden', targetSubtab !== 'sent-cleaner');
-      $('#subtabCommentInbox')?.classList.toggle('hidden', targetSubtab !== 'comment-inbox');
 
-      if (targetSubtab === 'received-cleaner') {
-        if (state.connected && $('#receivedRequestsContainer')?.querySelector('.empty-state')) {
-          loadReceivedCleanerList();
-        }
-      } else if (targetSubtab === 'sent-cleaner') {
-        if (state.connected && $('#sentRequestsContainer')?.querySelector('.empty-state')) {
-          loadSentCleanerList();
-        }
-      }
     });
   });
 
-  // Option card toggle handlers
-  $('#cleanerAcceptGenuine')?.addEventListener('change', (e) => {
-    $('#cardOptionAcceptGenuine')?.classList.toggle('checked', e.target.checked);
-  });
-  $('#cleanerRejectSpam')?.addEventListener('change', (e) => {
-    $('#cardOptionRejectSpam')?.classList.toggle('checked', e.target.checked);
-  });
+  // Option card toggle handlers. Turning both conditions off explicitly means accept all.
+  const syncCleanerAcceptMode = () => {
+    const acceptGenuine = $('#cleanerAcceptGenuine')?.checked ?? true;
+    const rejectSpam = $('#cleanerRejectSpam')?.checked ?? true;
+    const acceptAll = !acceptGenuine && !rejectSpam;
+    const notice = $('#cleanerAcceptModeNotice');
+    const title = $('#cleanerAcceptModeTitle');
+    const desc = $('#cleanerAcceptModeDesc');
+    const startBtn = $('#startReceivedCleanBtn');
+
+    $('#cardOptionAcceptGenuine')?.classList.toggle('checked', acceptGenuine);
+    $('#cardOptionRejectSpam')?.classList.toggle('checked', rejectSpam);
+    notice?.classList.toggle('accept-all', acceptAll);
+    if (title) title.textContent = acceptAll ? '조건 없이 모두 수락' : 'AI 선별 수락 모드';
+    if (desc) {
+      desc.textContent = acceptAll
+        ? '두 조건이 모두 꺼져 있어 AI 판정 없이 대기 중인 신청을 전부 수락합니다.'
+        : '선택한 조건에 따라 진성 이웃은 수락하고 광고·매크로는 거절합니다.';
+    }
+    if (startBtn && !startBtn.disabled) {
+      startBtn.innerHTML = acceptAll
+        ? '<strong>모든 신청 수락</strong>'
+        : '<strong>선별 처리 시작</strong>';
+    }
+  };
+
+  $('#cleanerAcceptGenuine')?.addEventListener('change', syncCleanerAcceptMode);
+  $('#cleanerRejectSpam')?.addEventListener('change', syncCleanerAcceptMode);
+  syncCleanerAcceptMode();
 
   // Received Cleaner Actions
   $('#startReceivedCleanBtn')?.addEventListener('click', async (e) => {
@@ -3248,16 +3429,16 @@ function initNeighborCleaner() {
 
     const acceptGenuine = $('#cleanerAcceptGenuine')?.checked ?? true;
     const rejectSpam = $('#cleanerRejectSpam')?.checked ?? true;
-
-    if (!acceptGenuine && !rejectSpam) {
-      return toast('수락 또는 거절 옵션 중 최소 1개 이상을 선택해주세요.', true);
+    const acceptAll = !acceptGenuine && !rejectSpam;
+    if (acceptAll && !confirm('AI 판정 없이 대기 중인 받은 서로이웃 신청을 모두 수락하시겠습니까?')) {
+      return;
     }
 
     const startBtn = $('#startReceivedCleanBtn');
     try {
       if (startBtn) {
         startBtn.disabled = true;
-        startBtn.innerHTML = '<span class="btn-icon">⏳</span> <strong>선별 준비 중...</strong>';
+        startBtn.innerHTML = '<strong>준비 중...</strong>';
       }
 
       await api('/api/cleaner/received/start', {
@@ -3265,13 +3446,15 @@ function initNeighborCleaner() {
         body: JSON.stringify({ acceptGenuine, rejectSpam })
       });
 
-      toast('받은 서로이웃 신청 AI 자동 선별 처리를 시작합니다.');
+      toast(acceptAll
+        ? '대기 중인 받은 서로이웃 신청을 조건 없이 모두 수락합니다.'
+        : '받은 서로이웃 신청 AI 자동 선별 처리를 시작합니다.');
       startCleanerPolling('received');
     } catch (err) {
       toast(`선별 시작 실패: ${err.message}`, true);
       if (startBtn) {
         startBtn.disabled = false;
-        startBtn.innerHTML = '<span class="btn-icon">🚀</span> <strong>AI 선별 자동 처리 시작</strong>';
+        syncCleanerAcceptMode();
       }
     }
   });
@@ -3323,6 +3506,49 @@ function initNeighborCleaner() {
     loadReceivedCleanerList();
   });
 
+  $('#receivedRequestsContainer')?.addEventListener('click', async (e) => {
+    const button = e.target.closest('.cleaner-single-accept-btn');
+    if (!button || button.disabled) return;
+
+    const targetBlogId = button.dataset.blogId;
+    const nickname = button.dataset.nickname || targetBlogId;
+    if (!targetBlogId) return;
+    if (!confirm(`@${targetBlogId} (${nickname}) 님의 서로이웃 신청을 수락하시겠습니까?`)) return;
+
+    button.disabled = true;
+    button.innerHTML = '<span>⏳</span> 수락 중...';
+    try {
+      await api('/api/cleaner/received/accept', {
+        method: 'POST',
+        body: JSON.stringify({ targetBlogId })
+      });
+
+      const card = button.closest('.cleaner-request-card');
+      card?.classList.add('is-accepted');
+      button.innerHTML = '<span>✓</span> 수락 완료';
+      const acceptedEl = $('#cleanerStatReceivedAccepted');
+      if (acceptedEl) acceptedEl.textContent = String((Number(acceptedEl.textContent) || 0) + 1);
+      const totalEl = $('#cleanerStatReceivedTotal');
+      if (totalEl) totalEl.textContent = String(Math.max(0, (Number(totalEl.textContent) || 0) - 1));
+      toast(`✅ @${targetBlogId} 님의 서로이웃 신청을 수락했습니다.`);
+
+      setTimeout(() => {
+        card?.remove();
+        const container = $('#receivedRequestsContainer');
+        if (container && !container.querySelector('.cleaner-request-card')) {
+          container.innerHTML = renderCleanerEmptyState(
+            '대기 중인 신청이 없습니다',
+            '새로운 서로이웃 신청이 들어오면 이곳에 표시됩니다.'
+          );
+        }
+      }, 700);
+    } catch (err) {
+      button.disabled = false;
+      button.innerHTML = '<span>✓</span> 수락';
+      toast(`개별 수락 실패: ${err.message}`, true);
+    }
+  });
+
   // Sent Cleaner Actions
   $$('#sentDaysChips .chip').forEach((chip) => {
     chip.addEventListener('click', () => {
@@ -3331,7 +3557,7 @@ function initNeighborCleaner() {
       const input = $('#sentOlderThanDays');
       if (input) {
         input.value = chip.dataset.days;
-        loadSentCleanerList();
+        resetSentCleanerListQuery();
       }
     });
   });
@@ -3341,7 +3567,7 @@ function initNeighborCleaner() {
     $$('#sentDaysChips .chip').forEach((c) => {
       c.classList.toggle('active', c.dataset.days === val);
     });
-    loadSentCleanerList();
+    resetSentCleanerListQuery();
   });
 
   $('#startSentCancelBtn')?.addEventListener('click', async (e) => {

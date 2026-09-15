@@ -52,51 +52,49 @@ When the user asks "트렌드글 포스팅 해줘", "트렌드 분석해서 글 
 
 ## Article quality (정성스럽고 깊이 있는 프리미엄 포스팅 원칙)
 
-독자가 글을 읽었을 때 "단순 AI 요약글이나 백과사전이 아니라, 진짜 살림·건강 전문가가 정성을 다해 쓴 글"이라는 신뢰와 감동을 느낄 수 있도록 아래의 고품질 작성 원칙을 반드시 준수합니다.
+독자가 글을 읽었을 때 "단순 AI 요약글이나 백과사전이 아니라, 진짜 살림·건강·IT 전문가가 정성을 다해 쓴 글"이라는 신뢰와 감동을 느낄 수 있도록 아래의 고품질 작성 원칙을 반드시 준수합니다.
 
-### 1. 글자 수 및 정보 밀도 (Depth & Volume Gate)
-- **분량 기준**: 순수 본문 기준 **2,500 ~ 3,800자 (공백 제외 2,200자 이상 의무화)**를 철저히 지킵니다. (태그, 출처 URL 제외)
-- **무의미한 패딩 금지**: 같은 말을 반복하는 말 늘리기가 아니라, **구체적인 수치(온도, 비율, g/ml 용량, 분/초 단위 시간), 과학적·의학적·조리적 원리, 실제 발생 가능한 돌발 상황별 해결책**으로 정보 밀도를 촘촘하게 채웁니다.
-- **발행 게이트**: 작성 완료 후 공백 제외 글자 수를 계산하여 2,200자 미만일 경우, 심층 팁과 FAQ를 추가 보강하기 전까지는 절대 발행하지 않습니다.
+### 1. 글자 수 및 정보 밀도 (Depth & Substance)
+- **분량 기준**: 순수 본문 기준 **2,200 ~ 3,500자 (공백 제외 1,800~2,800자)**. 무의미한 분량 늘리기(패딩)를 엄격히 금지하고 알짜 실무 정보로 촘촘히 채웁니다.
+- **[핵심 원칙] 겉핥기식 서술 전면 금지 (Zero Superficial Skimming)**: 여러 주제를 두루뭉술하게 수박 겉핥기식으로 얕게 훑고 지나가는 글은 절대 금지합니다. 하나의 주제를 정했다면 초보자가 글만 보고도 100% 따라 할 수 있을 만큼 **구체적인 실행 절차, 정확한 설정값/프롬프트, 실제 써보았을 때의 속도와 체감, 무료 플랜의 숨겨진 제약, 돌발 상황별 대처법**까지 깊이 있게 파고들어 작성합니다.
+- **[필수 준수] 긴 내용의 1, 2, 3 체계적 분할 포스팅 원칙 (Readable 1-2-3 Hierarchy)**:
+  - **1) 단일 포스팅 본문 내 1, 2, 3 구조화**: 내용이 방대하거나 단계가 길어질수록 빽빽한 줄글을 절대 쓰지 않으며, 독자가 3초 만에 파악할 수 있도록 **`1. 핵심 개념/단계명`, `2. 세부 실행/단계명`, `3. 실전 꿀팁/주의사항`**과 같이 일목요연하게 1, 2, 3 넘버링으로 나누어 전개합니다.
+  - **2) 번호별 심층 불릿 전개**: 각 번호 항목 아래에는 단순 요약이 아니라 `• 구체적 실행 절차`, `• 실전 예시/프롬프트`, `• 놓치기 쉬운 한계와 대처법` 등을 체계적인 불릿과 시원한 줄바꿈으로 배치하여 모바일과 PC 화면 모두에서 스캔하듯 술술 읽히도록 설계합니다.
+  - **3) 방대한 대형 주제의 1, 2, 3탄 시리즈 연재**: 한 번의 글에 억지로 구겨 넣기 어려운 방대한 전문 주제의 경우, 겉핥기 압축을 피하고 **`[1탄: 기초 설정/입문]`, `[2탄: 실전 활용/테크닉]`, `[3탄: 고급 응용/트러블슈팅]`**과 같이 1·2·3탄 연재 시리즈로 분할 기획하여 발행합니다.
 
-### 2. 공감형 스토리텔링 도입부 (Empathy & Reader Hook)
-- 건조하고 딱딱한 백과사전식 도입("~에 대해 알아보겠습니다", "최근 ~가 인기입니다")을 **전면 금지**합니다.
-- 독자가 일상에서 겪었을 법한 **구체적인 곤란한 상황, 당황했던 에피소드, 흔히 겪는 착오**를 생생하게 묘사하여 3초 안에 독자의 깊은 공감을 이끌어냅니다.
-  *(예: "장바구니에 담아올 땐 뿌듯했는데, 막상 싱크대 앞에 서서 손질할 생각에 한숨부터 나오셨던 적 다들 있으시죠?", "아침에 일어났는데 갑자기 핑 돌며 식은땀이 비 오듯 쏟아져 덜컥 겁이 났던 경험...")*
-- 왜 이 글이 지금 독자의 고민을 해결하는 데 반드시 필요한지 명확한 이유를 제시합니다.
+### 2. [절대 금지] 공장형 판박이 템플릿 증후군 근절 (Zero-Template Syndrome)
+글마다 똑같은 구조와 똑같은 상투구를 찍어내는 행위는 "저품질 AI 양산 블로그"로 낙인찍히는 지름길입니다. 다음 규칙을 엄격히 적용합니다:
+- **기계적인 브래킷 제목 표기 금지**: `[바쁜 분들을 위한 3줄 핵심 요약]`, `[흔히 저지르는 치명적 실수 TOP 3]`, `[독자들이 가장 많이 묻는 실전 Q&A]`, `[전문가의 한 끗 차이 실무 꿀팁 (Secret Pro-Tip)]` 같은 브래킷 제목을 모든 글에 기계적으로 똑같이 쓰지 않는다. 주제에 어울리는 자연스러운 소제목과 문맥 속 소단락(`💡 30초 핵심 가이드`, `⚠️ 초보자가 놓치기 쉬운 주의사항`, `실전 문제 해결 FAQ` 등)으로 다양하고 유연하게 변형한다.
+- **판박이 도입부/마무리 클리셰 전면 금지**:
+  - 도입부에서 `"...한 경험 다들 한 번쯤 있으실 겁니다"`, `"...라는 고민 해보셨을 겁니다"` 같은 복붙형 상투구 전면 금지. 생생한 에피소드, 충격적인 발견, 구체적인 현실의 불편함에서 곧바로 시작할 것.
+  - 마무리에서 `"기술의 본질은...", "정보가 부족해서..."` 식의 훈화 말씀과 `"오늘 소개해 드린 ~ 가이드가 도움이 되셨기를... 공감과 댓글 부탁드립니다"` 식의 기계적 복붙 엔딩 전면 금지. 진솔한 총평, 독자의 질문을 유도하는 마무리, 다음 실천 팁으로 자연스럽게 끝맺을 것.
+- **실제 사용 경험(Hands-on Detail) 필수 포함**:
+  - 실제 사용자의 시점에서 "어디에 접속해서 어떤 버튼을 눌러야 하는지", "직접 써보았을 때 어떤 점이 편리했고 어떤 부분은 한계나 주의가 필요한지", "무료 사용 시 크레딧이나 분량 제한을 아끼는 실전 팁" 등 직접 써본 사람만 아는 1%의 디테일을 반드시 담아야 한다.
 
-### 3. 정성스러운 글의 5대 필수 시그니처 구성요소 (Signature Elements)
-모든 포스팅은 다음 5가지 요소를 본문 속에 유기적으로 반드시 포함해야 합니다:
-
-1. **[바쁜 분들을 위한 3줄 핵심 요약]**: 도입부 끝 또는 글 서두에 바쁜 독자를 위해 전체 핵심 결론과 필수 행동 요령을 3줄로 깔끔하게 정리한 박스/문단 제공. (불필요한 이모지 남발 금지)
-2. **[흔히 저지르는 치명적 실수 TOP 3 / 실패 방지 꿀팁]**: 초보자들이 실제로 가장 많이 실패하는 포인트와 그 이유, 그리고 해결책을 구체적으로 짚어줌 (*"대부분 여기서 실패합니다", "주의해야 할 점"*).
-3. **[한눈에 쏙 들어오는 비교/체크리스트 요약]**: 상황별 비교(A vs B, 모델별 차이, 전/후 비교)나 단계별 점검 체크리스트를 **마크다운 표 기호(|---|)를 쓰지 않고**, 깔끔한 불릿 포인트와 비교 카드 형식(`▶ 항목명: 내용`, `• 세부 설명`)으로 일목요연하게 제공.
-4. **[독자들이 가장 많이 묻는 실전 Q&A (FAQ 2~3선)]**: 댓글로 자주 물어볼 법한 실전 궁금증(보관 기한, 대체 재료, 주의 대상, 부작용 등)을 사전에 명쾌하게 해소.
-5. **[전문가의 한 끗 차이 살림/업무 꿀팁 (Secret Pro-Tip)]**: 일반인은 잘 모르는 1%의 실전 비법을 짚어주어 글의 소장 가치를 극대화.
-
-### 4. 사람이 직접 쓴 블로그 서식 원칙 (마크다운 특수문자 및 어색한 이모지 전면 금지)
+### 3. 사람이 직접 쓴 블로그 서식 원칙 (마크다운 특수문자 및 어색한 이모지 전면 금지)
 네이버 스마트에디터 ONE은 마크다운 문법을 HTML로 자동 렌더링하지 않고 텍스트 그대로 타이핑하므로, 마크다운 특수문자가 노출되면 심각한 AI 티가 나고 독자의 신뢰를 완전히 잃게 됩니다. "진짜 사람이 정성껏 쓴 글"처럼 보이도록 다음 서식 규칙을 100% 강제합니다:
 
 - **제목 해시태그(`###`, `##`, `#`) 절대 금지**: 소제목 앞에 `###` 기호를 절대 쓰지 않는다. `1. 소제목`, `2. 소제목` 또는 `[소제목]` 형태로 깔끔하고 자연스럽게 작성한다.
 - **마크다운 표 기호(`| :--- | :--- |`, `|---|`) 절대 금지**: 표 문법은 텍스트 에디터에서 깨진 파이프(|)와 하이픈(-) 찌꺼기로 그대로 출력되어 극도로 난잡해 보인다. 비교나 정리 내용은 `▶ A 모델 / B 모델` 같은 깔끔한 불릿(`•`, `·`, `▶`)과 들여쓰기 문단으로 보기 좋게 정리한다.
 - **코드 블록 백틱(```) 남발 금지**: 프롬프트 예시나 가이드는 마크다운 코드 블록(```)으로 감싸지 말고, 큰따옴표나 `[프롬프트 예시]`, 꺾쇠(`-`), 또는 줄바꿈 인용 형태로 자연스럽게 서술한다.
-- **과도하고 어색한 이모티콘 전면 배제 (Zero Robotic Emojis)**: 문단이나 소제목마다 `🤖`, `💡`, `⚠️`, `❓`, `🎁`, `✨` 등의 이모지를 기계적으로 붙이는 것은 전형적인 저품질 AI 생성 글의 특징이다. 단정한 기호(`[핵심 요약]`, `[주의사항]`, `•`, `▶`)를 사용하고, 전체 글에서 감정선에 맞게 최대 1~2개 이내로만 자연스럽게 제한한다.
+- **과도하고 어색한 이모티콘 전면 배제 (Zero Robotic Emojis)**: 문단이나 소제목마다 `🤖`, `💡`, `⚠️`, `❓`, `🎁`, `✨` 등의 이모지를 기계적으로 붙이는 것은 전형적인 저품질 AI 생성 글의 특징이다. 단정한 기호(`•`, `▶`)를 주로 사용하고, 전체 글에서 감정선에 맞게 최대 1~2개 이내로만 정제한다.
 - **인간적인 블로거 페르소나와 유려한 필력**:
   - 딱딱한 기계 번역투나 사전식 정의를 버리고, 필자가 직접 조사하고 실무에서 검증해 본 경험을 독자에게 친절히 이야기하듯 술술 읽히는 유려한 문장 구조를 갖춘다.
   - 모바일과 PC 화면에서 모두 읽기 편하도록 적절한 줄바꿈과 호흡을 유지한다.
 
-### 5. 신뢰성과 안전성 (Authoritative Grounding)
-- 건강, 안전, 의약품, 화학 세제, IT/보안 등 전문성이 요구되는 주제는 반드시 공식 발표 자료, 전문 기관 가이드 등 공신력 있는 출처에 기반하여 작성하고, 주의사항을 자연스럽게 포함합니다.
-- 최대 10개의 핵심 타겟 태그를 엄선합니다.
+### 4. Image creation and placement (Gemini Imagen - 무단 복제/재탕 절대 금지)
 
-### 6. [발행 전 절대 필수] 5대 AI 흔적 무관용 자가 검증 게이트 (Zero-AI-Clutter Gate)
-포스팅을 에디터에 전송하기 직전, 아래 5개 항목을 무조건 검증해야 하며 **단 하나라도 위반 시 발행을 즉시 중단하고 수정**합니다:
-
-1. **[무관용 1] 소제목 해시태그(`#`, `##`, `###`) 0개**: 소제목은 반드시 `1. 소제목`, `2. 소제목` 또는 `[소제목]` 형태로만 작성되어야 함.
-2. **[무관용 2] 마크다운 표(`|---|`, `| :--- |`) 0개**: 스마트에디터에 깨져 나오는 표 기호는 전면 금지하며, `▶ A 모델 / B 모델` 불릿 비교 카드로만 작성되어야 함.
-3. **[무관용 3] 백틱 코드 블록(```) 0개**: 프롬프트나 가이드는 큰따옴표나 들여쓰기 인용문으로 자연스럽게 풀어서 작성되어야 함.
-4. **[무관용 4] 기계적 이모티콘(`🤖`, `💡`, `⚠️`, `❓`, `🎁`, `✨` 등) 남발 금지**: 제목이나 문단 머리마다 기계적으로 붙이는 이모지를 전면 삭제하고, 단정한 기호(`[핵심 요약]`, `[주의사항]`, `•`, `▶`)를 사용하며 전체 글에서 최대 1~2개 이내로만 정제되어야 함.
-5. **[무관용 5] 순수 글자 수 2,200자 이상 & 유려한 인간 필력**: 공백과 특수기호를 제외한 순수 한글/영문 글자 수가 2,200자 이상이어야 하며, 기계 번역투 없이 사람이 정성을 다해 쓴 자연스러운 문장이어야 함.
+1. **Gemini Engine Only**: All images must be generated using Gemini's native `generate_image` tool (Google Imagen engine). Do NOT use GPT, DALL-E, or external image generation APIs.
+2. **절대 기존 이미지 복사/재탕 금지 (Strict Zero-Duplicate Rule)**:
+   - 이전 포스팅에 사용했던 이미지 파일이나 로컬에 있는 다른 주제의 이미지를 `copyFileSync` 등으로 복사하여 사용하는 행위를 **엄격히 금지**합니다.
+   - 모든 글의 3장 이미지는 **해당 글의 본문 내용에 1:1로 맞춘 고유 프롬프트로 새롭게 생성**되어야 하며, 이미지 해시(SHA256)가 다른 글과 절대 중복되지 않아야 합니다.
+3. **사실적이고 일상적인 실사 스타일 (Photorealistic & Contextual)**:
+   - 뜬구름 잡는 추상적인 사이버펑크 그래픽이나 복잡한 모니터 화면 그래픽을 피합니다.
+   - 실제 한국인의 일상 환경(깔끔한 서재, 카페, 오피스 회의실, 거실)에서 기기를 사용하거나, 깨끗하게 정돈된 데스크셋업, 직관적인 시각 자료 느낌의 실사 포토(editorial photo look)로 생성합니다.
+   - 텍스트, 알파벳, 로고, 워터마크가 이미지에 들어가지 않도록 프롬프트에 명시합니다.
+4. Unless the user requests another count, plan and publish exactly three images for each normal standalone post after the article structure is fixed. Each image must illustrate the exact section beside it, not just the broad topic.
+5. Give every image a different exact `afterHeading` value copied from a real body heading. Use three distinct roles: representative scene, concrete detail or preparation, and practical action or completed result.
+6. Save accepted images under `D:\work\dev\blog\output\gemini-images\<date>-<topic>\` with ordered descriptive filenames.
 
 ## Naver category routing
 
@@ -109,31 +107,22 @@ When the user asks "트렌드글 포스팅 해줘", "트렌드 분석해서 글 
   - `자동화`와 `개발` 카테고리는 블로그 소유자의 자체 프로그램 개발 로그 전용 카테고리입니다.
   - **자동 포스팅 시스템에서는 절대로 `자동화`나 `개발` 카테고리에 글을 발행하거나 건드리지 않아야 합니다.** (모든 AI/테크/자동화 관련 글은 무조건 **`IT`**로 분류)
 
-네이버 발행 설정 창에서 지정된 카테고리를 정확히 선택하고 확인한 뒤 최종 발행 버튼을 누릅니다. 태그 이름만 지정하는 것은 카테고리 설정으로 인정되지 않습니다.
-
-## Image creation and placement (Gemini Imagen)
-
-1. **Gemini Engine Only**: All images must be generated using Gemini's native `generate_image` tool (Google Imagen engine). Do NOT use GPT, DALL-E, or external image generation APIs.
-2. Unless the user requests another count, plan and publish exactly three images for each normal standalone post after the article structure is fixed. Each image must illustrate the exact section beside it, not just the broad topic.
-3. Give every image a different exact `afterHeading` value copied from a real body heading. Use three distinct roles: representative scene, concrete detail or preparation, and practical action or completed result.
-4. Call `generate_image` with distinct, high-quality prompts and set appropriate AspectRatio (e.g. `1:1` or `4:3` or `16:9`). Prefer natural Korean everyday scenes when people or homes are involved. Request realistic anatomy, an editorial photo look, no branding, no watermark, and no text in the image.
-5. Inspect the generated image artifact. If there are any flaws, regenerate with an adjusted prompt.
-6. Save or copy accepted images under `D:\work\dev\blog\output\gemini-images\<date>-<topic>\` with ordered descriptive filenames.
-7. Before publishing, verify all three accepted files exist, all three anchors occur exactly in the article, and the images are not merely variants of one generic scene. Do not publish when the image count or placement contract is incomplete.
-
-## Publish through the selected path
+## Publish or Update through the selected path
 
 Read and follow [references/direct-browser-publishing.md](references/direct-browser-publishing.md) for every live publication.
 
-1. By default, publish directly using the automated session helper:
+1. **신규 발행 시**:
    ```powershell
    node .agents/skills/naver-auto-posting/scripts/publish-post.js --title "<title>" --content-file "<path-to-content.txt>" --category "<category>" --tags "<tag1,tag2>" --images-file "<path-to-images.json>"
    ```
-   Or instantiate `NaverBrowserSession` directly from `windows/lib/naver.js` via Node.js script.
-2. The publishing engine navigates to Naver SmartEditor ONE, verifies the logged-in session, types the title and body, places each image after its designated heading, selects the category, applies tags, and clicks publish.
+2. **기존 글 수정(Update) 시**:
+   ```powershell
+   node .agents/skills/naver-auto-posting/scripts/publish-post.js --title "<title>" --content-file "<path-to-content.txt>" --category "<category>" --tags "<tag1,tag2>" --images-file "<path-to-images.json>" --update --log-no "<logNo>"
+   ```
+   - 기존 글 수정은 고유 URL(`https://blog.naver.com/<blogId>/<logNo>`)을 100% 보존하면서 스마트에디터 ONE의 수정 모드(`PostUpdateForm.naver`)에서 제목, 본문, 이미지, 태그, 카테고리를 완벽하게 교체·저장합니다.
 3. If authentication is required, pause at the visible login page for the user as described under **Scope and authorization**.
-4. Publish once and capture the resulting numeric Naver post URL (e.g. `https://blog.naver.com/<blogId>/<logNo>`). If navigation or feedback is ambiguous, inspect the blog or newest-post list before any retry.
-5. For an explicitly requested update, open the existing numeric post's update form, replace the title/body/images in that post, save once, and verify the same numeric public URL. Never create a replacement post unless the user asks for one.
+4. Capture the resulting numeric Naver post URL (e.g. `https://blog.naver.com/<blogId>/<logNo>`), and verify that the content and images rendered correctly.
+5. Do not flood publish: maintain natural intervals between live publications to protect account health and reader feed quality.
 
 ## Proof of completion
 

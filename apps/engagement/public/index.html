@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/login.css">
   <link rel="stylesheet" href="/refresh.css">
-  <link rel="stylesheet" href="/app-mode.css">
+  <link rel="stylesheet" href="/app-mode.css?v=22">
 </head>
 <body>
   <main class="shell">
@@ -17,12 +17,10 @@
         <div class="brand">
           <span class="brand-mark">N</span>
           <span class="brand-title">이웃메이트 Engage</span>
-          <span class="pill pill-version">v2.4 Desktop</span>
         </div>
       </div>
       <div class="header-right">
         <div class="header-license-badge" id="topLicenseBadge" title="클릭하여 정품 라이선스 및 구독 관리 확인" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 9999px; font-size: 12px; font-weight: 700; background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; transition: all 0.2s ease;">
-          <span id="topLicenseBadgeIcon">👑</span>
           <span id="topLicenseBadgeText">구독 확인 중...</span>
         </div>
         <div class="header-account-badge offline" id="topAccountBadge" title="네이버 계정 연결 상태 (클릭 시 설정으로 이동)">
@@ -30,29 +28,23 @@
           <span id="topAccountStatusText">네이버 로그인 필요</span>
         </div>
         <div class="header-engine-indicator" id="globalEngineStatusBox" title="클릭하여 AI 모델 설정을 확인하세요">
-          <span style="font-size:13px;">🚀</span>
-          <strong id="globalEngineStatusText">⚡ 내 PC 로컬 GPU (모델 확인 중)</strong>
-          <span class="pill-settings">설정 ⚙️</span>
+          <strong id="globalEngineStatusText">로컬 AI 확인 중</strong>
         </div>
       </div>
     </header>
 
     <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
       <button class="workspace-tab active" id="engagementTab" type="button" role="tab" aria-selected="true" aria-controls="engagementWorkspace" data-tab="engagement">
-        <span class="tab-icon" aria-hidden="true">❤️</span>
-        <span><strong>1-Click AI 소통</strong></span>
+        <span class="tab-copy"><strong>소통</strong><small>주제 기반 댓글 · 서로이웃</small></span>
       </button>
-      <button class="workspace-tab" id="feedTab" type="button" role="tab" aria-selected="false" aria-controls="feedWorkspace" data-tab="feed" tabindex="-1">
-        <span class="tab-icon" aria-hidden="true">📰</span>
-        <span><strong>이웃 새글 피드 소통</strong></span>
+      <button class="workspace-tab" id="feedTab" type="button" role="tab" aria-selected="false" aria-controls="commentsWorkspace" data-tab="comments" tabindex="-1">
+        <span class="tab-copy"><strong>댓글</strong><small>이웃 새글 · 내 글 대댓글</small></span>
       </button>
       <button class="workspace-tab" id="commentManagementTab" type="button" role="tab" aria-selected="false" aria-controls="commentManagementWorkspace" data-tab="comment-management" tabindex="-1">
-        <span class="tab-icon" aria-hidden="true">🤝</span>
-        <span><strong>스마트 이웃 관리</strong></span>
+        <span class="tab-copy"><strong>이웃 관리</strong><small>받은 요청 · 보낸 신청</small></span>
       </button>
       <button class="workspace-tab" id="settingsTab" type="button" role="tab" aria-selected="false" aria-controls="settingsWorkspace" data-tab="settings" tabindex="-1">
-        <span class="tab-icon" aria-hidden="true">⚙️</span>
-        <span><strong>공통 환경 설정</strong></span>
+        <span class="tab-copy"><strong>설정</strong><small>계정 · 로컬 AI</small></span>
       </button>
       <button class="workspace-tab hidden" id="neighborTab" type="button" role="tab" aria-selected="false" aria-controls="neighborWorkspace" data-tab="neighbor" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">＋</span>
@@ -69,15 +61,11 @@
       <!-- Section 1: Naver Account Connection -->
       <section class="panel" id="settingsAccountPanel">
         <div class="panel-heading">
-          <div><span class="eyebrow">CONFIG 01 · ACCOUNT</span><h2>네이버 계정 연결</h2></div>
+          <div><span class="eyebrow">계정</span><h2>네이버 계정 연결</h2></div>
           <div class="header-badges">
             <span class="status" id="settingsAccountStatus"><i></i> 연결 안 됨</span>
           </div>
         </div>
-        <p style="color:#718096; font-size:13.5px; margin-bottom:16px;">
-          🔒 로그인 세션은 이 공감·AI 댓글·서로이웃 프로그램 안에서만 사용됩니다.
-        </p>
-
         <div id="settingsLoginFormContainer">
           <form id="settingsAccountForm" style="margin-bottom:16px;">
             <div class="field-grid">
@@ -85,7 +73,7 @@
               <label>네이버 비밀번호<input id="settingsUserPassword" name="password" type="password" required autocomplete="current-password" placeholder="네이버 비밀번호"></label>
             </div>
             <div class="action-row" style="margin-top:12px;">
-              <p class="security-note">🔒 입력된 정보는 외부로 전송되지 않으며, 내 PC 로컬 브라우저 세션 생성에만 사용됩니다.</p>
+              <p class="security-note">로그인 정보는 이 PC의 브라우저 세션에만 사용됩니다.</p>
               <button class="button primary" type="submit" style="padding:10px 24px; font-weight:600;">네이버 로그인하고 연결</button>
             </div>
           </form>
@@ -94,7 +82,7 @@
         <div class="connected-card hidden" id="settingsConnectedCard">
           <div>
             <strong id="settingsAccountLabel">연결됨</strong>
-            <span>로컬 브라우저 로그인 세션이 안전하게 활성화되어 있습니다.</span>
+            <span>이 PC의 네이버 로그인 세션을 사용합니다.</span>
           </div>
           <button class="button ghost" id="settingsLogoutButton" type="button">연결 끊기 (로그아웃)</button>
         </div>
@@ -103,22 +91,22 @@
       <!-- Section 2: Pure Local GPU Gemma AI Model Hub -->
       <section class="panel" style="margin-top:20px;">
         <div class="panel-heading">
-          <div><span class="eyebrow">CONFIG 02 · LOCAL GPU AI</span><h2>내 PC 로컬 GPU · 구글 Gemma AI 모델 관리</h2></div>
-          <span class="pill pill-green" id="currentEngineBadge">⚡ 내 PC 로컬 GPU</span>
+          <div><span class="eyebrow">AI MODEL</span><h2>로컬 AI 모델</h2></div>
+          <span class="pill pill-green" id="currentEngineBadge">확인 중</span>
         </div>
 
         <!-- Current Active Model Summary Card -->
         <div class="active-ai-summary-box" style="background:#f0fff4; border:2px solid #38a169; border-radius:12px; padding:16px 20px; margin-bottom:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
             <strong style="color:#22543d; font-size:15px; display:flex; align-items:center; gap:6px;">
-              <span style="font-size:18px;">🟢</span> 내 PC 로컬 GPU 연산 가동 중
+              로컬 AI 상태
             </strong>
-            <span class="pill pill-green" id="activeAiStatusPill" style="font-weight:700;">비용 0원 · 오프라인 완전 독립</span>
+            <span class="pill pill-green" id="activeAiStatusPill" style="font-weight:700;">내 PC에서 실행</span>
           </div>
-          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; font-size:13px; color:#276749;">
-            <div><strong>연산 방식:</strong> <span id="summaryEngineType">⚡ 내 PC 로컬 GPU (VRAM 가속)</span></div>
+          <div class="active-ai-summary-grid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; font-size:13px; color:#276749;">
+            <div><strong>실행:</strong> <span id="summaryEngineType">로컬 GPU</span></div>
             <div><strong>활성 모델:</strong> <span id="summaryModelName">모델 확인 중</span></div>
-            <div><strong>로컬 주소:</strong> <span id="summaryEndpointUrl">http://127.0.0.1:8089</span></div>
+            <span class="hidden" id="summaryEndpointUrl">http://127.0.0.1:8089</span>
           </div>
           <p style="margin:10px 0 0; font-size:12px; color:#2f855a; border-top:1px dashed #9ae6b4; padding-top:8px;" id="localGpuSummaryText">
             GPU 사양 감지 중...
@@ -130,10 +118,8 @@
         </div>
 
         <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-          <label style="font-size:14px; font-weight:700; color:#2d3748; margin:0;">
-            사용할 구글 Gemma 모델을 선택하세요
-          </label>
-          <span style="font-size:12px; color:#718096;" id="hardwareRecommendText">100% GPU 가속으로 비용 0원에 1초 만에 생성</span>
+          <label style="font-size:14px; font-weight:700; color:#2d3748; margin:0;">사용할 모델</label>
+          <span class="hidden" id="hardwareRecommendText"></span>
         </div>
         <div class="ai-models-grid" id="settingsAiModelCardsGrid" aria-label="사용 가능한 AI 모델 목록"></div>
       </section>
@@ -401,25 +387,25 @@
             <div class="desktop-card">
               <div class="desktop-card-header">
                 <div class="card-title-group">
-                  <span class="card-badge">STEP 1</span>
-                  <h3>소통 타겟 &amp; AI 말투</h3>
+                  <span class="card-badge">대상</span>
+                  <h3>주제와 댓글 말투</h3>
                 </div>
               </div>
               <div class="desktop-card-body">
                 <div class="form-group">
                   <div class="label-row">
-                    <label for="engKeyword"><strong>소통 타겟 키워드</strong> <small>(쉼표로 여러 개 입력 가능)</small></label>
-                    <button type="button" class="btn-finder-link" id="openTargetFinderBtn">🎯 소통 타겟 찾기 &amp; AI 추천</button>
+                    <label for="engKeyword"><strong>소통할 주제</strong></label>
+                    <button type="button" class="btn-finder-link" id="openTargetFinderBtn">주제 추천</button>
                   </div>
                   <div class="keyword-input-row">
                     <input id="engKeyword" required placeholder="예: 맛집, 육아, 캠핑, IT리뷰, 여행" value="맛집" class="desktop-input keyword-main-input">
-                    <button type="button" class="button secondary small inline-finder-btn" id="openTargetFinderInlineBtn">🎯 타겟 추천</button>
+                    <button type="button" class="button secondary small inline-finder-btn" id="openTargetFinderInlineBtn">주제 추천</button>
                   </div>
                   <div class="chips eng-chips" id="engTrendChips" aria-label="실시간 추천 키워드"></div>
                 </div>
 
                 <div class="form-group" style="margin-top: 14px;">
-                  <label for="engTone"><strong>AI 댓글 분위기 (말투)</strong></label>
+                  <label for="engTone"><strong>댓글 말투</strong></label>
                   <select id="engTone" class="desktop-select">
                     <option value="friendly" selected>친근한 이웃체 (~해요! ㅎㅎ, 넘 맛있어보여요)</option>
                     <option value="polite">정중한 소통체 (~합니다, 유익한 정보 감사합니다)</option>
@@ -433,19 +419,18 @@
             <div class="desktop-card">
               <div class="desktop-card-header">
                 <div class="card-title-group">
-                  <span class="card-badge">STEP 2</span>
-                  <h3>반응 방식 &amp; 실행 범위</h3>
+                  <span class="card-badge">작업</span>
+                  <h3>작업과 목표</h3>
                 </div>
               </div>
               <div class="desktop-card-body">
                 <!-- Action Type Selectors -->
                 <div class="form-group">
-                  <label><strong>반응 방식 선택</strong> <small>(최소 1개 이상 선택)</small></label>
+                  <label><strong>실행할 작업</strong></label>
                   <div class="action-toggle-cards">
                     <label class="action-toggle-card">
                       <input type="checkbox" id="engDoLike" checked>
                       <div class="toggle-card-inner">
-                        <span class="toggle-emoji">❤️</span>
                         <div class="toggle-texts">
                           <strong>공감(하트)</strong>
                           <small>게시글 좋아요</small>
@@ -455,7 +440,6 @@
                     <label class="action-toggle-card">
                       <input type="checkbox" id="engDoComment" checked>
                       <div class="toggle-card-inner">
-                        <span class="toggle-emoji">💬</span>
                         <div class="toggle-texts">
                           <strong>AI 맞춤 댓글</strong>
                           <small>본문·사진 분석</small>
@@ -465,7 +449,6 @@
                     <label class="action-toggle-card">
                       <input type="checkbox" id="engDoNeighbor" checked>
                       <div class="toggle-card-inner">
-                        <span class="toggle-emoji">👥</span>
                         <div class="toggle-texts">
                           <strong>서로이웃 신청</strong>
                           <small>맞이웃 소통</small>
@@ -479,22 +462,25 @@
                 <div class="form-group" style="margin-top: 14px;">
                   <div class="label-row">
                     <label for="engTargetCount"><strong>전체 목표 글 수</strong></label>
-                    <span class="helper-text">여러 키워드를 입력해도 전체 합계 기준</span>
+                    <span class="helper-text">서로이웃 신청은 100명에서 종료</span>
                   </div>
                   <div class="number-input-row">
-                    <input type="number" id="engTargetCount" min="1" max="100" value="100" required class="desktop-input number-field">
+                    <input type="number" id="engTargetCount" min="1" max="500" value="100" required class="desktop-input number-field">
                     <div class="quick-counts eng-quick-counts">
-                      <button type="button" data-val="10">10건</button>
-                      <button type="button" data-val="20">20건</button>
-                      <button type="button" data-val="30">30건</button>
                       <button type="button" data-val="50">50건</button>
                       <button type="button" data-val="100">100건</button>
+                      <button type="button" data-val="200">200건</button>
+                      <button type="button" data-val="300">300건</button>
+                      <button type="button" data-val="500">500건</button>
                     </div>
                   </div>
                 </div>
 
+                <details class="eng-advanced-settings">
+                  <summary>고급 설정</summary>
+                  <div class="eng-advanced-settings-body">
                 <!-- Random Delay & Protection -->
-                <div class="form-group" style="margin-top: 14px;">
+                <div class="form-group">
                   <label><strong>작업 간격 (계정 보호 랜덤 딜레이)</strong></label>
                   <div class="delay-row">
                     <div class="delay-inputs-pair">
@@ -503,10 +489,6 @@
                       <input type="number" id="engMaxDelay" min="30" max="900" value="180" class="desktop-input delay-field">
                       <span>초 사이 무작위</span>
                     </div>
-                  </div>
-                  <div class="account-protect-banner">
-                    <span class="protect-icon">🛡️</span>
-                    <span>기본 120~180초 랜덤 간격 · 보호조치 신호가 감지되면 전체 작업 즉시 중단</span>
                   </div>
                 </div>
 
@@ -524,18 +506,6 @@
                       <input type="number" id="engBreakMaxMinutes" min="1" max="60" value="20" class="desktop-input delay-field"> 분
                     </label>
                   </div>
-                  <div id="engNeighborQuotaStatus" class="account-protect-banner" style="background:#eefbf4; border-color:#9be3ba; color:#155c35; align-items:flex-start;">
-                    <span class="protect-icon">📊</span>
-                    <span>
-                      <strong>오늘 서로이웃 신청 현황</strong> <small>(프로그램 성공 기록 기준)</small><br>
-                      신청 <strong id="engNeighborUsed">-</strong>명 · 남음 <strong id="engNeighborRemaining">-</strong>명<br>
-                      <small id="engNeighborResetAt">내역을 불러오는 중...</small>
-                    </span>
-                  </div>
-                  <div class="account-protect-banner" style="background:#fff3cd; border-color:#f6c453; color:#7a4b00;">
-                    <span class="protect-icon">⚠️</span>
-                    <span><strong>보호조치 경고:</strong> 이 계정에서 네이버의 하루 100명 한도 응답이 확인됐습니다. 보호조치가 감지되면 모든 자동 작업을 즉시 중단합니다.</span>
-                  </div>
                 </div>
 
                 <!-- Neighbor Request Message -->
@@ -546,15 +516,14 @@
 
                 <!-- Neighbor Target Group -->
                 <div class="form-group" id="engNeighborGroupSetting" style="margin-top: 14px;">
-                  <label for="engActiveNeighborGroup"><strong>📁 적용 이웃 그룹</strong> <small>(가득 차면 자동으로 다음 새 그룹 생성)</small></label>
+                  <label for="engActiveNeighborGroup"><strong>적용 이웃 그룹</strong> <small>(가득 차면 다음 그룹 자동 생성)</small></label>
                   <div style="display:flex; gap:8px; align-items:center;">
                     <input type="text" id="engActiveNeighborGroup" value="소통이웃-1" placeholder="예: 소통이웃-1" class="desktop-input" style="flex:1;">
                     <button type="button" class="button secondary small" id="saveEngGroupBtn" style="white-space:nowrap; padding: 7px 16px;">그룹 저장</button>
                   </div>
-                  <p class="field-hint" style="margin-top:4px; font-size:12px; color:var(--text-muted, #666);">
-                    💡 네이버 그룹 한도(500명)에 도달하면 프로그램이 자동으로 다음 그룹(예: <strong>소통이웃-2</strong>)을 생성해 끊김 없이 이어서 추가합니다.
-                  </p>
                 </div>
+                  </div>
+                </details>
               </div>
             </div>
 
@@ -562,7 +531,7 @@
             <div class="action-command-toolbar">
               <div class="main-buttons-group">
                 <button type="button" class="button primary large full-width" id="startEngBtn">
-                  <span class="btn-icon">🚀</span> <strong>공감 &amp; AI 맞춤 댓글 시작</strong>
+                  <strong>소통 시작</strong>
                 </button>
                 <button type="button" class="button warning large full-width hidden" id="pauseEngBtn">
                   <span class="btn-icon">⏸️</span> <strong>일시정지</strong>
@@ -576,7 +545,7 @@
               </div>
               <div class="sub-buttons-group">
                 <button type="button" class="button secondary small full-width" id="engHistoryModalBtn">
-                  📋 소통 이력 조회 &amp; 엑셀(CSV) 다운로드
+                  소통 이력
                 </button>
               </div>
             </div>
@@ -593,7 +562,7 @@
               <div class="monitor-status-left">
                 <span class="desktop-status-dot" id="engStatusDot"></span>
                 <div class="monitor-status-titles">
-                  <span class="monitor-eyebrow">REALTIME STATUS</span>
+                  <span class="monitor-eyebrow">진행 상태</span>
                   <strong id="engDashboardStatusText">대기 중 · 설정을 완료하고 시작 버튼을 누르세요</strong>
                 </div>
               </div>
@@ -619,35 +588,30 @@
             <!-- 5 Metric Tiles Grid -->
             <div class="stats-cards-grid">
               <div class="stat-card">
-                <span class="stat-icon">🎯</span>
                 <div class="stat-info">
                   <span class="stat-label">목표</span>
                   <strong class="stat-value" id="engStatTarget">0</strong>
                 </div>
               </div>
               <div class="stat-card success">
-                <span class="stat-icon">❤️</span>
                 <div class="stat-info">
                   <span class="stat-label">공감</span>
                   <strong class="stat-value" id="engStatLikes">0</strong>
                 </div>
               </div>
               <div class="stat-card info">
-                <span class="stat-icon">💬</span>
                 <div class="stat-info">
                   <span class="stat-label">AI 댓글</span>
                   <strong class="stat-value" id="engStatComments">0</strong>
                 </div>
               </div>
               <div class="stat-card neighbor">
-                <span class="stat-icon">👥</span>
                 <div class="stat-info">
                   <span class="stat-label">서로이웃</span>
                   <strong class="stat-value" id="engStatNeighbors">0</strong>
                 </div>
               </div>
               <div class="stat-card danger">
-                <span class="stat-icon">⚠️</span>
                 <div class="stat-info">
                   <span class="stat-label">스킵/실패</span>
                   <strong class="stat-value" id="engStatFailed">0</strong>
@@ -659,16 +623,31 @@
             <div class="live-terminal">
               <div class="terminal-header">
                 <div class="terminal-title">
-                  <span class="terminal-badge-icon">🖥️</span>
-                  <span>실시간 AI 소통 실행 로그 (Live Console)</span>
+                  <span>실시간 작업 로그</span>
                 </div>
                 <div class="terminal-btn-group">
-                  <button type="button" class="terminal-clear-btn" id="copyEngLogsBtn" title="전체 로그 복사">📋 복사</button>
+                  <button type="button" class="terminal-clear-btn" id="copyEngLogsBtn" title="전체 로그 복사">복사</button>
                   <button type="button" class="terminal-clear-btn" id="clearEngLogsBtn" title="콘솔 지우기">지우기</button>
                 </div>
               </div>
               <div class="terminal-body" id="engTerminalLogs">
                 <div class="terminal-line info">[대기 중] 설정을 완료하고 '공감 &amp; AI 맞춤 댓글 시작' 버튼을 눌러주세요.</div>
+              </div>
+            </div>
+
+            <div class="eng-monitor-notices" aria-label="서로이웃 신청 및 계정 보호 상태">
+              <div id="engNeighborQuotaStatus" class="eng-monitor-notice quota">
+                <span class="notice-label">오늘 서로이웃 신청</span>
+                <div class="notice-metrics">
+                  <span>신청 <strong id="engNeighborUsed">-</strong>명</span>
+                  <span>남음 <strong id="engNeighborRemaining">-</strong>명</span>
+                </div>
+                <small id="engNeighborResetAt">내역을 불러오는 중...</small>
+              </div>
+              <div class="eng-monitor-notice protection">
+                <span class="notice-label">보호조치 경고</span>
+                <strong>보호조치 감지 시 자동 중단</strong>
+                <small>하루 100명 한도 응답도 즉시 감지합니다.</small>
               </div>
             </div>
 
@@ -679,24 +658,29 @@
 
       <!-- Engagement History & CSV Export Modal -->
       <div class="modal-overlay hidden" id="engHistoryModal">
-        <div class="modal-card" style="max-width: 980px;">
+        <div class="modal-card eng-history-modal-card">
           <div class="modal-header">
             <div>
-              <h3>📋 공감(❤️) & AI 맞춤 댓글 소통 내역</h3>
-              <p class="modal-sub">중복 소통 방지를 위해 로컬에 영구 저장된 이력입니다. 이 목록의 포스팅은 자동으로 제외됩니다.</p>
+              <h3>소통 이력</h3>
+              <p class="modal-sub">이미 처리한 글은 다음 소통에서 자동으로 제외됩니다.</p>
             </div>
-            <button type="button" class="modal-close" id="closeEngHistoryModal">✕</button>
+            <button type="button" class="modal-close" id="closeEngHistoryModal" aria-label="닫기">×</button>
           </div>
-          <div class="modal-toolbar">
+          <div class="modal-toolbar eng-history-toolbar">
             <div class="history-search">
-              <input type="text" id="engHistorySearchInput" placeholder="블로그 ID, 작성자명, 글제목, 키워드 검색...">
+              <input type="text" id="engHistorySearchInput" placeholder="블로그 ID 또는 글 제목 검색">
               <button class="button small" id="engHistorySearchBtn" type="button">검색</button>
             </div>
             <div class="history-actions">
-              <button class="button primary small" id="exportEngCsvBtn" type="button">📥 엑셀(CSV) 다운로드</button>
-              <button class="button secondary small" id="exportTrainingSftBtn" type="button">🧠 SFT JSONL</button>
-              <button class="button secondary small" id="exportTrainingDpoBtn" type="button">⚖️ DPO JSONL</button>
-              <button class="button danger small" id="clearEngHistoryBtn" type="button">🗑️ 이력 초기화</button>
+              <button class="button secondary small" id="exportEngCsvBtn" type="button">CSV 다운로드</button>
+              <details class="history-more-menu">
+                <summary>더보기</summary>
+                <div class="history-more-popover">
+                  <button class="button secondary small" id="exportTrainingSftBtn" type="button">SFT 데이터 내보내기</button>
+                  <button class="button secondary small" id="exportTrainingDpoBtn" type="button">DPO 데이터 내보내기</button>
+                  <button class="button danger small" id="clearEngHistoryBtn" type="button">이력 초기화</button>
+                </div>
+              </details>
             </div>
           </div>
           <div class="training-review-summary" id="trainingReviewSummary" aria-live="polite">
@@ -704,24 +688,8 @@
             <span class="training-stat success"><strong>0</strong> 학습 준비</span>
             <span class="training-review-hint">댓글을 그대로 승인하거나 문장을 고친 뒤 저장하면 학습 데이터가 됩니다.</span>
           </div>
-          <div class="history-table-wrap" style="max-height: 480px; overflow-y: auto;">
-            <table class="history-table">
-              <thead>
-                <tr>
-                  <th style="width: 120px;">일시</th>
-                  <th style="width: 100px;">블로그 ID</th>
-                  <th style="width: 160px;">글 제목</th>
-                  <th style="width: 90px;">반응</th>
-                  <th>작성된 AI 댓글</th>
-                  <th style="width: 220px;">학습 검수</th>
-                  <th style="width: 90px;">서로이웃</th>
-                  <th style="width: 80px;">상태</th>
-                </tr>
-              </thead>
-              <tbody id="engHistoryTableBody">
-                <tr><td colspan="8" style="text-align: center; color: #888; padding: 24px;">소통 이력을 불러오는 중...</td></tr>
-              </tbody>
-            </table>
+          <div class="eng-history-list" id="engHistoryTableBody">
+            <div class="eng-history-empty">소통 이력을 불러오는 중...</div>
           </div>
         </div>
       </div>
@@ -731,9 +699,8 @@
         <div class="modal-card target-finder-card">
           <div class="modal-header">
             <div>
-              <span class="modal-eyebrow">TARGET FINDER &amp; AI RECOMMENDATIONS</span>
-              <h3 id="targetFinderModalTitle">🎯 소통 타겟 키워드 탐색기</h3>
-              <p class="modal-sub">내 블로그 주제 분석, 실시간 트렌드, 인기 카테고리 프리셋에서 소통 타겟을 찾아보세요.</p>
+              <h3 id="targetFinderModalTitle">주제 추천</h3>
+              <p class="modal-sub">내 블로그와 관련된 소통 주제를 찾아 선택하세요.</p>
             </div>
             <button type="button" class="modal-close" id="closeTargetFinderModal" aria-label="닫기">✕</button>
           </div>
@@ -741,16 +708,16 @@
           <!-- Finder Segmented Tabs -->
           <div class="finder-tabs" role="tablist">
             <button type="button" class="finder-tab active" data-finder-tab="myblog">
-              <span>🤖 내 블로그 맞춤 AI 추천</span>
+              <span>맞춤 추천</span>
             </button>
             <button type="button" class="finder-tab" data-finder-tab="trends">
-              <span>🔥 실시간 검색 트렌드</span>
+              <span>실시간 트렌드</span>
             </button>
             <button type="button" class="finder-tab" data-finder-tab="presets">
-              <span>🏷️ 인기 블로그 테마 프리셋</span>
+              <span>인기 주제</span>
             </button>
             <button type="button" class="finder-tab" data-finder-tab="related">
-              <span>🔎 내 키워드 연관 검색</span>
+              <span>연관 검색</span>
             </button>
           </div>
 
@@ -759,11 +726,11 @@
             <div class="finder-panel" id="finderPanelMyBlog" data-panel="myblog">
               <div class="finder-hero-banner" id="myBlogAnalysisBanner">
                 <div class="hero-text">
-                  <strong>💡 내 블로그 글을 분석하여 꼭 맞는 소통 타겟을 추천합니다</strong>
-                  <p>최근 작성한 포스팅의 핵심 주제와 독자층을 로컬 AI(Gemma 4 12B)가 분석하여 공감대 높은 타겟을 제안합니다.</p>
+                  <strong>내 블로그에 맞는 주제를 추천합니다</strong>
+                  <p>최근 게시글의 주제를 분석해 관련 키워드를 찾습니다.</p>
                 </div>
                 <button type="button" class="button primary small" id="startMyBlogAnalysisBtn">
-                  <span>🚀</span> 내 블로그 분석 시작
+                  블로그 분석
                 </button>
               </div>
 
@@ -790,7 +757,7 @@
                 </div>
 
                 <div class="recommendations-heading">
-                  <strong>🎯 AI 추천 소통 타겟 키워드</strong>
+                  <strong>추천 주제</strong>
                   <button type="button" class="btn-text-link" id="addAllMyBlogKeywordsBtn">+ 추천 키워드 전체 담기</button>
                 </div>
                 <div class="keyword-recommendations-grid" id="myBlogKeywordsGrid"></div>
@@ -821,7 +788,7 @@
             <div class="finder-panel hidden" id="finderPanelRelated" data-panel="related">
               <div class="finder-hero-banner">
                 <div class="hero-text">
-                  <strong>🔎 내가 생각한 키워드의 연관 검색어 찾기</strong>
+                  <strong>연관 검색어 찾기</strong>
                   <p>키워드를 입력하면 네이버 검색 제안을 기준으로 관련 키워드 목록을 보여줍니다.</p>
                 </div>
               </div>
@@ -851,7 +818,7 @@
             <div class="tray-actions">
               <button type="button" class="button ghost" id="cancelTargetFinderBtn">취소</button>
               <button type="button" class="button primary" id="applyTargetFinderBtn" disabled>
-                <span>🎯</span> <span id="applyTargetBtnText">선택 키워드 적용하기</span>
+                <span id="applyTargetBtnText">선택 키워드 적용</span>
               </button>
             </div>
           </div>
@@ -859,26 +826,42 @@
       </div>
     </section>
 
-    <!-- Workspace: Neighbor Feed Real-Time Engagement Panel -->
+    <!-- Workspace: Comment category -->
+    <section class="workspace-panel hidden" id="commentsWorkspace" role="tabpanel" aria-labelledby="feedTab" data-tab-panel="comments">
+      <div class="category-mode-tabs" role="tablist" aria-label="댓글 작업 선택">
+        <button type="button" class="category-mode-tab active" role="tab" aria-selected="true" data-comment-mode="neighbor-feed">
+          <strong>이웃 새글에 댓글</strong>
+          <small>새글을 골라 공감과 AI 댓글 남기기</small>
+        </button>
+        <button type="button" class="category-mode-tab" role="tab" aria-selected="false" data-comment-mode="own-post-reply">
+          <strong>내 글 댓글에 대댓글</strong>
+          <small>내 게시글에 받은 댓글을 골라 답글 달기</small>
+        </button>
+      </div>
+      <div id="neighborFeedCommentMount" class="comment-mode-panel"></div>
+      <div id="ownPostReplyMount" class="comment-mode-panel hidden"></div>
+    </section>
+
+    <!-- Legacy feed container: its contents are mounted into the Comment category on load. -->
     <section class="workspace-panel hidden" id="feedWorkspace" role="tabpanel" aria-labelledby="feedTab" data-tab-panel="feed">
-      <div class="desktop-workspace-grid">
+      <div class="desktop-workspace-grid feed-workspace-grid">
         <!-- Left Column: Controls & Real-time Terminal -->
         <div class="desktop-col desktop-col-left">
           <div class="desktop-card hero-card">
             <div class="desktop-card-header">
               <div class="card-title-group">
-                <span class="card-badge pulse">REAL-TIME</span>
-                <h3>📰 이웃 새글 피드 실시간 소통</h3>
+                <span class="card-badge pulse">진행</span>
+                <h3>새글 댓글 진행 현황</h3>
               </div>
               <span class="status ready" id="feedAutoStatus"><i></i> 대기 중</span>
             </div>
             <div class="desktop-card-body">
-              <p class="section-desc">
+              <p class="section-desc feed-legacy-intro">
                 내 네이버 블로그 이웃들의 최신 새글 피드를 실시간으로 탐색하여 <strong>공감(❤️)</strong>을 누르고 <strong>온디바이스 AI 맞춤형 찐이웃 댓글(💬)</strong>을 전자동으로 작성합니다.
               </p>
 
               <!-- Main Execution Toolbar (Top CTA) -->
-              <div class="action-command-toolbar" style="margin-top: 14px; margin-bottom: 14px;">
+              <div class="action-command-toolbar feed-legacy-start-toolbar" style="margin-top: 14px; margin-bottom: 14px;">
                 <button type="button" class="feed-cta-btn" id="startFeedBtn">
                   <span>🚀</span> <strong>이웃 새글 자동 소통 시작</strong>
                 </button>
@@ -896,7 +879,7 @@
               </div>
 
               <!-- Quick Target Goal Chips -->
-              <div class="form-group" style="margin-top: 10px;">
+              <div class="form-group feed-legacy-target-count" style="margin-top: 10px;">
                 <label style="margin-bottom: 6px;"><strong>소통 목표 건수</strong></label>
                 <div class="quick-counts eng-quick-counts" id="feedQuickCounts" style="display:flex; gap:6px; margin-bottom:6px;">
                   <button type="button" class="chip" data-val="5">5건</button>
@@ -913,26 +896,26 @@
                 <div style="display:flex; gap:8px;">
                   <label class="feed-option-card checked" id="cardFeedDoLike" style="flex:1; display:flex; align-items:center; gap:8px; padding:9px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; cursor:pointer; font-size:12.5px; font-weight:700; color:#15803d; user-select:none;">
                     <input type="checkbox" id="feedDoLike" checked style="width:16px!important; height:16px!important; margin:0!important; accent-color:#03c75a!important;">
-                    <span>❤️ 공감(좋아요)</span>
+                    <span>공감</span>
                   </label>
                   <label class="feed-option-card checked" id="cardFeedDoComment" style="flex:1; display:flex; align-items:center; gap:8px; padding:9px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; cursor:pointer; font-size:12.5px; font-weight:700; color:#1d4ed8; user-select:none;">
                     <input type="checkbox" id="feedDoComment" checked style="width:16px!important; height:16px!important; margin:0!important; accent-color:#2563eb!important;">
-                    <span>💬 AI 맞춤 댓글</span>
+                    <span>AI 맞춤 댓글</span>
                   </label>
                 </div>
               </div>
 
               <!-- Collapsible Advanced Settings (Drawer) -->
-              <button type="button" class="feed-advanced-toggle" id="toggleFeedAdvancedBtn" style="display:flex; justify-content:space-between; align-items:center; width:100%; padding:9px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-size:12px; font-weight:600; color:#475569; margin-top:10px; transition:all 0.15s ease;">
-                <span>⚙️ <strong>상세 옵션</strong> <small style="color:#94a3b8; font-weight:normal;">(말투 · 딜레이 속도)</small></span>
-                <span id="feedAdvancedArrow" style="font-size:11px; transition:transform 0.2s ease;">▼</span>
+              <button type="button" class="feed-advanced-toggle" id="toggleFeedAdvancedBtn" aria-expanded="false">
+                <strong>상세 설정</strong>
+                <span id="feedAdvancedArrow">열기</span>
               </button>
 
               <div class="feed-advanced-drawer hidden" id="feedAdvancedSettings" style="margin-top:8px; padding:12px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; display:flex; flex-direction:column; gap:10px;">
                 <div class="form-group">
                   <label for="feedCommentTone" style="font-size:12px;"><strong>AI 댓글 말투</strong></label>
                   <select id="feedCommentTone" class="desktop-select" style="font-size:12px; padding:6px 10px;">
-                    <option value="friendly" selected>친근한 이웃체 (~해요! 넘 정성 가득 글이네요 😊)</option>
+                    <option value="friendly" selected>친근한 이웃체 (~해요! 넘 정성 가득 글이네요)</option>
                     <option value="informative">정중한 소통체 (좋은 정보 유익하게 잘 읽고 갑니다.)</option>
                     <option value="warm">따뜻한 공감체 (공감 꾹 누르고 가요! 늘 응원합니다 ✨)</option>
                   </select>
@@ -941,9 +924,9 @@
                 <div class="form-group" style="margin-top: 4px;">
                   <label for="feedSpeedMode" style="font-size:12px;"><strong>소통 간격 (계정 보호 딜레이)</strong></label>
                   <select id="feedSpeedMode" class="desktop-select" style="font-size:12px; padding:6px 10px;">
-                    <option value="safe" selected>🛡️ 안전 모드 (25~40초 대기 - 네이버 제재 100% 방지 권장)</option>
-                    <option value="balanced">⚡ 표준 모드 (15~25초 대기 - 빠른 소통과 안정성 균형)</option>
-                    <option value="fast">🚀 빠른 모드 (8~15초 대기 - 빠른 피드 순환)</option>
+                    <option value="safe" selected>안전 모드 (25~40초)</option>
+                    <option value="balanced">표준 모드 (15~25초)</option>
+                    <option value="fast">빠른 모드 (8~15초)</option>
                   </select>
                 </div>
               </div>
@@ -952,7 +935,7 @@
               <div class="feed-live-widget" id="feedLiveProgressWidget" style="display:none;">
                 <div class="feed-progress-header">
                   <span class="feed-progress-label">
-                    <span class="feed-pulse-dot"></span> <span id="feedProgressText">실시간 소통 진행 중</span>
+                    <span class="feed-pulse-dot"></span> <span id="feedProgressText">선택한 글을 기다리는 중</span>
                   </span>
                   <span class="feed-progress-percent" id="feedProgressPercent">0%</span>
                 </div>
@@ -963,7 +946,7 @@
                 <!-- Active In-Progress Post Highlight Card -->
                 <div class="feed-active-card" id="feedActiveCard" style="display:none;">
                   <div class="feed-active-header">
-                    <span class="feed-active-badge">⚡ 현재 소통 진행 중</span>
+                    <span class="feed-active-badge">현재 소통 중</span>
                     <span class="feed-active-countdown" id="feedActiveCountdown" style="display:none;"></span>
                   </div>
                   <div class="feed-active-body">
@@ -980,30 +963,30 @@
               <!-- Session Stats Grid (4 Columns) -->
               <div class="feed-stat-grid">
                 <div class="feed-stat-card">
-                  <span class="feed-stat-label">🎯 회차 목표</span>
-                  <div class="feed-stat-value" id="feedStatTarget">10</div>
+                  <span class="feed-stat-label">선택</span>
+                  <div class="feed-stat-value" id="feedStatTarget">0</div>
                 </div>
                 <div class="feed-stat-card" style="background:#f0fdf4; border-color:#bbf7d0;">
-                  <span class="feed-stat-label" style="color:#166534;">✅ 소통 완료</span>
+                  <span class="feed-stat-label" style="color:#166534;">완료</span>
                   <div class="feed-stat-value" style="color:#15803d;" id="feedStatSuccess">0</div>
                 </div>
                 <div class="feed-stat-card" style="background:#eff6ff; border-color:#bfdbfe;">
-                  <span class="feed-stat-label" style="color:#1e40af;">⏳ 남은 글</span>
-                  <div class="feed-stat-value" style="color:#2563eb;" id="feedStatRemaining">10</div>
+                  <span class="feed-stat-label" style="color:#1e40af;">남음</span>
+                  <div class="feed-stat-value" style="color:#2563eb;" id="feedStatRemaining">0</div>
                 </div>
                 <div class="feed-stat-card" style="background:#f8fafc; border-color:#e2e8f0;">
-                  <span class="feed-stat-label" style="color:#64748b;">⏩ 제외/기작성</span>
+                  <span class="feed-stat-label" style="color:#64748b;">제외</span>
                   <div class="feed-stat-value" style="color:#64748b;" id="feedStatSkipped">0</div>
                 </div>
               </div>
 
               <!-- Today's Cumulative Performance Strip -->
               <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-top:10px; font-size:12px; color:#475569;">
-                <span>📅 <strong>오늘 누적 소통 실적</strong></span>
+                <span><strong>오늘 누적</strong></span>
                 <div style="display:flex; gap:12px; font-weight:700;">
                   <span>총 <strong id="feedStatTotal" style="color:#0f172a;">0</strong>건</span>
-                  <span>❤️ 공감 <strong id="feedStatLikes" style="color:#e11d48;">0</strong>건</span>
-                  <span>💬 AI 댓글 <strong id="feedStatComments" style="color:#2563eb;">0</strong>건</span>
+                  <span>공감 <strong id="feedStatLikes" style="color:#e11d48;">0</strong>건</span>
+                  <span>AI 댓글 <strong id="feedStatComments" style="color:#2563eb;">0</strong>건</span>
                 </div>
               </div>
             </div>
@@ -1023,7 +1006,7 @@
             </div>
             <div class="desktop-card-body">
               <div class="feed-terminal-box" id="feedTerminalLogs">
-                <div class="terminal-line info">[대기 중] '이웃 새글 자동 소통 시작' 버튼을 누르면 실시간 피드 탐색이 시작됩니다.</div>
+                <div class="terminal-line info">[대기 중] 왼쪽 목록에서 소통할 글을 선택해주세요.</div>
               </div>
             </div>
           </div>
@@ -1034,27 +1017,33 @@
           <div class="desktop-card">
             <div class="desktop-card-header">
               <div class="card-title-group">
-                <span class="card-badge">FEED</span>
-                <h3>📰 내 이웃 새글 피드 목록</h3>
+                <span class="card-badge">목록</span>
+                <h3>소통할 이웃 새글</h3>
                 <span class="feed-count-chip" id="feedFoundCountBadge">0개 발견</span>
               </div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <button type="button" class="button secondary small" id="refreshFeedPreviewBtn">
-                  🔄 피드 새로고침
-                </button>
-              </div>
             </div>
-            <div class="desktop-card-body" style="padding-top: 12px;">
+            <div class="desktop-card-body feed-selection-body" style="padding-top: 12px;">
+              <div class="list-query-cta">
+                <div class="list-query-copy">
+                  <strong>이웃 새글 목록을 먼저 불러오세요</strong>
+                  <span>조회한 글 중에서 댓글을 남길 대상을 선택할 수 있습니다.</span>
+                </div>
+                <div class="list-query-actions">
+                  <span class="status" id="feedPreviewQueryStatus" role="status"><i></i> 조회 전</span>
+                  <button type="button" class="list-query-button" id="refreshFeedPreviewBtn">목록 조회</button>
+                </div>
+              </div>
+              <div id="feedSelectionOptionsSlot" class="feed-selection-options-slot"></div>
               <!-- Feed Filter Tabs & Search Filter -->
               <div class="feed-filter-bar">
                 <div class="feed-filter-tabs" id="feedFilterTabs">
                   <button type="button" class="feed-filter-btn active" data-filter="all">전체 (<span id="countFilterAll">0</span>)</button>
-                  <button type="button" class="feed-filter-btn" data-filter="pending">⏳ 소통 대기 (<span id="countFilterPending">0</span>)</button>
-                  <button type="button" class="feed-filter-btn" data-filter="engaged">✅ 내가 소통한 글 (<span id="countFilterEngaged">0</span>)</button>
-                  <button type="button" class="feed-filter-btn" data-filter="skipped">⏩ 제외/기작성 (<span id="countFilterSkipped">0</span>)</button>
+                  <button type="button" class="feed-filter-btn" data-filter="pending">소통 대기 (<span id="countFilterPending">0</span>)</button>
+                  <button type="button" class="feed-filter-btn" data-filter="engaged">완료 (<span id="countFilterEngaged">0</span>)</button>
+                  <button type="button" class="feed-filter-btn" data-filter="skipped">제외 (<span id="countFilterSkipped">0</span>)</button>
                 </div>
                 <div class="feed-search-wrap">
-                  <span class="feed-search-icon">🔍</span>
+                  <span class="feed-search-icon" aria-hidden="true"></span>
                   <input type="text" id="feedSearchInput" placeholder="이웃 닉네임 또는 글 제목 검색..." class="feed-search-input">
                 </div>
               </div>
@@ -1067,18 +1056,19 @@
                 </label>
                 <div style="display:flex; align-items:center; gap:10px;">
                   <div id="feedSelectionStatus" style="color:#64748b; font-size:11.5px;">
-                    <span>원하는 글을 선택하거나, 카드의 [⚡ 바로 소통]을 누르세요.</span>
+                    <span>먼저 소통할 글을 선택해주세요.</span>
                   </div>
-                  <button type="button" id="feedEngageSelectedBtn" class="button primary small" style="display:none; padding:4px 12px; font-size:11.5px; border-radius:6px; font-weight:700; cursor:pointer; background:#03c75a; color:#fff; border:none;">
-                    ⚡ 선택한 0개 글 소통 시작
+                  <button type="button" id="feedEngageSelectedBtn" class="button primary small" disabled style="padding:7px 14px; font-size:11.5px; border-radius:8px; font-weight:700; cursor:pointer; background:#03c75a; color:#fff; border:none;">
+                    ✓ 글을 선택하세요
                   </button>
                 </div>
               </div>
 
               <!-- Feed Post Cards List Container -->
               <div id="feedPostsContainer" class="feed-posts-list">
-                <div class="empty-state" style="text-align:center; padding: 40px 20px; color: var(--text-muted, #888);">
-                  <span>피드 목록을 불러오려면 [🔄 피드 새로고침] 버튼을 눌러주세요.</span>
+                <div class="feed-empty-state">
+                  <strong>아직 불러온 이웃 새글이 없습니다</strong>
+                  <p>위의 목록 조회 버튼을 눌러 확인하세요.</p>
                 </div>
               </div>
             </div>
@@ -1092,13 +1082,12 @@
       <!-- Sub-Tab Navigation Bar -->
       <div class="cleaner-subtabs-nav">
         <button type="button" class="cleaner-subtab-btn active" data-subtab="received-cleaner">
-          <span>🤝</span> <strong>받은 신청 AI 선별 수락</strong>
+          <strong>받은 서로이웃 요청</strong>
+          <small>수락 또는 AI 선별</small>
         </button>
         <button type="button" class="cleaner-subtab-btn" data-subtab="sent-cleaner">
-          <span>⏳</span> <strong>보낸 신청 일괄 회수</strong>
-        </button>
-        <button type="button" class="cleaner-subtab-btn" data-subtab="comment-inbox">
-          <span>💬</span> <strong>내 글 댓글 수신함</strong>
+          <strong>내가 보낸 신청</strong>
+          <small>미수락 신청 확인 및 회수</small>
         </button>
       </div>
 
@@ -1110,39 +1099,41 @@
             <div class="desktop-card hero-card">
               <div class="desktop-card-header">
                 <div class="card-title-group">
-                  <span class="card-badge pulse">AI FILTER</span>
-                  <h3>🤝 받은 서로이웃 신청 AI 자동 선별</h3>
+                  <span class="card-badge pulse">처리</span>
+                  <h3>받은 신청 자동 처리</h3>
                 </div>
                 <span class="status ready" id="receivedCleanAutoStatus"><i></i> 대기 중</span>
               </div>
               <div class="desktop-card-body">
-                <p class="section-desc" style="background:#f8fafc; padding:12px 14px; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:14px; line-height:1.5;">
-                  기본 매크로(<em>"우리 서로이웃해요~"</em>) 및 대출/광고/도박성 신청은 <strong>자동 거절</strong>하고, 온디바이스 AI가 진성 소통 블로거 신청만 선별하여 <strong>지정된 이웃 그룹에 자동 수락</strong>합니다.
-                </p>
+                <p class="section-desc cleaner-compact-desc">조건에 따라 받은 신청을 수락하거나 거절합니다. 두 조건을 모두 끄면 전체 수락합니다.</p>
 
                 <div style="margin-top:14px;">
-                  <div style="font-size:12px; font-weight:700; color:#334155; margin-bottom:6px;">작업 처리 옵션</div>
+                  <div style="font-size:12px; font-weight:700; color:#334155; margin-bottom:6px;">AI 자동 선별 조건</div>
                   <div class="cleaner-options-grid">
                     <label class="cleaner-option-card checked" id="cardOptionAcceptGenuine">
                       <input type="checkbox" id="cleanerAcceptGenuine" checked>
                       <div class="option-content">
-                        <span class="option-title">✅ 진성 블로거 판정 시 자동 수락</span>
-                        <span class="option-desc">AI가 분석한 정상 소통 블로거를 지정된 새 그룹에 자동 수락</span>
+                        <span class="option-title">진성 블로거 자동 수락</span>
                       </div>
                     </label>
                     <label class="cleaner-option-card checked" id="cardOptionRejectSpam">
                       <input type="checkbox" id="cleanerRejectSpam" checked>
                       <div class="option-content">
-                        <span class="option-title">🛡️ 광고·매크로 의심 시 자동 거절</span>
-                        <span class="option-desc">상업 키워드 및 "우리 서로이웃해요~" 기본 멘트 즉각 거절</span>
+                        <span class="option-title">광고·매크로 자동 거절</span>
                       </div>
                     </label>
+                  </div>
+                  <div class="cleaner-accept-mode-notice" id="cleanerAcceptModeNotice">
+                    <div>
+                      <strong id="cleanerAcceptModeTitle">AI 선별 수락 모드</strong>
+                      <span id="cleanerAcceptModeDesc">선택한 조건에 따라 진성 이웃은 수락하고 광고·매크로는 거절합니다.</span>
+                    </div>
                   </div>
                 </div>
 
                 <div class="action-command-toolbar" style="margin-top:18px;">
                   <button type="button" class="cleaner-cta-btn" id="startReceivedCleanBtn">
-                    <span class="btn-icon" style="font-size:16px;">🚀</span> <strong>AI 선별 자동 처리 시작</strong>
+                    <strong>선별 처리 시작</strong>
                   </button>
                   <div style="display:flex; gap:8px; width:100%; margin-top:8px;">
                     <button type="button" class="button warning medium full-width hidden" id="pauseReceivedCleanBtn">
@@ -1164,11 +1155,11 @@
                     <div class="stat-value" id="cleanerStatReceivedTotal">0</div>
                   </div>
                   <div class="cleaner-stat-card stat-accepted">
-                    <span class="stat-label">✅ 선별 수락</span>
+                    <span class="stat-label">수락</span>
                     <div class="stat-value" id="cleanerStatReceivedAccepted">0</div>
                   </div>
                   <div class="cleaner-stat-card stat-rejected">
-                    <span class="stat-label">🛡️ 스팸 거절</span>
+                    <span class="stat-label">거절</span>
                     <div class="stat-value" id="cleanerStatReceivedRejected">0</div>
                   </div>
                 </div>
@@ -1180,11 +1171,11 @@
               <div class="desktop-card-header">
                 <div class="card-title-group">
                   <span class="card-badge terminal-badge">LOG</span>
-                  <h3>실시간 선별 진행 로그</h3>
+                  <h3>처리 로그</h3>
                 </div>
                 <div style="display:flex; gap:6px;">
-                  <button type="button" class="button secondary small" id="copyCleanerLogsBtn">로그 복사</button>
-                  <button type="button" class="button secondary small" id="clearCleanerLogsBtn">로그 지우기</button>
+                  <button type="button" class="button secondary small" id="copyCleanerLogsBtn">복사</button>
+                  <button type="button" class="button secondary small" id="clearCleanerLogsBtn">지우기</button>
                 </div>
               </div>
               <div class="desktop-card-body">
@@ -1200,17 +1191,26 @@
             <div class="desktop-card">
               <div class="desktop-card-header">
                 <div class="card-title-group">
-                  <span class="card-badge">INBOX</span>
-                  <h3>📥 받은 서로이웃 신청 목록</h3>
+                  <span class="card-badge">목록</span>
+                  <h3>받은 서로이웃 신청 목록</h3>
                 </div>
-                <button type="button" class="button secondary small" id="refreshReceivedListBtn">
-                  🔄 목록 새로고침
-                </button>
               </div>
               <div class="desktop-card-body">
+                <div class="list-query-cta">
+                  <div class="list-query-copy">
+                    <strong>받은 신청 목록을 먼저 불러오세요</strong>
+                    <span>최신 신청을 조회한 뒤 개별 수락하거나 AI로 선별할 수 있습니다.</span>
+                  </div>
+                  <div class="list-query-actions">
+                    <span class="status" id="receivedListStatus"><i></i> 조회 전</span>
+                    <button type="button" class="list-query-button" id="refreshReceivedListBtn">목록 조회</button>
+                  </div>
+                </div>
                 <div id="receivedRequestsContainer" style="display:flex; flex-direction:column; gap:10px; max-height:650px; overflow-y:auto;">
-                  <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
-                    <span>신청 목록을 불러오려면 [🔄 목록 새로고침] 버튼을 눌러주세요.</span>
+                  <div class="empty-state cleaner-empty-state">
+                    <div class="cleaner-empty-icon" aria-hidden="true"></div>
+                    <strong>받은 신청을 확인하세요</strong>
+                    <p>목록 조회를 누르면 최신 받은 신청을 불러옵니다.</p>
                   </div>
                 </div>
               </div>
@@ -1227,15 +1227,13 @@
             <div class="desktop-card hero-card">
               <div class="desktop-card-header">
                 <div class="card-title-group">
-                  <span class="card-badge pulse">SLOT RECOVERY</span>
-                  <h3>⏳ 보낸 서로이웃 신청 일괄 회수</h3>
+                  <span class="card-badge pulse">처리</span>
+                  <h3>보낸 신청 정리</h3>
                 </div>
                 <span class="status ready" id="sentCleanAutoStatus"><i></i> 대기 중</span>
               </div>
               <div class="desktop-card-body">
-                <p class="section-desc">
-                  네이버는 보낸 서로이웃 신청이 <strong>최대 500건</strong>에 도달하면 더 이상 이웃을 추가할 수 없습니다. 오랫동안 수락되지 않고 방치된 신청을 일괄 취소하여 <strong>소중한 이웃 추가 슬롯을 복구</strong>합니다.
-                </p>
+                <p class="section-desc cleaner-compact-desc">설정한 기간 동안 수락되지 않은 보낸 신청을 조회하고 일괄 취소합니다.</p>
 
                 <div class="form-group" style="margin-top:14px;">
                   <label><strong>회수 기준 경과일</strong></label>
@@ -1252,7 +1250,7 @@
 
                 <div class="action-command-toolbar" style="margin-top:18px;">
                   <button type="button" class="cleaner-cta-btn" id="startSentCancelBtn">
-                    <span class="btn-icon" style="font-size:16px;">🗑️</span> <strong>오래된 신청 일괄 취소 (슬롯 복구)</strong>
+                    <strong>오래된 신청 취소</strong>
                   </button>
                   <div style="display:flex; gap:8px; width:100%; margin-top:8px;">
                     <button type="button" class="button danger medium full-width hidden" id="stopSentCancelBtn">
@@ -1268,7 +1266,7 @@
                     <div class="stat-value" id="cleanerStatSentTotal">0</div>
                   </div>
                   <div class="cleaner-stat-card stat-accepted" style="background:#eff6ff; border-color:#bfdbfe;">
-                    <span class="stat-label" style="color:#1d4ed8;">⚡ 복구된 슬롯</span>
+                    <span class="stat-label" style="color:#1d4ed8;">취소 완료</span>
                     <div class="stat-value" id="cleanerStatSentCanceled" style="color:#2563eb;">0</div>
                   </div>
                 </div>
@@ -1280,11 +1278,11 @@
               <div class="desktop-card-header">
                 <div class="card-title-group">
                   <span class="card-badge terminal-badge">LOG</span>
-                  <h3>실시간 회수 진행 로그</h3>
+                  <h3>처리 로그</h3>
                 </div>
                 <div style="display:flex; gap:6px;">
-                  <button type="button" class="button secondary small" id="copySentLogsBtn">로그 복사</button>
-                  <button type="button" class="button secondary small" id="clearSentLogsBtn">로그 지우기</button>
+                  <button type="button" class="button secondary small" id="copySentLogsBtn">복사</button>
+                  <button type="button" class="button secondary small" id="clearSentLogsBtn">지우기</button>
                 </div>
               </div>
               <div class="desktop-card-body">
@@ -1300,17 +1298,26 @@
             <div class="desktop-card">
               <div class="desktop-card-header">
                 <div class="card-title-group">
-                  <span class="card-badge">SENT</span>
-                  <h3>📤 보낸 신청 목록 (회수 대상)</h3>
+                  <span class="card-badge">목록</span>
+                  <h3>보낸 서로이웃 신청 목록</h3>
                 </div>
-                <button type="button" class="button secondary small" id="refreshSentListBtn">
-                  🔄 목록 새로고침
-                </button>
               </div>
               <div class="desktop-card-body">
+                <div class="list-query-cta">
+                  <div class="list-query-copy">
+                    <strong>보낸 신청 목록을 먼저 불러오세요</strong>
+                    <span>설정한 경과일을 기준으로 미수락 신청을 조회합니다.</span>
+                  </div>
+                  <div class="list-query-actions">
+                    <span class="status" id="sentListStatus"><i></i> 조회 전</span>
+                    <button type="button" class="list-query-button" id="refreshSentListBtn">목록 조회</button>
+                  </div>
+                </div>
                 <div id="sentRequestsContainer" style="display:flex; flex-direction:column; gap:10px; max-height:650px; overflow-y:auto;">
-                  <div class="empty-state" style="text-align:center; padding:40px 20px; color:var(--text-muted, #888);">
-                    <span>보낸 신청 목록을 불러오려면 [🔄 목록 새로고침] 버튼을 눌러주세요.</span>
+                  <div class="empty-state cleaner-empty-state">
+                    <div class="cleaner-empty-icon" aria-hidden="true"></div>
+                    <strong>보낸 신청을 확인하세요</strong>
+                    <p>목록 조회를 누르면 설정한 기간의 미수락 신청을 불러옵니다.</p>
                   </div>
                 </div>
               </div>
@@ -1327,12 +1334,21 @@
           <div class="desktop-card comment-inbox-card">
             <div class="desktop-card-header">
               <div class="card-title-group">
-                <span class="card-badge">INBOX</span>
-                <h3>내 게시글 댓글 수신함</h3>
+                <span class="card-badge">목록</span>
+                <h3>내 글에 달린 댓글</h3>
               </div>
-              <span class="status" id="commentManagementStatus"><i></i> 확인 전</span>
             </div>
             <div class="desktop-card-body">
+              <div class="list-query-cta">
+                <div class="list-query-copy">
+                  <strong>내 글의 댓글 목록을 먼저 불러오세요</strong>
+                  <span>최근 게시글을 조회한 뒤 대댓글을 작성할 댓글을 선택합니다.</span>
+                </div>
+                <div class="list-query-actions">
+                  <span class="status" id="commentManagementStatus"><i></i> 조회 전</span>
+                  <button class="list-query-button" id="scanMyCommentsBtn" type="button">목록 조회</button>
+                </div>
+              </div>
               <!-- Top Controls Toolbar -->
               <div class="comment-control-bar">
                 <div class="comment-range-group">
@@ -1352,31 +1368,27 @@
                 <label class="comment-neighbor-switch-card">
                   <input id="commentRequestNeighbor" type="checkbox" checked>
                   <div class="switch-card-text">
-                    <span class="switch-title">🤝 대댓글 후 서로이웃 자동 신청</span>
-                    <span class="switch-desc">미이웃 작성자에게 친근한 기본 메시지로 서로이웃을 함께 신청합니다.</span>
+                    <span class="switch-title">대댓글 작성 후 서로이웃도 신청</span>
+                    <span class="switch-desc">아직 이웃이 아닌 댓글 작성자에게만 서로이웃을 신청합니다.</span>
                   </div>
                 </label>
               </div>
 
               <!-- Action Buttons -->
               <div class="comment-actions-bar">
-                <button class="button secondary" id="scanMyCommentsBtn" type="button">
-                  <span>🔍</span> 새 댓글 스캔
-                </button>
                 <button class="button primary" id="processMyCommentsBtn" type="button" disabled>
-                  <span>✨</span> 선택 댓글 AI 대댓글 & 이웃 처리
+                  선택한 댓글에 AI 대댓글 달기
                 </button>
               </div>
               <div class="comment-auto-bar">
                 <button class="button ghost" id="toggleCommentAutoBtn" type="button">
-                  <span>⏱️</span> 5분 주기 자동 백그라운드 관리 시작
+                  5분마다 새 댓글 확인 시작
                 </button>
               </div>
 
               <!-- Summary Status Strip -->
-              <div class="comment-summary-strip" id="commentManagementSummaryStrip">
-                <span class="strip-icon">ℹ️</span>
-                <span id="commentManagementSummary">새 댓글 스캔을 눌러 최근 게시글에 달린 댓글을 확인하세요.</span>
+              <div class="comment-summary-strip hidden" id="commentManagementSummaryStrip">
+                <span id="commentManagementSummary">목록 조회를 누르면 최근 게시글의 댓글을 확인합니다.</span>
               </div>
 
               <!-- Inbox DataGrid -->
@@ -1387,7 +1399,7 @@
                       <th style="width: 38px; text-align: center;"><input type="checkbox" id="selectAllMyComments" title="전체 선택"></th>
                       <th style="width: 140px;">게시글</th>
                       <th style="width: 125px;">작성자</th>
-                      <th>수신 댓글</th>
+                      <th>내 글에 받은 댓글</th>
                       <th style="width: 90px; text-align: right;">작성일</th>
                     </tr>
                   </thead>
@@ -1395,10 +1407,9 @@
                     <tr>
                       <td colspan="5" class="comment-empty-cell">
                         <div class="comment-empty-state">
-                          <span class="empty-icon">💬</span>
                           <div class="empty-text">
-                            <strong>수신된 새 댓글이 없습니다</strong>
-                            <small>'새 댓글 스캔' 버튼을 눌러 최근 게시글의 댓글을 불러오세요.</small>
+                            <strong>아직 불러온 댓글이 없습니다</strong>
+                            <small>내 글 새 댓글 불러오기를 눌러 확인하세요.</small>
                           </div>
                         </div>
                       </td>
@@ -1412,23 +1423,45 @@
 
         <!-- Right Column: AI Reply & Neighbor History Feed -->
         <div class="desktop-col comment-col-right">
+          <div class="desktop-card comment-progress-card" id="commentReplyProgressCard">
+            <div class="desktop-card-header">
+              <div class="card-title-group">
+                <span class="card-badge">진행</span>
+                <h3>대댓글 진행 현황</h3>
+              </div>
+              <span class="status" id="commentReplyProgressStatus"><i></i> 대기 중</span>
+            </div>
+            <div class="desktop-card-body">
+              <div class="comment-progress-summary">
+                <strong id="commentReplyProgressCurrent">처리할 댓글을 선택해주세요.</strong>
+                <span id="commentReplyProgressCount">0 / 0건</span>
+              </div>
+              <div class="comment-progress-track" aria-label="대댓글 처리 진행률">
+                <span id="commentReplyProgressBar" style="width:0%"></span>
+              </div>
+              <div class="comment-progress-stats" aria-live="polite">
+                <span class="progress-stat success"><b id="commentReplyProgressCompleted">0</b> 완료</span>
+                <span class="progress-stat danger"><b id="commentReplyProgressFailed">0</b> 실패</span>
+                <span class="progress-stat pending"><b id="commentReplyProgressRemaining">0</b> 남음</span>
+              </div>
+            </div>
+          </div>
           <div class="desktop-card comment-history-card">
             <div class="desktop-card-header">
               <div class="card-title-group">
-                <span class="card-badge">HISTORY</span>
-                <h3>AI 대댓글 & 이웃 처리 기록</h3>
+                <span class="card-badge">기록</span>
+                <h3>내 글 대댓글 처리 기록</h3>
               </div>
               <button class="button ghost small" id="refreshCommentHistoryBtn" type="button">
-                🔄 새로고침
+                새로고침
               </button>
             </div>
             <div class="desktop-card-body history-card-body">
               <div id="commentManagementHistory" class="comment-history-feed">
                 <div class="comment-empty-state">
-                  <span class="empty-icon">📋</span>
                   <div class="empty-text">
                     <strong>처리 기록이 없습니다</strong>
-                    <small>댓글 처리가 진행되면 AI 대댓글과 서로이웃 신청 결과가 여기에 기록됩니다.</small>
+                    <small>AI 대댓글과 서로이웃 신청 결과가 여기에 표시됩니다.</small>
                   </div>
                 </div>
               </div>
@@ -1596,12 +1629,11 @@
 
     <!-- License & Subscription Auth Modal -->
     <div class="modal-overlay hidden" id="licenseModal" role="dialog" aria-modal="true" aria-labelledby="licenseModalTitle">
-      <div class="modal-card" style="max-width: 520px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+      <div class="modal-card license-modal-card">
         <div class="modal-header" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 16px;">
           <div>
-            <span class="modal-eyebrow" style="color: #4f46e5; font-weight: 700; font-size: 11px; letter-spacing: 0.05em;">NEIGHBOR MATE LICENSE</span>
-            <h2 id="licenseModalTitle" style="font-size: 20px; font-weight: 800; margin: 4px 0 0 0; color: #0f172a;">정품 라이선스 및 구독 관리</h2>
-            <p class="modal-sub" style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">1인 1PC 정품 보안 인증 및 이용권 연장</p>
+            <h2 id="licenseModalTitle" style="font-size: 20px; font-weight: 800; margin: 0; color: #0f172a;">이용권 관리</h2>
+            <p class="modal-sub" style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">로그인하거나 이용권 키를 등록하세요.</p>
           </div>
           <button type="button" class="modal-close" id="closeLicenseModal" aria-label="닫기">✕</button>
         </div>
@@ -1642,7 +1674,7 @@
           <!-- Direct License Key Activation Section -->
           <div id="licenseKeySection" style="margin-top: 20px; padding-top: 18px; border-top: 1px dashed #e2e8f0;">
             <div style="font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 8px;">
-              🔑 크몽 / 스마트스토어 라이선스 키 등록 (+30일)
+              이용권 키 등록
             </div>
             <div style="display: flex; gap: 8px;">
               <input type="text" id="licenseKeyInput" placeholder="MATE-XXXX-XXXX-XXXX" style="flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 14px; font-family: monospace; text-transform: uppercase;">
@@ -1671,9 +1703,8 @@
             </button>
           </form>
 
-          <!-- HWID Info & Cooldown Note -->
-          <div style="margin-top: 18px; background: #f8fafc; padding: 10px 14px; border-radius: 10px; font-size: 12px; color: #64748b; line-height: 1.5;">
-            🔒 <strong>1인 1PC 보안 바인딩</strong>: 이 컴퓨터의 고유 기기 지문(HWID: <span id="licenseHwidText" style="font-family: monospace; font-weight: 600; color: #334155;">-</span>)이 계정에 안전하게 귀속됩니다.
+          <div class="license-device-note">
+            이용권은 현재 PC에 연결됩니다.<span class="hidden" id="licenseHwidText">-</span>
           </div>
         </div>
 
@@ -1695,19 +1726,19 @@
 
     <footer class="desktop-statusbar">
       <div class="statusbar-left">
-        <span>🟢 시스템 준비 완료</span>
+        <span>시스템 준비 완료</span>
         <span class="statusbar-sep">|</span>
         <span>이웃메이트 Engage Desktop</span>
       </div>
       <div class="statusbar-center">
-        <span>⚡ 로컬 GPU Gemma 4 AI 독립 연산 (비용 0원)</span>
+        <span>로컬 AI 실행 중</span>
       </div>
       <div class="statusbar-right">
-        <span>🛡️ 계정 보호 지터 &amp; 정기 휴식 보호 모드 활성</span>
+        <span>계정 보호 모드 활성</span>
       </div>
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/app.js?v=10"></script>
+  <script type="module" src="/app.js?v=22"></script>
 </body>
 </html>

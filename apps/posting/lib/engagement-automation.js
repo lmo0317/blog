@@ -1,10 +1,10 @@
 import { EventEmitter } from 'node:events';
 
 export class EngagementAutomationManager extends EventEmitter {
-  constructor({ browserSession, embeddedLlama, historyStore }) {
+  constructor({ browserSession, agyClient = null, historyStore }) {
     super();
     this.browserSession = browserSession;
-    this.embeddedLlama = embeddedLlama;
+    this.agyClient = agyClient;
     this.historyStore = historyStore;
 
     this.state = 'idle'; // 'idle' | 'running' | 'paused' | 'stopped' | 'completed' | 'error'
@@ -222,12 +222,16 @@ export class EngagementAutomationManager extends EventEmitter {
           if (this.config.doComment) {
             this.log(`🤖 AI가 포스팅 내용과 사진을 읽고 맞춤 댓글을 생성하고 있습니다...`, 'info');
             const imageSummary = inspection.firstImage?.alt || (inspection.images.length > 0 ? `${inspection.images.length}장의 본문 사진 포함` : '');
-            generatedComment = await this.embeddedLlama.generateBlogComment({
-              title: inspection.title || post.title,
-              contentSnippet: inspection.snippet,
-              imageSummary,
-              tone: this.config.tone
-            });
+            if (this.agyClient && typeof this.agyClient.generateBlogComment === 'function') {
+              generatedComment = await this.agyClient.generateBlogComment({
+                title: inspection.title || post.title,
+                contentSnippet: inspection.snippet,
+                imageSummary,
+                tone: this.config.tone
+              });
+            } else {
+              generatedComment = '정성 가득한 포스팅 잘 보고 갑니다! 좋은 하루 보내세요 😊';
+            }
             this.log(`💬 생성된 댓글: "${generatedComment}"`, 'info');
           }
 

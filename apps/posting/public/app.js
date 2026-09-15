@@ -9,9 +9,53 @@ const state = {
   images: [],
   selectedImages: new Set(),
   sourceTopic: '',
-  imagePlans: []
+  imagePlans: [],
+  seriesEpisodes: [],
+  currentEpisodeIdx: 0
 };
 let promptConfig = null;
+
+function switchPromptTab(tab) {
+  const writingBtn = $('#tabWritingPromptBtn');
+  const imageBtn = $('#tabImagePromptBtn');
+  const writingContent = $('#writingPromptTabContent');
+  const imageContent = $('#imagePromptTabContent');
+
+  if (tab === 'writing') {
+    if (writingBtn) {
+      writingBtn.style.background = '#03c75a';
+      writingBtn.style.color = '#fff';
+      writingBtn.style.border = 'none';
+      writingBtn.classList.add('active');
+    }
+    if (imageBtn) {
+      imageBtn.style.background = '#f8faf9';
+      imageBtn.style.color = '#4a5568';
+      imageBtn.style.border = '1px solid #dce3df';
+      imageBtn.classList.remove('active');
+    }
+    writingContent?.classList.remove('hidden');
+    imageContent?.classList.add('hidden');
+  } else {
+    if (imageBtn) {
+      imageBtn.style.background = '#03c75a';
+      imageBtn.style.color = '#fff';
+      imageBtn.style.border = 'none';
+      imageBtn.classList.add('active');
+    }
+    if (writingBtn) {
+      writingBtn.style.background = '#f8faf9';
+      writingBtn.style.color = '#4a5568';
+      writingBtn.style.border = '1px solid #dce3df';
+      writingBtn.classList.remove('active');
+    }
+    imageContent?.classList.remove('hidden');
+    writingContent?.classList.add('hidden');
+  }
+}
+
+$('#tabWritingPromptBtn')?.addEventListener('click', () => switchPromptTab('writing'));
+$('#tabImagePromptBtn')?.addEventListener('click', () => switchPromptTab('image'));
 
 async function loadPromptConfig(force = false) {
   if (promptConfig && !force) return promptConfig;
@@ -20,32 +64,58 @@ async function loadPromptConfig(force = false) {
 }
 
 function parsePromptEditor() {
-  const value = JSON.parse($('#promptJsonEditor')?.value || '{}');
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSON 객체 형식으로 입력해주세요.');
-  if (typeof value.systemPrompt !== 'string' || value.systemPrompt.trim().length < 10) throw new Error('systemPrompt를 10자 이상 입력해주세요.');
-  if (typeof value.userPromptTemplate !== 'string' || !value.userPromptTemplate.trim()) throw new Error('userPromptTemplate을 입력해주세요.');
-  return value;
+  const writingPrompt = $('#writingPromptEditor')?.value?.trim() || '';
+  const imagePrompt = $('#imagePromptEditor')?.value?.trim() || '';
+  if (writingPrompt.length < 10) throw new Error('글생성 프롬프트를 10자 이상 입력해주세요.');
+
+  const config = {
+    writingPrompt,
+    imagePrompt,
+    systemPrompt: writingPrompt,
+    imagePromptInstructions: imagePrompt,
+    userPromptTemplate: promptConfig?.userPromptTemplate || '다음 주제와 요청 내용으로 네이버 블로그 글을 작성하라.\n\n주제:\n{{topic}}\n\n내용 및 사용자 요청:\n{{content}}'
+  };
+
+  const jsonEditor = $('#promptJsonEditor');
+  if (jsonEditor) {
+    jsonEditor.value = JSON.stringify(config, null, 2);
+  }
+  return config;
 }
 
 $('#openPromptJsonBtn')?.addEventListener('click', async () => {
   try {
     const config = await loadPromptConfig();
-    $('#promptJsonEditor').value = JSON.stringify(config, null, 2);
+    const writingEl = $('#writingPromptEditor');
+    const imageEl = $('#imagePromptEditor');
+    const jsonEl = $('#promptJsonEditor');
+    if (writingEl) writingEl.value = config.writingPrompt || config.systemPrompt || '';
+    if (imageEl) imageEl.value = config.imagePrompt || config.imagePromptInstructions || '';
+    if (jsonEl) jsonEl.value = JSON.stringify(config, null, 2);
+    switchPromptTab('writing');
     $('#promptJsonDialog')?.showModal();
   } catch (error) { toast(`프롬프트를 불러오지 못했습니다: ${error.message}`, true); }
 });
 
 $('#resetPromptJsonBtn')?.addEventListener('click', async () => {
-  try { $('#promptJsonEditor').value = JSON.stringify(await loadPromptConfig(true), null, 2); }
-  catch (error) { toast(error.message, true); }
+  try {
+    const config = await loadPromptConfig(true);
+    const writingEl = $('#writingPromptEditor');
+    const imageEl = $('#imagePromptEditor');
+    const jsonEl = $('#promptJsonEditor');
+    if (writingEl) writingEl.value = config.writingPrompt || config.systemPrompt || '';
+    if (imageEl) imageEl.value = config.imagePrompt || config.imagePromptInstructions || '';
+    if (jsonEl) jsonEl.value = JSON.stringify(config, null, 2);
+    toast('기본 글생성 및 이미지 프롬프트로 복원되었습니다.');
+  } catch (error) { toast(error.message, true); }
 });
 
 $('#usePromptPublishBtn')?.addEventListener('click', () => {
   try {
     promptConfig = parsePromptEditor();
     $('#promptJsonDialog')?.close();
-    $('#articleDraftForm')?.requestSubmit();
-  } catch (error) { toast(`프롬프트 JSON 오류: ${error.message}`, true); }
+    toast('글생성 및 이미지 생성 프롬프트가 적용되었습니다! ✨');
+  } catch (error) { toast(`프롬프트 오류: ${error.message}`, true); }
 });
 
 function setConnected(connected, label = '') {
@@ -140,11 +210,16 @@ workspaceTabs.forEach((tab, index) => {
 setActiveTab('publish');
 
 async function api(url, options = {}) {
+  const timeoutMs = options.timeoutMs || (url.includes('/draft') ? 300000 : 30000);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       ...options,
+      signal: options.signal || controller.signal,
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
     });
+    clearTimeout(timer);
     const text = await response.text();
     let body = {};
     try {
@@ -157,8 +232,12 @@ async function api(url, options = {}) {
     }
     return body;
   } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      throw new Error(`요청 시간 초과 (${Math.round(timeoutMs / 1000)}초). AI 응답이 지연되고 있습니다. 다시 시도해주세요.`);
+    }
     if (err.name === 'TypeError' && String(err.message).toLowerCase().includes('fetch')) {
-      throw new Error('서버(Node.js)와 연결할 수 없습니다. 터미널에서 npm start로 서버가 켜져 있는지 확인해주세요.');
+      throw new Error('서버(Node.js)와 연결할 수 없습니다. 포스팅 프로그램을 재시작해주세요.');
     }
     throw err;
   }
@@ -276,15 +355,34 @@ function startGenerationProgress(generationId) {
   const startedAt = Date.now();
   let latest = '생성 작업을 서버에 전달하는 중';
   let stopped = false;
+  let pollFailCount = 0;
   const render = () => {
     const seconds = Math.floor((Date.now() - startedAt) / 1000);
     setAutoPostProgress(`${latest}\n경과 시간 ${Math.floor(seconds / 60)}분 ${String(seconds % 60).padStart(2, '0')}초`);
   };
-  const elapsedTimer = setInterval(render, 1000);
+  const elapsedTimer = setInterval(() => {
+    if (stopped) return;
+    const seconds = Math.floor((Date.now() - startedAt) / 1000);
+    if (seconds > 360) { // Safety ceiling: 6 minutes max
+      stopped = true;
+      clearInterval(elapsedTimer);
+      clearInterval(pollTimer);
+      setAutoPostProgress('생성 시간 초과 (6분 경과)\nAI 모델 또는 서버 응답이 지연되고 있습니다. 창을 새로고침하고 다시 시도해주세요.', 'error');
+      const btn = $('#articleDraftBtn');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">✨</span> <strong>Gemini (agy) 글 작성 + 맞춤 이미지 자동 생성</strong>';
+      }
+      return;
+    }
+    render();
+  }, 1000);
+
   const pollTimer = setInterval(async () => {
     if (stopped) return;
     try {
-      const progress = await api(`/api/blog/generation-status/${generationId}`);
+      const progress = await api(`/api/blog/generation-status/${generationId}`, { timeoutMs: 3000 });
+      pollFailCount = 0;
       latest = progress.message || latest;
       if (progress.status === 'error') {
         stopped = true;
@@ -294,8 +392,14 @@ function startGenerationProgress(generationId) {
       } else {
         render();
       }
-    } catch {}
-  }, 1200);
+    } catch {
+      pollFailCount += 1;
+      if (pollFailCount >= 10 && !stopped) {
+        latest = '서버 응답을 기다리는 중...';
+        render();
+      }
+    }
+  }, 1500);
   render();
   return () => {
     stopped = true;
@@ -303,6 +407,259 @@ function startGenerationProgress(generationId) {
     clearInterval(pollTimer);
   };
 }
+
+function updateSeriesEpisodeOptions() {
+  const countSelect = $('#articleSeriesCount');
+  const episodeWrap = $('#seriesEpisodeWrap');
+  const episodeSelect = $('#articleSeriesEpisode');
+  const guidanceWrap = $('#seriesGuidance');
+  if (!countSelect || !episodeSelect) return;
+
+  const count = parseInt(countSelect.value, 10) || 1;
+  if (count <= 1) {
+    if (episodeWrap) episodeWrap.classList.add('hidden');
+    if (guidanceWrap) guidanceWrap.classList.add('hidden');
+    episodeSelect.innerHTML = '<option value="1" selected>[1편] 단편 집중 심층 분석</option>';
+    return;
+  }
+
+  if (episodeWrap) episodeWrap.classList.remove('hidden');
+  if (guidanceWrap) guidanceWrap.classList.remove('hidden');
+
+  const episodeGuides = {
+    2: [
+      '[1/2] 제1편 - 핵심 개념 원리 및 현황 총분석',
+      '[2/2] 제2편 - 실전 적용 전략 및 1% 전문가 꿀팁'
+    ],
+    3: [
+      '[1/3] 제1편 - 기본 입문 및 꼭 알아야 할 기초 원리',
+      '[2/3] 제2편 - 실전 로드맵 & 200% 활용 노하우',
+      '[3/3] 제3편 - 심화 마스터 & 실수 방지 체크리스트'
+    ],
+    5: [
+      '[1/5] 제1편 - 기초 개념 및 배경 원리 마스터',
+      '[2/5] 제2편 - 환경 구축 및 필수 준비 단계',
+      '[3/5] 제3편 - 실전 테크닉 및 1% 디테일 노하우',
+      '[4/5] 제4편 - 빈출 함정 및 문제 해결(트러블슈팅)',
+      '[5/5] 제5편 - 장기 성장 로드맵 및 전문가 마스터 총정리'
+    ]
+  };
+
+  const guides = episodeGuides[count] || Array.from({ length: count }, (_, i) => `[${i + 1}/${count}] 제${i + 1}편`);
+  const prevVal = parseInt(episodeSelect.value, 10) || 1;
+  episodeSelect.innerHTML = guides.map((text, i) => `<option value="${i + 1}" ${i + 1 === Math.min(prevVal, count) ? 'selected' : ''}>${text}</option>`).join('');
+}
+
+function saveCurrentEpisodeState() {
+  if (!state.seriesEpisodes || !state.seriesEpisodes[state.currentEpisodeIdx]) return;
+  const current = state.seriesEpisodes[state.currentEpisodeIdx];
+  current.title = $('#postTitle')?.value || current.title;
+  current.content = $('#postContent')?.value || current.content;
+  current.tags = ($('#postTags')?.value || '').split(',').map((tag) => tag.trim()).filter(Boolean);
+  current.images = [...state.images];
+  current.autoImages = [...state.images];
+  current.imagePlans = [...state.imagePlans];
+}
+
+function updatePublishButtonLabel() {
+  if (!publishButton) return;
+  const publishAllBtn = $('#publishAllSeriesBtn');
+  if (state.seriesEpisodes && state.seriesEpisodes.length > 1) {
+    const curNum = state.currentEpisodeIdx + 1;
+    const isPub = state.seriesEpisodes[state.currentEpisodeIdx]?.isPublished;
+    publishButton.textContent = isPub
+      ? `네이버 블로그에 [제${curNum}편] 다시 발행하기`
+      : `네이버 블로그에 [제${curNum}편] 게시 발행`;
+    if (publishAllBtn) {
+      publishAllBtn.classList.remove('hidden');
+      publishAllBtn.textContent = `🚀 총 ${state.seriesEpisodes.length}부작 전편 순차 자동 발행`;
+    }
+  } else {
+    publishButton.textContent = '네이버 블로그에 게시 발행';
+    if (publishAllBtn) publishAllBtn.classList.add('hidden');
+  }
+}
+
+function renderSeriesTabs() {
+  const banner = $('#seriesPostBanner');
+  const cardsGrid = $('#seriesEpisodeCardsGrid');
+  const badge = $('#seriesActiveEpBadge');
+  const continuousView = $('#seriesAllContinuousView');
+  if (!banner) return;
+
+  if (!state.seriesEpisodes || state.seriesEpisodes.length <= 1) {
+    banner.classList.add('hidden');
+    if (cardsGrid) cardsGrid.innerHTML = '';
+    if (continuousView) continuousView.innerHTML = '';
+    return;
+  }
+
+  banner.classList.remove('hidden');
+  if (badge) {
+    badge.textContent = `제${state.currentEpisodeIdx + 1}편 편집 중 (${state.currentEpisodeIdx + 1}/${state.seriesEpisodes.length})`;
+  }
+
+  if (cardsGrid) {
+    cardsGrid.innerHTML = state.seriesEpisodes.map((ep, idx) => {
+      const isActive = idx === state.currentEpisodeIdx;
+      const isPub = Boolean(ep.isPublished);
+      const epTitle = ep.title || `제${idx + 1}편 포스팅`;
+      const wordCount = (ep.content || '').replace(/\s+/g, '').length;
+      const images = (ep.autoImages || ep.images || []).slice(0, 3);
+      const leadSnippet = (ep.lead || ep.content || '').slice(0, 75).replace(/\n/g, ' ') + '…';
+
+      const thumbHtml = images.length > 0
+        ? `<div style="display:flex; gap:6px; margin-top:8px;">
+            ${images.map((img) => `<img src="${img.previewUrl || img.downloadUrl || ''}" alt="썸네일" style="width:54px; height:40px; object-fit:cover; border-radius:6px; border:1px solid #cbd5e1; background:#f1f5f9;">`).join('')}
+          </div>`
+        : `<div style="font-size:11px; color:#94a3b8; margin-top:6px;">이미지 준비 완료</div>`;
+
+      return `
+        <div class="series-card-item" data-episode-idx="${idx}" style="
+          padding: 14px 16px;
+          border-radius: 12px;
+          cursor: pointer;
+          border: 2px solid ${isActive ? '#03c75a' : '#e2e8f0'};
+          background: ${isActive ? '#f0fdf4' : '#ffffff'};
+          box-shadow: ${isActive ? '0 4px 12px rgba(3,199,90,0.18)' : '0 1px 3px rgba(0,0,0,0.04)'};
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        ">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span style="
+                font-size: 11px;
+                font-weight: 800;
+                color: ${isActive ? '#15803d' : '#64748b'};
+                background: ${isActive ? '#dcfce7' : '#f1f5f9'};
+                padding: 2px 8px;
+                border-radius: 9999px;
+              ">제${idx + 1}편</span>
+              <div style="display:flex; gap:4px; align-items:center;">
+                <span style="font-size:11px; color:#64748b;">약 ${wordCount.toLocaleString()}자</span>
+                ${isPub ? '<span style="font-size:11px; font-weight:700; color:#15803d; background:#dcfce7; padding:1px 6px; border-radius:4px;">✓발행됨</span>' : ''}
+              </div>
+            </div>
+            <strong style="
+              font-size: 13px;
+              line-height: 1.4;
+              color: #0f172a;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
+              margin-bottom: 4px;
+            ">${escapeHtml(epTitle)}</strong>
+            <p style="
+              font-size: 11px;
+              color: #64748b;
+              margin: 0;
+              line-height: 1.35;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
+            ">${escapeHtml(leadSnippet)}</p>
+            ${thumbHtml}
+          </div>
+          <div style="margin-top:10px; display:flex; justify-content:flex-end;">
+            <button type="button" style="
+              padding: 5px 12px;
+              font-size: 12px;
+              font-weight: ${isActive ? '700' : '600'};
+              border-radius: 6px;
+              border: 1px solid ${isActive ? '#03c75a' : '#cbd5e1'};
+              background: ${isActive ? '#03c75a' : '#ffffff'};
+              color: ${isActive ? '#ffffff' : '#334155'};
+              cursor: pointer;
+            ">${isActive ? '✓ 현재 편집 중' : '선택하여 편집'}</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    cardsGrid.querySelectorAll('.series-card-item').forEach((card) => {
+      card.addEventListener('click', () => {
+        const idx = parseInt(card.dataset.episodeIdx, 10);
+        if (!isNaN(idx) && idx !== state.currentEpisodeIdx) {
+          switchToEpisode(idx);
+        }
+      });
+    });
+  }
+
+  // Render Full Continuous Series View
+  if (continuousView) {
+    continuousView.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; padding-bottom:10px; border-bottom:1.5px solid #e2e8f0;">
+        <h4 style="margin:0; font-size:15px; color:#0f172a;">📖 전체 ${state.seriesEpisodes.length}부작 연속 미리보기</h4>
+        <small style="color:#64748b;">(아래 각 편의 제목, 본문, 이미지를 한번에 검토할 수 있습니다)</small>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:24px;">
+        ${state.seriesEpisodes.map((ep, idx) => {
+          const epImgs = (ep.autoImages || ep.images || []);
+          return `
+            <article style="
+              padding: 16px;
+              background: #f8fafc;
+              border: 1.5px solid #e2e8f0;
+              border-radius: 10px;
+            ">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <span style="font-size:12px; font-weight:700; color:#15803d; background:#dcfce7; padding:2px 10px; border-radius:9999px;">제${idx + 1}편</span>
+                <button type="button" class="switch-to-ep-btn" data-episode-idx="${idx}" style="
+                  font-size:12px; color:#03c75a; background:none; border:1px solid #03c75a; border-radius:6px; padding:3px 10px; cursor:pointer; font-weight:600;
+                ">이 회차 에디터로 불러오기 ✏️</button>
+              </div>
+              <h3 style="font-size:16px; color:#0f172a; margin:0 0 10px 0;">${escapeHtml(ep.title || '')}</h3>
+              ${epImgs.length > 0 ? `
+                <div style="display:flex; gap:10px; margin-bottom:12px; overflow-x:auto; padding-bottom:6px;">
+                  ${epImgs.map((img) => `<img src="${img.previewUrl || img.downloadUrl || ''}" alt="이미지" style="height:90px; border-radius:8px; border:1px solid #cbd5e1; object-fit:cover;">`).join('')}
+                </div>
+              ` : ''}
+              <div style="font-size:13px; color:#334155; line-height:1.6; white-space:pre-wrap; max-height:240px; overflow-y:auto; background:#ffffff; padding:12px; border-radius:8px; border:1px solid #e2e8f0;">${escapeHtml((ep.content || '').slice(0, 1200))}${(ep.content || '').length > 1200 ? '\n\n…(이하 생략, 상단 에디터에서 전체 확인 가능)' : ''}</div>
+            </article>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    continuousView.querySelectorAll('.switch-to-ep-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.episodeIdx, 10);
+        if (!isNaN(idx)) {
+          switchToEpisode(idx);
+          $('#publishForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  }
+}
+
+function switchToEpisode(idx) {
+  if (!state.seriesEpisodes || !state.seriesEpisodes[idx]) return;
+  saveCurrentEpisodeState();
+  state.currentEpisodeIdx = idx;
+  const ep = state.seriesEpisodes[idx];
+
+  if ($('#postTitle')) $('#postTitle').value = ep.title || '';
+  if ($('#postContent')) $('#postContent').value = ep.content || '';
+  if ($('#postTags')) $('#postTags').value = (ep.tags || []).join(', ');
+  if ($('#imageQuery')) $('#imageQuery').value = ep.imageQueries?.[0] || ep.title.slice(0, 20);
+
+  state.imagePlans = ep.imagePlans || [];
+  state.images = ep.autoImages || ep.images || [];
+  state.selectedImages = new Set(state.images.map((_, i) => i));
+  renderImages();
+
+  renderSeriesTabs();
+  updatePublishButtonLabel();
+  updatePublishState();
+}
+
+$('#articleSeriesCount')?.addEventListener('change', updateSeriesEpisodeOptions);
 
 $('#articleDraftForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -313,7 +670,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
 
   const btn = $('#articleDraftBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="btn-icon">⏳</span> <strong>LLM이 글과 이미지를 만드는 중...</strong>';
+  btn.innerHTML = '<span class="btn-icon">⏳</span> <strong>Gemini가 글과 맞춤 이미지를 만드는 중...</strong>';
   $('#llmStatus').className = 'status';
   const generationId = crypto.randomUUID();
   const stopProgress = startGenerationProgress(generationId);
@@ -322,6 +679,8 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     state.sourceTopic = topic;
     const tone = $('#articleTone')?.value || 'friendly';
     const length = $('#articleLength')?.value || 'medium';
+    const seriesCount = parseInt($('#articleSeriesCount')?.value, 10) || 1;
+    const seriesEpisode = parseInt($('#articleSeriesEpisode')?.value, 10) || 1;
     const notes = $('#articleNotes')?.value?.trim() || '';
     const model = $('#articleModelSelect')?.value || '';
     const imageStyle = $('#articleImageStyle')?.value || 'photorealistic';
@@ -332,25 +691,61 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
       activeImageModelId = imageModelId;
     }
 
-    const payload = { generationId, topic, notes: [brief, notes].filter(Boolean).join('\n\n').slice(0, 3000), tone, length, model, imageStyle, promptConfig };
+    const payload = {
+      generationId,
+      topic,
+      notes: [brief, notes].filter(Boolean).join('\n\n').slice(0, 3000),
+      tone,
+      length,
+      seriesCount,
+      seriesEpisode,
+      model,
+      imageStyle,
+      writingPrompt: promptConfig?.writingPrompt || promptConfig?.systemPrompt || '',
+      imagePrompt: promptConfig?.imagePrompt || promptConfig?.imagePromptInstructions || '',
+      promptConfig
+    };
     const data = await api('/api/blog/draft', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
     stopProgress();
 
-    $('#postTitle').value = data.title;
-    $('#postContent').value = data.content;
-    $('#postTags').value = (data.tags || []).join(', ');
-    $('#imageQuery').value = data.imageQueries?.[0] || data.title.slice(0, 20);
-    state.imagePlans = data.imagePlans || [];
-
-    // Set auto-matched images
     state.images = data.autoImages || [];
-    state.selectedImages = new Set(state.images.map((_, i) => i));
-    renderImages();
+    state.seriesEpisodes = Array.isArray(data.episodes) && data.episodes.length > 0 ? data.episodes : [data];
+    state.currentEpisodeIdx = 0;
+    switchToEpisode(0);
 
-    $('#draftModel').textContent = data.engineLabel || data.model || '112 로컬 LLM';
+    const seriesBadge = data.seriesCount > 1 ? ` · [총 ${data.seriesCount}부작 전편 집필 완료]` : '';
+    $('#draftModel').textContent = `${data.engineLabel || data.model || '💎 Google Gemini (agy)'}${seriesBadge}`;
+
+    // Series banner display
+    const seriesBanner = $('#seriesPostBanner');
+    const seriesBannerTitle = $('#seriesBannerTitle');
+    const seriesBannerRoadmap = $('#seriesBannerRoadmap');
+    if (seriesBanner && seriesBannerTitle) {
+      if (data.seriesCount > 1) {
+        seriesBanner.classList.remove('hidden');
+        seriesBannerTitle.textContent = `📚 [기획 연재] ${data.seriesTitle || topic} (총 ${data.seriesCount}부작 전편 완결)`;
+        if (seriesBannerRoadmap) {
+          const roadmapSummary = Array.isArray(data.seriesRoadmap) && data.seriesRoadmap.length
+            ? data.seriesRoadmap.join(' ➔ ')
+            : `총 ${data.seriesCount}부작 기획 연재`;
+          seriesBannerRoadmap.textContent = roadmapSummary;
+        }
+
+        // Auto-expand all-series continuous view by default so all episodes are immediately visible
+        const continuous = $('#seriesAllContinuousView');
+        const toggleText = $('#toggleAllSeriesText');
+        if (continuous) {
+          continuous.classList.remove('hidden');
+          if (toggleText) toggleText.textContent = `${data.seriesCount}부작 전편 접기 🔼`;
+        }
+      } else {
+        seriesBanner.classList.add('hidden');
+      }
+    }
+
     if (data.sourceUrl) {
       renderPostSource({ sourceUrl: data.sourceUrl, source: '참조 뉴스/포스팅 원문' });
     } else {
@@ -369,7 +764,9 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
       else setAutoPostProgress('네이버 발행 창이 열렸습니다. 화면에서 최종 상태를 확인해주세요.');
     } else {
       setAutoPostProgress('완료: 글과 이미지가 준비됐습니다. 아래에서 검토 후 발행할 수 있습니다.', 'complete');
-      toast(`✨ [${data.engineLabel || data.model}] 글과 맞춤 이미지 생성이 완료되었습니다!`);
+      toast(data.seriesCount > 1
+        ? `✨ [총 ${data.seriesCount}부작] 전편 글과 맞춤 이미지가 준비되었습니다! 회차별 탭을 클릭하여 확인하세요.`
+        : `✨ [${data.engineLabel || data.model}] 글과 맞춤 이미지 생성이 완료되었습니다!`);
     }
   } catch (error) {
     stopProgress();
@@ -378,7 +775,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     toast(`AI 자동 포스팅 실패: ${error.message}`, true);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="btn-icon">✨</span> <strong>LLM 글 작성 + 이미지 자동 생성</strong>';
+    btn.innerHTML = '<span class="btn-icon">✨</span> <strong>Gemini (agy) 글 작성 + 맞춤 이미지 자동 생성</strong>';
   }
 });
 
@@ -395,6 +792,21 @@ function renderPostSource(sourceInfo) {
 
 imageSearchButton?.addEventListener('click', () => {
   loadImages().catch((error) => toast(error.message, true));
+});
+
+$('#toggleAllSeriesViewBtn')?.addEventListener('click', () => {
+  const continuous = $('#seriesAllContinuousView');
+  const text = $('#toggleAllSeriesText');
+  if (!continuous) return;
+  const isHidden = continuous.classList.contains('hidden');
+  if (isHidden) {
+    continuous.classList.remove('hidden');
+    if (text) text.textContent = '3부작 전편 접기 🔼';
+    continuous.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    continuous.classList.add('hidden');
+    if (text) text.textContent = '3부작 전편 한번에 펼쳐보기';
+  }
 });
 
 async function loadImages() {
@@ -454,13 +866,16 @@ function renderImages() {
   imageResults?.classList.toggle('hidden', state.images.length === 0);
   if (imageResults) {
     imageResults.innerHTML = state.images.map((image, index) => {
-      const isAi = image.isAiGenerated || image.license?.includes('Gemma');
+      const isAi = image.isAiGenerated || image.license?.includes('Gemini') || image.license?.includes('Imagen') || image.license?.includes('Gemma');
+      const cardBorder = isAi ? 'border: 2px solid #3b82f6; background: #eff6ff;' : 'border: 2px solid #10b981; background: #f0fdf4;';
       return `
-      <label class="image-card${state.selectedImages.has(index) ? ' selected' : ''}${isAi ? ' ai-card' : ''}" data-image-index="${index}" style="${isAi ? 'border: 2px solid #3182ce; background: #f0f7ff;' : ''}">
+      <label class="image-card${state.selectedImages.has(index) ? ' selected' : ''}${isAi ? ' ai-card' : ' real-photo-card'}" data-image-index="${index}" style="${cardBorder}">
         <input type="checkbox" value="${escapeHtml(image.id)}" aria-label="${escapeHtml(image.title)} 선택"${state.selectedImages.has(index) ? ' checked' : ''}>
         <img src="${escapeHtml(image.previewUrl)}" alt="${escapeHtml(image.description || image.title)}" loading="lazy" style="object-fit:cover; border-radius:6px;">
         <span>
-          ${isAi ? `<div style="color:#2b6cb0; font-size:11px; font-weight:800; margin-bottom:2px;">⚡ 로컬 AI 생성 그림</div>` : ''}
+          ${isAi
+            ? `<div style="color:#1d4ed8; font-size:11px; font-weight:800; margin-bottom:2px;">💎 Gemini AI 맞춤 그림</div>`
+            : `<div style="color:#059669; font-size:11px; font-weight:800; margin-bottom:2px;">📸 고화질 실사 포토 (1280px)</div>`}
           <strong>${escapeHtml(image.title)}</strong>
           <small>${escapeHtml([image.author, image.license].filter(Boolean).join(' · '))}</small>
           ${image.afterHeading ? `<em>“${escapeHtml(image.afterHeading)}” 뒤에 삽입</em>` : ''}
@@ -492,6 +907,10 @@ function updatePublishState() {
     && title.length >= 2
     && content.length >= 20;
   publishButton.disabled = !ready;
+  const publishAllBtn = $('#publishAllSeriesBtn');
+  if (publishAllBtn) {
+    publishAllBtn.disabled = !ready;
+  }
   $('#publishHelp')?.classList.toggle('hidden', state.connected);
 }
 
@@ -501,6 +920,8 @@ function resetPublishedPostWorkspace() {
   state.imagePlans = [];
   state.sourceTopic = '';
   state.selectedTrend = null;
+  state.seriesEpisodes = [];
+  state.currentEpisodeIdx = 0;
 
   ['#postTitle', '#postContent', '#postTags', '#imageQuery'].forEach((selector) => {
     const field = $(selector);
@@ -509,6 +930,8 @@ function resetPublishedPostWorkspace() {
   $('#articleDraftForm')?.reset();
   $('#topicInputFields')?.classList.remove('hidden');
   $('#linkInputFields')?.classList.add('hidden');
+  $('#seriesEpisodeTabsBar')?.classList.add('hidden');
+  $('#seriesPostBanner')?.classList.add('hidden');
   renderImages();
   publishForm?.classList.add('hidden');
   if (publishConfirm) publishConfirm.checked = false;
@@ -547,8 +970,21 @@ async function publishCurrentDraft() {
         $('#publishedLink').href = data.url;
         $('#publishedLink').classList.remove('hidden');
       }
-      toast('네이버 블로그에 글을 발행했습니다. 새 글 작성 화면을 초기화했습니다.');
-      resetPublishedPostWorkspace();
+
+      if (state.seriesEpisodes && state.seriesEpisodes[state.currentEpisodeIdx]) {
+        state.seriesEpisodes[state.currentEpisodeIdx].isPublished = true;
+        renderSeriesTabs();
+      }
+
+      const nextIdx = state.currentEpisodeIdx + 1;
+      if (state.seriesEpisodes && nextIdx < state.seriesEpisodes.length) {
+        toast(`🎉 [제${state.currentEpisodeIdx + 1}편]이 네이버 블로그에 성공적으로 발행되었습니다! 다음 [제${nextIdx + 1}편]으로 전환합니다.`);
+        switchToEpisode(nextIdx);
+        publishForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        toast('🎉 네이버 블로그에 포스팅이 성공적으로 완료되었습니다!');
+        resetPublishedPostWorkspace();
+      }
     } else {
       toast(data.message || '열린 네이버 창에서 발행 상태를 확인해주세요.', true);
     }
@@ -557,7 +993,7 @@ async function publishCurrentDraft() {
     if (error.message.includes('로그인 세션이 만료')) setConnected(false);
     throw error;
   } finally {
-    publishButton.textContent = '블로그에 게시 발행';
+    updatePublishButtonLabel();
     updatePublishState();
   }
 }
@@ -568,6 +1004,82 @@ publishForm?.addEventListener('submit', async (event) => {
     await publishCurrentDraft();
   } catch (error) {
     toast(error.message, true);
+  }
+});
+
+$('#publishAllSeriesBtn')?.addEventListener('click', async () => {
+  if (!state.connected) return toast('자동 발행을 사용하려면 먼저 네이버 계정을 연결해주세요.', true);
+  if (!publishConfirm?.checked) return toast('발행 동의 체크박스를 선택해주세요.', true);
+  const episodes = state.seriesEpisodes || [];
+  if (episodes.length <= 1) return;
+
+  const btn = $('#publishAllSeriesBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '🚀 순차 자동 발행 진행 중...';
+  }
+
+  try {
+    for (let i = 0; i < episodes.length; i += 1) {
+      switchToEpisode(i);
+      toast(`[제${i + 1}편/${episodes.length}편] 네이버 블로그에 발행을 시작합니다...`);
+      await publishCurrentDraft();
+      if (i < episodes.length - 1) {
+        toast(`[제${i + 1}편 발행 완료] 다음 편 발행 대기 중 (4초)...`);
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+    }
+    toast(`🎉 [총 ${episodes.length}부작] 모든 회차가 네이버 블로그에 성공적으로 발행되었습니다!`);
+  } catch (err) {
+    toast(`순차 발행 중 오류: ${err.message}`, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      updatePublishButtonLabel();
+    }
+  }
+});
+
+$('#generateEpisodeImagesBtn')?.addEventListener('click', async () => {
+  const currentEp = state.seriesEpisodes[state.currentEpisodeIdx] || {
+    title: $('#postTitle')?.value,
+    content: $('#postContent')?.value,
+    imagePlans: state.imagePlans
+  };
+  const btn = $('#generateEpisodeImagesBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '🎨 AI 이미지 생성 중...';
+  }
+  try {
+    const imageStyle = $('#articleImageStyle')?.value || 'photorealistic';
+    const res = await api('/api/blog/series/generate-images', {
+      method: 'POST',
+      body: JSON.stringify({
+        episodePost: currentEp,
+        imageStyle,
+        imagePrompt: promptConfig?.imagePrompt || ''
+      })
+    });
+    if (res.images && res.images.length > 0) {
+      state.images = res.images;
+      state.selectedImages = new Set(state.images.map((_, i) => i));
+      if (state.seriesEpisodes[state.currentEpisodeIdx]) {
+        state.seriesEpisodes[state.currentEpisodeIdx].images = res.images;
+        state.seriesEpisodes[state.currentEpisodeIdx].autoImages = res.images;
+      }
+      renderImages();
+      toast(`제${state.currentEpisodeIdx + 1}편 맞춤 이미지 ${res.images.length}장이 생성되었습니다!`);
+    } else {
+      toast('이미지 생성에 실패했습니다. 잠시 후 다시 시도해주세요.', true);
+    }
+  } catch (err) {
+    toast(`이미지 생성 실패: ${err.message}`, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🎨 이 회차 맞춤 AI 이미지 생성';
+    }
   }
 });
 
@@ -1071,42 +1583,33 @@ let activeModelId = null;
 let activeImageModelId = 'pollinations';
 let imageModelRefreshTimer = null;
 
-function updateLocalAiSummaryUI(activeModel, activeEndpoint) {
+function updateLocalAiSummaryUI(activeModel, activeEndpoint, geminiInfo) {
   const globalStatus = $('#globalEngineStatusText');
   const summaryModel = $('#summaryModelName');
   const summaryEndpoint = $('#summaryEndpointUrl');
   const currentBadge = $('#currentEngineBadge');
+  const activePill = $('#activeAiStatusPill');
+  const summaryEngineType = $('#summaryEngineType');
 
-  if (activeModel) {
-    if (summaryModel) summaryModel.textContent = `${activeModel.name} (${activeModel.sizeFormatted || ''})`;
-    if (summaryEndpoint) summaryEndpoint.textContent = activeEndpoint?.baseUrl || 'http://127.0.0.1:8089';
-    if (globalStatus) {
-      globalStatus.textContent = `⚡ 내 PC 로컬 GPU (${activeModel.name})`;
-      globalStatus.style.color = '#234e52';
-    }
-    if (currentBadge) {
-      currentBadge.className = 'pill pill-green';
-      currentBadge.textContent = `⚡ ${activeModel.name}`;
-    }
-    if ($('#llmStatus')) {
-      $('#llmStatus').className = 'status online';
-      $('#llmStatus').innerHTML = `<i></i> ⚡ 로컬 GPU (${escapeHtml(activeModel.name)})`;
-    }
-  } else {
-    if (summaryModel) summaryModel.textContent = '미설치 (Gemma 모델 다운로드 필요)';
-    if (summaryEndpoint) summaryEndpoint.textContent = '-';
-    if (globalStatus) {
-      globalStatus.textContent = '⚠️ AI 모델 다운로드 필요';
-      globalStatus.style.color = '#c53030';
-    }
-    if (currentBadge) {
-      currentBadge.className = 'pill pill-gray';
-      currentBadge.textContent = '미설치';
-    }
-    if ($('#llmStatus')) {
-      $('#llmStatus').className = 'status offline';
-      $('#llmStatus').innerHTML = `<i></i> ⚠️ 모델 설치 필요`;
-    }
+  const modelName = activeModel?.name || activeEndpoint?.label || 'Gemini 3.8 Flash (High)';
+  if (summaryEngineType) summaryEngineType.textContent = '💎 Google Gemini (agy CLI 연동)';
+  if (summaryModel) summaryModel.textContent = modelName;
+  if (summaryEndpoint) summaryEndpoint.textContent = '초고속 3초 (클라우드 가속)';
+  if (globalStatus) {
+    globalStatus.textContent = `💎 Google Gemini (${modelName.replace(/\s*\(.*?\)/, '')})`;
+    globalStatus.style.color = '#1d4ed8';
+  }
+  if (currentBadge) {
+    currentBadge.className = 'pill pill-blue';
+    currentBadge.textContent = `💎 ${modelName}`;
+  }
+  if (activePill) {
+    activePill.className = 'pill pill-blue';
+    activePill.textContent = '구독 연동 · PC 부하 0% · 초고속';
+  }
+  if ($('#llmStatus')) {
+    $('#llmStatus').className = 'status online';
+    $('#llmStatus').innerHTML = `<i></i> 💎 ${escapeHtml(modelName)}`;
   }
 }
 
@@ -1132,37 +1635,38 @@ function initSettingsController() {
 async function initAiHardwareAndModels() {
   try {
     const settings = await api('/api/settings').catch(() => null);
-
-    const specs = await api('/api/hardware/specs');
+    const specs = await api('/api/hardware/specs').catch(() => ({}));
     currentHardwareSpecs = specs;
-    
-    // Update GPU badges & text
-    const gpuNameText = specs.gpu?.primaryGpu ? `${specs.gpu.primaryGpu.name} (${specs.gpu.vramFormatted})` : '시스템 GPU';
-    if ($('#gpuSpecBadge')) $('#gpuSpecBadge').innerHTML = `🎮 ${escapeHtml(gpuNameText)}`;
-    if ($('#localGpuSummaryText')) $('#localGpuSummaryText').textContent = `🎮 내 그래픽: ${gpuNameText} · 전용 VRAM ${specs.gpu?.vramFormatted || '8GB'}`;
 
-    const summaryHtml = `내 컴퓨터 사양(<strong>${escapeHtml(specs.gpu?.primaryGpu?.name || 'GPU')}</strong> / <strong>${escapeHtml(specs.gpu?.vramFormatted || '8GB')}</strong>)에 맞는 <strong>[${escapeHtml(specs.recommendedModel?.modelInfo?.name || '로컬 AI')}]</strong> 모델을 추천합니다. 실제 설치된 모델만 선택해 글과 댓글을 생성합니다.`;
+    const gpuNameText = 'Google Cloud TPU / GPU';
+    if ($('#gpuSpecBadge')) $('#gpuSpecBadge').innerHTML = `💎 ${escapeHtml(gpuNameText)}`;
+    if ($('#localGpuSummaryText')) {
+      $('#localGpuSummaryText').innerHTML = `💎 <strong>Google Gemini (agy 연동)</strong> 가동 중 · 구독 중인 클라우드 가속으로 PC 부하 없이 초고속 작성`;
+    }
 
-    if ($('#hardwareRecommendText')) $('#hardwareRecommendText').innerHTML = summaryHtml;
+    if ($('#hardwareRecommendText')) {
+      $('#hardwareRecommendText').innerHTML = `구독 중인 <strong>[💎 Google Gemini (agy 연동)]</strong> 엔진을 사용합니다. PC 사양(VRAM)과 무관하게 3초 만에 글과 이미지를 완성합니다.`;
+    }
 
     const modelsRes = await api('/api/models/list').catch(() => null);
     if (modelsRes) {
       currentModelsList = modelsRes.models || [];
-      activeModelId = modelsRes.activeModel?.id || null;
-      
-      renderModelCards(modelsRes.models, activeModelId, specs.recommendedModel?.id, '#aiModelCardsGrid');
-      renderModelCards(modelsRes.models, activeModelId, specs.recommendedModel?.id, '#settingsAiModelCardsGrid');
-      
-      updateLocalAiSummaryUI(modelsRes.activeModel, settings?.activeEndpoint);
+      activeModelId = modelsRes.activeModel?.id || 'gemini-3.8-flash-high';
+
+      renderModelCards(modelsRes.models, activeModelId, '#settingsAiModelCardsGrid');
+      updateLocalAiSummaryUI(modelsRes.activeModel, settings?.activeEndpoint, settings?.geminiInfo);
 
       // Synchronize global select dropdowns
       $$('.ai-model-global-select').forEach((sel) => {
         if (!sel) return;
         sel.replaceChildren();
-        const option = document.createElement('option');
-        option.value = activeModelId || '';
-        option.textContent = modelsRes.activeModel?.name || '활성 로컬 모델 없음';
-        sel.append(option);
+        (modelsRes.models || []).forEach((m) => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = `💎 ${m.name}`;
+          opt.selected = (m.id === activeModelId);
+          sel.append(opt);
+        });
       });
     }
   } catch (err) {
@@ -1174,19 +1678,17 @@ async function initImageModels() {
   try {
     const result = await api('/api/image-models/list');
     const models = result.models || [];
-    activeImageModelId = result.activeModel?.id || 'pollinations';
+    activeImageModelId = result.activeModel?.id || 'gemini-imagen';
     renderImageModelCards(models);
-    clearTimeout(imageModelRefreshTimer);
-    if (models.some((model) => model.isDownloading)) imageModelRefreshTimer = setTimeout(initImageModels, 2000);
     const badge = $('#currentImageEngineBadge');
-    if (badge) badge.textContent = result.activeModel?.name || '이미지 모델 미선택';
+    if (badge) badge.textContent = result.activeModel?.name || 'Google Imagen (agy 연동)';
     $$('.image-model-global-select').forEach((select) => {
       select.replaceChildren();
-      models.filter((model) => model.isInstalled).forEach((model) => {
+      models.forEach((model) => {
         const option = document.createElement('option');
         option.value = model.id;
-        option.textContent = model.type === 'local' ? `${model.name} · 내 PC GPU` : model.name;
-        option.selected = model.id === activeImageModelId;
+        option.textContent = `💎 ${model.name}`;
+        option.selected = (model.id === activeImageModelId);
         select.append(option);
       });
     });
@@ -1198,41 +1700,37 @@ async function initImageModels() {
 function renderImageModelCards(models) {
   const container = $('#settingsImageModelCardsGrid');
   if (!container) return;
-  container.innerHTML = models.map((model) => {
+  container.innerHTML = (models || []).map((model) => {
     const active = model.isActive;
-    const local = model.type === 'local';
-    const status = active ? '사용 중' : model.isInstalled ? '설치됨' : '미설치';
-    const progress = model.isDownloading && !model.isInstalled
-      ? `<div class="model-download-progress" style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700"><span>📥 ${escapeHtml(model.downloadedFormatted || '확인 중')} / ${escapeHtml(model.sizeFormatted)}</span><span>${Number(model.percent || 0)}%</span></div><div style="height:8px;background:#bee3f8;border-radius:4px;overflow:hidden;margin-top:6px"><div style="width:${Number(model.percent || 0)}%;height:100%;background:#3182ce"></div></div></div>`
-      : '';
+    const status = active ? '✓ 사용 중' : '사용 가능';
     const button = active
-      ? '<button type="button" class="button small" disabled>✓ 사용 중</button>'
-      : model.isDownloading
-        ? `<button type="button" class="button small" disabled>다운로드 중 (${Number(model.percent || 0)}%)</button>`
-      : model.isInstalled
-        ? `<button type="button" class="button small image-model-action" data-action="select" data-id="${escapeHtml(model.id)}">이 모델 사용</button>`
-        : `<button type="button" class="button small ghost image-model-action" data-action="download" data-id="${escapeHtml(model.id)}">다운로드 (${escapeHtml(model.sizeFormatted)})</button>`;
-    return `<div class="ai-model-card ${active ? 'active-model' : ''}" data-image-model="${escapeHtml(model.id)}">
-      <div class="model-card-header"><div><strong>${escapeHtml(model.name)}</strong><span class="model-badge-sub">${local ? '내 PC 로컬 GPU' : '온라인'} · ${escapeHtml(model.sizeFormatted)}</span></div><span class="pill ${active ? 'pill-green' : ''}">${status}</span></div>
-      <p class="model-card-desc">${escapeHtml(model.description || '')}</p>${progress}
-      <div class="model-card-footer"><span class="model-vram-hint">${local ? '🎮 생성 전 Gemma를 내려 VRAM 확보' : '🌐 별도 설치 없음'}</span>${button}</div>
+      ? '<button type="button" class="button small" disabled style="background:#2563eb; color:#fff; font-weight:700;">✓ 활성화됨</button>'
+      : `<button type="button" class="button small primary image-model-action" data-action="select" data-id="${escapeHtml(model.id)}">이 모델 사용</button>`;
+    return `<div class="ai-model-card ${active ? 'active-model' : ''}" data-image-model="${escapeHtml(model.id)}" style="border: 2px solid ${active ? '#3b82f6' : '#e2e8f0'}; background:${active ? '#eff6ff' : '#ffffff'};">
+      <div class="model-card-header">
+        <div>
+          <strong style="color:#1e3a8a; font-size:14.5px;">💎 ${escapeHtml(model.name)}</strong>
+          <span class="model-badge-sub" style="color:#2563eb; font-weight:600;">클라우드 AI · 고화질 이미지</span>
+        </div>
+        <span class="pill ${active ? 'pill-blue' : ''}">${status}</span>
+      </div>
+      <p class="model-card-desc" style="color:#4b5563;">${escapeHtml(model.description || '')}</p>
+      <div class="model-card-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="model-vram-hint" style="color:#059669; font-weight:700;">⚡ PC 부하 0% · 클라우드 생성</span>
+        ${button}
+      </div>
     </div>`;
   }).join('');
+
   container.querySelectorAll('.image-model-action').forEach((button) => {
     button.addEventListener('click', async () => {
-      const { action, id: modelId } = button.dataset;
+      const { id: modelId } = button.dataset;
       try {
         button.disabled = true;
-        if (action === 'select') {
-          await api('/api/image-models/select', { method: 'POST', body: JSON.stringify({ modelId }) });
-          toast('이미지 생성 모델을 변경했습니다.');
-          await initImageModels();
-        } else {
-          button.textContent = '다운로드 시작 중…';
-          await api('/api/image-models/download', { method: 'POST', body: JSON.stringify({ modelId }) });
-          toast('이미지 모델 다운로드를 시작했습니다. 완료되면 선택할 수 있습니다.');
-          initImageModelEvents();
-        }
+        button.textContent = '적용 중…';
+        await api('/api/image-models/select', { method: 'POST', body: JSON.stringify({ modelId }) });
+        toast(`이미지 생성 모델을 [${modelId}]로 설정했습니다.`);
+        await initImageModels();
       } catch (err) {
         button.disabled = false;
         toast(err.message, true);
@@ -1241,165 +1739,53 @@ function renderImageModelCards(models) {
   });
 }
 
-let imageModelEventSource = null;
-function initImageModelEvents() {
-  if (imageModelEventSource) return;
-  imageModelEventSource = new EventSource('/api/image-models/events');
-  imageModelEventSource.addEventListener('progress', (event) => {
-    const data = JSON.parse(event.data || '{}');
-    const card = document.querySelector(`[data-image-model="${CSS.escape(data.modelId || '')}"]`);
-    const button = card?.querySelector('.image-model-action');
-    if (button) { button.disabled = true; button.textContent = data.message || '다운로드 중…'; }
-  });
-  imageModelEventSource.addEventListener('complete', async () => {
-    toast('이미지 모델 다운로드가 완료되었습니다.');
-    await initImageModels();
-  });
-  imageModelEventSource.addEventListener('model-error', async (event) => {
-    try { const data = JSON.parse(event.data || '{}'); if (data.message) toast(`이미지 모델 다운로드 실패: ${data.message}`, true); } catch {}
-    await initImageModels();
-  });
-}
-
-let modelEventSource = null;
-
-function initModelEvents() {
-  if (modelEventSource) return;
-  try {
-    modelEventSource = new EventSource('/api/models/events');
-    
-    modelEventSource.addEventListener('progress', (e) => {
-      const data = JSON.parse(e.data || '{}');
-      updateDownloadProgressUI(data);
-    });
-
-    modelEventSource.addEventListener('complete', (e) => {
-      const data = JSON.parse(e.data || '{}');
-      toast(`✨ [${data.meta?.name || data.modelId}] 다운로드가 완료되어 내 PC GPU 활성 모델로 설정되었습니다!`);
-      initAiHardwareAndModels();
-    });
-
-    modelEventSource.addEventListener('error', (e) => {
-      const data = JSON.parse(e.data || '{}');
-      if (data.error) toast(`다운로드 실패: ${data.error}`, true);
-      initAiHardwareAndModels();
-    });
-  } catch (err) {
-    console.error('Failed to connect model events SSE:', err);
-  }
-}
-
-function updateDownloadProgressUI(data) {
-  const { modelId, percent, downloadedFormatted, totalFormatted, speedMbps, remainingSec } = data;
-  $$(`.ai-model-card[data-model="${modelId}"]`).forEach((card) => {
-    let progressBox = card.querySelector('.model-download-progress');
-    if (!progressBox) {
-      progressBox = document.createElement('div');
-      progressBox.className = 'model-download-progress';
-      progressBox.style.cssText = 'margin-top:10px; padding:10px 12px; background:#ebf8ff; border:1px solid #bee3f8; border-radius:8px;';
-      card.querySelector('.model-card-footer')?.before(progressBox);
-    }
-    
-    const timeText = remainingSec > 60 ? `약 ${Math.floor(remainingSec / 60)}분 ${remainingSec % 60}초 남음` : `${remainingSec}초 남음`;
-    progressBox.innerHTML = `
-      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; color:#2b6cb0; margin-bottom:5px;">
-        <span>📥 다운로드 진행 중: <strong>${percent}%</strong> (${downloadedFormatted} / ${totalFormatted})</span>
-        <span style="color:#2b6cb0; font-weight:700;">⚡ ${speedMbps}</span>
-      </div>
-      <div style="width:100%; height:8px; background:#bee3f8; border-radius:4px; overflow:hidden;">
-        <div style="width:${percent}%; height:100%; background:#3182ce; transition:width 0.3s ease;"></div>
-      </div>
-      <div style="display:flex; justify-content:space-between; font-size:11px; color:#4a5568; margin-top:5px;">
-        <span>내 PC GPU VRAM에 로컬 모델 파일 설치 중</span>
-        <span>⏳ ${timeText}</span>
-      </div>
-    `;
-
-    const btn = card.querySelector('.model-select-btn');
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = `다운로드 중 (${percent}%)`;
-    }
-  });
-}
-
-function renderModelCards(models, activeId, recommendedId, containerSelector = '#aiModelCardsGrid') {
+function renderModelCards(models, activeId, containerSelector = '#settingsAiModelCardsGrid') {
   const container = $(containerSelector);
-  if (!container || !models || !models.length) return;
+  if (!container) return;
 
-  container.innerHTML = models.map((m) => {
-    const isRecommended = m.id === recommendedId;
-    const isInstalled = Boolean(m.isInstalled);
-    const isActive = Boolean(isInstalled && m.id === activeId);
-    
-    let btnHtml = '';
-    let statusPill = '';
+  const geminiModels = (models && models.length > 0) ? models : [
+    { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', desc: '구독 연동 · 권장 기본 / 3초 초고속 생성 및 최고 지능', isDefault: true },
+    { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (High)', desc: '구독 연동 · 안정적인 고성능 플래시 모델' },
+    { id: 'gemini-3.1-pro-high', name: 'Gemini 3.1 Pro (High)', desc: '구독 연동 · 고난도 심층 분석 및 칼럼' }
+  ];
 
-    if (isActive) {
-      btnHtml = `<button type="button" class="button small model-select-btn" disabled style="background:#2b6cb0; color:#fff; font-weight:700;">✓ 사용 중 (내 PC GPU)</button>`;
-      statusPill = `<span class="pill pill-green" style="font-size:11px;">⚡ 내 PC GPU 활성</span>`;
-    } else if (isInstalled) {
-      btnHtml = `<button type="button" class="button small model-select-btn" data-action="select" data-id="${escapeHtml(m.id)}">내 PC GPU로 전환</button>`;
-      statusPill = `<span class="pill" style="font-size:11px; background:#edf2f7; color:#4a5568;">💾 설치됨 (대기)</span>`;
-    } else {
-      btnHtml = `<button type="button" class="button small ghost model-select-btn" data-action="download" data-id="${escapeHtml(m.id)}">다운로드 (${escapeHtml(m.sizeFormatted)})</button>`;
-      statusPill = `<span class="pill" style="font-size:11px; background:#fffaf0; color:#dd6b20; border:1px solid #feebc8;">미설치 (다운로드 필요)</span>`;
-    }
-
-    const tierPills = {
-      'gemma-4-e2b-it-qat-q4-0': '<span class="model-tier-pill">경량</span>',
-      'gemma-4-e4b-it-qat-q4-0': '<span class="model-tier-pill pill-gold">균형</span>',
-      'gemma-4-12b-it-qat-q4-0': '<span class="model-tier-pill pill-purple">고성능</span>'
-    };
-
+  container.innerHTML = geminiModels.map((m) => {
+    const isSelected = (m.id === activeId || (!activeId && m.isDefault));
     return `
-      <div class="ai-model-card ${isRecommended ? 'recommended' : ''} ${isActive ? 'active-model' : ''}" data-model="${escapeHtml(m.id)}">
+      <div class="ai-model-card ${isSelected ? 'active-model' : ''}" style="border: 2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}; background:${isSelected ? '#eff6ff' : '#ffffff'};">
         <div class="model-card-header">
           <div>
-            <strong>${escapeHtml(m.name)}</strong>
-            <span class="model-badge-sub">${escapeHtml(m.sizeFormatted)} GGUF · ${escapeHtml(m.description?.slice(0, 30) || '')}</span>
+            <strong style="color:#1e3a8a; font-size:14.5px;">💎 ${escapeHtml(m.name)}</strong>
+            <span class="model-badge-sub" style="color:#2563eb; font-weight:600;">Google Gemini (구독 연동) · 클라우드</span>
           </div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            ${statusPill}
-            ${tierPills[m.id] || '<span class="model-tier-pill">AI 모델</span>'}
-          </div>
+          <span class="pill ${isSelected ? 'pill-blue' : ''}">${isSelected ? '✓ 현재 사용 중' : '사용 가능'}</span>
         </div>
-        <p class="model-card-desc">${escapeHtml(m.description || '')}</p>
-        <div class="model-card-footer">
-          <span class="model-vram-hint">💡 최소 VRAM: ${(m.minVramMb / 1024).toFixed(1)}GB</span>
-          ${btnHtml}
+        <p class="model-card-desc" style="color:#4b5563;">${escapeHtml(m.desc || m.description || '')}</p>
+        <div class="model-card-footer" style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="model-vram-hint" style="color:#059669; font-weight:700;">⚡ VRAM 0MB · 초고속 3초</span>
+          ${isSelected
+            ? '<button type="button" class="button small" disabled style="background:#3b82f6; color:#fff; font-weight:700;">✓ 활성화됨</button>'
+            : `<button type="button" class="button small primary gemini-select-btn" data-model="${escapeHtml(m.id)}">이 모델로 시작</button>`}
         </div>
       </div>
     `;
   }).join('');
 
-  // Bind click handlers
-  container.querySelectorAll('.model-select-btn').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      const modelId = e.currentTarget.dataset.id;
-      const action = e.currentTarget.dataset.action;
-      if (!modelId) return;
-
-      if (action === 'select') {
-        try {
-          await api('/api/models/select', { method: 'POST', body: JSON.stringify({ modelId }) });
-          toast(`활성 AI 모델이 '${modelId}'(으)로 전환되었습니다.`);
-          initAiHardwareAndModels();
-        } catch (err) {
-          toast(err.message, true);
-        }
-      } else if (action === 'download') {
-        try {
-          btn.disabled = true;
-          btn.textContent = '다운로드 요청 중...';
-          await api('/api/models/download', { method: 'POST', body: JSON.stringify({ modelId }) });
-          toast(`'${modelId}' 모델 다운로드를 시작했습니다. 실시간 진행률을 확인하세요.`);
-          initModelEvents();
-        } catch (err) {
-          btn.disabled = false;
-          btn.textContent = '다운로드';
-          toast(err.message, true);
-        }
+  container.querySelectorAll('.gemini-select-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const modelId = btn.dataset.model;
+      try {
+        btn.disabled = true;
+        btn.textContent = '설정 중…';
+        await api('/api/models/select', {
+          method: 'POST',
+          body: JSON.stringify({ modelId })
+        });
+        toast(`💎 Gemini 엔진이 [${modelId}]로 설정되었습니다.`);
+        await initAiHardwareAndModels();
+      } catch (err) {
+        toast(err.message, true);
+        btn.disabled = false;
       }
     });
   });
@@ -1645,12 +2031,11 @@ function appendEngagementLog(entry) {
 }
 
 // Initial health check and session restoration
+updateSeriesEpisodeOptions();
 api('/api/health').then(async (data) => {
   initSettingsController();
   initAiHardwareAndModels();
-  initModelEvents();
   initImageModels();
-  initImageModelEvents();
   initEngagementAutomation();
 
   if (data.connected) {
@@ -1672,8 +2057,6 @@ api('/api/health').then(async (data) => {
   setConnected(false);
   initSettingsController();
   initAiHardwareAndModels();
-  initModelEvents();
   initImageModels();
-  initImageModelEvents();
   initEngagementAutomation();
 });

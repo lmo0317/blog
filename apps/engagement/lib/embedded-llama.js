@@ -163,15 +163,6 @@ export class EmbeddedLlamaServer extends EventEmitter {
   async _start() {
     if (this.status === 'running') return { status: 'running', port: this.port };
 
-    try {
-      const shared = await fetch(`http://${this.host}:${this.port}/health`, { signal: AbortSignal.timeout(1000) });
-      if (shared.ok) {
-        this.status = 'running';
-        this.serverProcess = null;
-        return { status: 'running', port: this.port, shared: true };
-      }
-    } catch {}
-
     if (!this.modelManager?.getActiveModel) {
       this.status = 'stopped';
       return { status: 'no_model', message: '로컬 AI 모델 관리자가 준비되지 않았습니다.' };
@@ -182,6 +173,32 @@ export class EmbeddedLlamaServer extends EventEmitter {
       return { status: 'no_model', message: '다운로드된 로컬 AI 모델이 없습니다.' };
     }
 
+    try {
+      const shared = await fetch(`http://${this.host}:${this.port}/health`, { signal: AbortSignal.timeout(1000) });
+      if (shared.ok) {
+        let loadedPath = '';
+        try {
+          const modelsResponse = await fetch(`http://${this.host}:${this.port}/v1/models`, { signal: AbortSignal.timeout(1500) });
+          const modelsPayload = await modelsResponse.json();
+          loadedPath = String(modelsPayload?.data?.[0]?.id || modelsPayload?.models?.[0]?.model || '');
+        } catch {}
+        const normalizePath = (value) => String(value || '').replaceAll('/', '\\').toLowerCase();
+        if (loadedPath && normalizePath(loadedPath) !== normalizePath(activeModel.actualPath)) {
+          const message = `다른 모델이 이미 실행 중입니다. 현재 실행 모델을 종료한 뒤 '${activeModel.name}'으로 다시 시도해주세요.`;
+          this.status = 'error';
+          this.setSetup('runtime_error', message, 100);
+          this.addLog(message, 'error');
+          return { status: 'error', message };
+        }
+        this.status = 'running';
+        this.serverProcess = null;
+        this.currentModelPath = activeModel.actualPath;
+        this.currentModelId = activeModel.id;
+        this.setSetup('ready', '로컬 AI가 준비되었습니다. 이제 AI 댓글을 작성할 수 있습니다.', 100);
+        return { status: 'running', port: this.port, modelId: activeModel.id, shared: true };
+      }
+    } catch {}
+
     this.setSetup('checking_runtime', '로컬 AI 실행 환경을 확인하고 있습니다.', 5);
 
     try {
@@ -189,6 +206,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
     } catch (error) {
       this.status = 'error';
       const message = `로컬 AI 실행 엔진 준비 실패: ${error.message}`;
+      this.setSetup('runtime_error', message, 100);
       this.addLog(message, 'error');
       return { status: 'error', message };
     }
@@ -253,10 +271,13 @@ export class EmbeddedLlamaServer extends EventEmitter {
         return { status: 'running', port: this.port, modelId: this.currentModelId };
       } else {
         this.status = 'fallback';
-        return { status: 'fallback', message: '내장 llama-server 구동 대기시간 초과' };
+        const message = '내장 llama-server 구동 대기시간을 초과했습니다.';
+        this.setSetup('runtime_error', message, 100);
+        return { status: 'fallback', message };
       }
     } catch (err) {
       this.status = 'fallback';
+      this.setSetup('runtime_error', `로컬 AI 실행 실패: ${err.message}`, 100);
       this.addLog(`Embedded llama-server start error: ${err.message}`, 'error');
       return { status: 'fallback', message: err.message };
     }

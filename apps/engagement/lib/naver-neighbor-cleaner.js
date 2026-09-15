@@ -494,6 +494,7 @@ class NeighborCleanerManager {
       minDelaySec = 3,
       maxDelaySec = 5
     } = options;
+    const acceptAll = !acceptGenuine && !rejectSpam;
 
     this.state = 'running';
     this.isPaused = false;
@@ -510,7 +511,12 @@ class NeighborCleanerManager {
     };
 
     const blogId = this.browserSession.accountLabel || 'lmo0317';
-    this.log(`🚀 받은 서로이웃 신청 AI 선별 ${dryRun ? '미리보기(Dry-Run)' : '자동 처리'}를 시작합니다.`, 'info');
+    this.log(
+      acceptAll
+        ? `🚀 AI 조건 없이 받은 서로이웃 신청 전체 수락을 시작합니다.${dryRun ? ' (미리보기)' : ''}`
+        : `🚀 받은 서로이웃 신청 AI 선별 ${dryRun ? '미리보기(Dry-Run)' : '자동 처리'}를 시작합니다.`,
+      'info'
+    );
 
     const page = await this.browserSession.context.newPage();
     try {
@@ -529,7 +535,7 @@ class NeighborCleanerManager {
       // Get active neighbor group for acceptances
       let activeGroup = '';
       if (this.neighborGroupStore) {
-        activeGroup = await this.neighborGroupStore.getActiveGroup();
+        activeGroup = this.neighborGroupStore.getActiveGroupName?.() || '';
       }
 
       for (let i = 0; i < requests.length; i++) {
@@ -543,8 +549,10 @@ class NeighborCleanerManager {
         const req = requests[i];
         this.log(`[${i + 1}/${requests.length}] @${req.targetBlogId} (${req.nickname}) 신청 검토 중...`, 'info');
 
-        // Evaluate request with heuristics and AI
-        const evaluation = await evaluateBuddyRequestWithAI(req, this.embeddedLlama);
+        // No filters means explicit accept-all mode; otherwise use heuristics and AI.
+        const evaluation = acceptAll
+          ? { decision: 'accept', reason: 'AI 조건 없음 - 전체 수락', rule: 'accept_all' }
+          : await evaluateBuddyRequestWithAI(req, this.embeddedLlama);
         this.log(`🤖 판정: [${evaluation.decision.toUpperCase()}] ${evaluation.reason}`, evaluation.decision === 'accept' ? 'success' : 'warn');
 
         this.stats.processed++;
@@ -558,7 +566,7 @@ class NeighborCleanerManager {
         // Real Execution
         try {
           if (evaluation.decision === 'accept') {
-            if (acceptGenuine) {
+            if (acceptGenuine || acceptAll) {
               await acceptReceivedBuddyRequest(page, req.targetBlogId, { activeGroup });
               this.stats.accepted++;
               this.log(`✅ @${req.targetBlogId} 서로이웃 신청을 수락했습니다. (그룹: ${activeGroup || '기본'})`, 'success');

@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { COMMENT_PROMPT_VERSION } from './comment-prompt.js';
 
 export const ENGAGEMENT_LIMITS = Object.freeze({
+  postsPerRun: 500,
   likesPerDay: 200,
   commentsPerDay: 100,
   neighborsPerDay: 100,
@@ -94,6 +95,7 @@ export class EngagementAutomationManager extends EventEmitter {
       skippedCount: 0,
       failedCount: 0,
       targetReached: false,
+      neighborLimitReached: false,
       startTime: null,
       endTime: null,
       currentPost: null,
@@ -166,7 +168,7 @@ export class EngagementAutomationManager extends EventEmitter {
       throw new Error('검색 키워드를 입력해주세요.');
     }
 
-    const cleanTarget = Math.min(Math.max(Number(targetCount) || 100, 1), 100);
+    const cleanTarget = Math.min(Math.max(Number(targetCount) || 100, 1), ENGAGEMENT_LIMITS.postsPerRun);
     const targetPerKeyword = Math.ceil(cleanTarget / keywords.length);
     const cleanMinDelay = Math.min(Math.max(Number(minDelay) || 120, 30), 900);
     const cleanMaxDelay = Math.min(Math.max(Number(maxDelay) || 180, cleanMinDelay), 900);
@@ -203,6 +205,7 @@ export class EngagementAutomationManager extends EventEmitter {
       skippedCount: 0,
       failedCount: 0,
       targetReached: false,
+      neighborLimitReached: false,
       startTime: new Date().toISOString(),
       endTime: null,
       currentPost: null,
@@ -301,10 +304,11 @@ export class EngagementAutomationManager extends EventEmitter {
           this.log('🌅 날짜가 바뀌어 서로이웃 일일 차단 상태를 초기화했습니다.', 'info');
         }
         const neighborDailyLimitReached = Number(todaySummary.todayNeighbors || 0) >= this.config.dailyNeighborLimit;
-        if (neighborDailyLimitReached && !blockedActions.has('neighbor')) {
-          blockedActions.add('neighbor');
-          neighborBlockedDate = todayKey;
-          this.log(`🛡️ 설정한 하루 서로이웃 상한(${this.config.dailyNeighborLimit}명)에 도달해 오늘의 이웃 신청을 중단합니다.`, 'warn');
+        if (this.config.doNeighbor && neighborDailyLimitReached) {
+          this.stats.neighborLimitReached = true;
+          this.state = 'completed';
+          this.log(`🏁 서로이웃 신청 ${this.config.dailyNeighborLimit}명에 도달해 전체 자동 작업을 종료합니다.`, 'success');
+          break;
         }
         let neighborPreflight = null;
         let neighborEligible = this.config.doNeighbor && !blockedActions.has('neighbor') && !neighborDailyLimitReached;
@@ -479,7 +483,9 @@ export class EngagementAutomationManager extends EventEmitter {
               } else if (nRes.status === 'mutual_unavailable') {
                 this.log(`⏩ [이웃 스킵] @${post.blogId} 님은 서로이웃 신청을 받지 않는 계정입니다.`, 'info');
               } else if (nRes.status === 'limit_reached') {
-                this.log(`⚠️ 네이버 서로이웃 일일 한도(100명)에 도달했습니다.${neighborRawMessage ? ` 네이버 원문: ${neighborRawMessage}` : ''}`, 'warn');
+                this.stats.neighborLimitReached = true;
+                this.state = 'completed';
+                this.log(`🏁 네이버 서로이웃 일일 한도(100명)에 도달해 전체 자동 작업을 종료합니다.${neighborRawMessage ? ` 네이버 원문: ${neighborRawMessage}` : ''}`, 'success');
                 blockedActions.add('neighbor');
                 neighborBlockedDate = koreaDateKey();
               } else if (nRes.status === 'verification_required') {
@@ -524,6 +530,18 @@ export class EngagementAutomationManager extends EventEmitter {
         } catch (postErr) {
           this.stats.failedCount += 1;
           this.log(`❌ [처리 실패] @${post.blogId} 처리 중 오류: ${postErr.message}`, 'error');
+        }
+
+        if (this.state === 'completed' && this.stats.neighborLimitReached) break;
+
+        if (this.config.doNeighbor && typeof this.historyStore?.getSummary === 'function') {
+          const latestSummary = await this.historyStore.getSummary().catch(() => ({}));
+          if (Number(latestSummary.todayNeighbors || 0) >= this.config.dailyNeighborLimit) {
+            this.stats.neighborLimitReached = true;
+            this.state = 'completed';
+            this.log(`🏁 서로이웃 신청 ${this.config.dailyNeighborLimit}명에 도달해 전체 자동 작업을 종료합니다.`, 'success');
+            break;
+          }
         }
 
         sessionProcessed += 1;

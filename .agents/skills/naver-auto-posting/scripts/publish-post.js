@@ -14,7 +14,10 @@ function parseArgs() {
     contentFile: '',
     category: '',
     tags: [],
-    imagesFile: ''
+    imagesFile: '',
+    update: false,
+    logNo: '',
+    blogId: 'lmo0317'
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -29,6 +32,13 @@ function parseArgs() {
       options.tags = args[++i].split(',').map((t) => t.trim()).filter(Boolean);
     } else if (arg === '--images-file' && i + 1 < args.length) {
       options.imagesFile = args[++i];
+    } else if (arg === '--update') {
+      options.update = true;
+    } else if (arg === '--log-no' && i + 1 < args.length) {
+      options.logNo = args[++i];
+      options.update = true;
+    } else if (arg === '--blog-id' && i + 1 < args.length) {
+      options.blogId = args[++i];
     }
   }
 
@@ -38,7 +48,7 @@ function parseArgs() {
 async function main() {
   const options = parseArgs();
   if (!options.title || !options.contentFile) {
-    console.error('Usage: node publish-post.js --title <title> --content-file <path> [--category <cat>] [--tags tag1,tag2] [--images-file <images.json>]');
+    console.error('Usage: node publish-post.js --title <title> --content-file <path> [--category <cat>] [--tags tag1,tag2] [--images-file <images.json>] [--update --log-no <logNo>]');
     process.exit(1);
   }
 
@@ -47,8 +57,6 @@ async function main() {
   if (options.imagesFile && fs.existsSync(options.imagesFile)) {
     images = JSON.parse(fs.readFileSync(path.resolve(options.imagesFile), 'utf8'));
   }
-
-  console.log(`[publish-post] Publishing: "${options.title}" to category: "${options.category || '기본'}"`);
 
   const browserSession = new NaverBrowserSession({
     headless: false,
@@ -61,15 +69,31 @@ async function main() {
     throw new Error('네이버 로그인 세션이 만료되었거나 연결되지 않았습니다.');
   }
 
-  const result = await browserSession.publishBlogPost({
-    title: options.title,
-    content,
-    tags: options.tags,
-    images,
-    categoryName: options.category
-  });
-
-  console.log(JSON.stringify(result, null, 2));
+  if (options.update && options.logNo) {
+    console.log(`[publish-post] Updating post ${options.logNo}: "${options.title}" to category: "${options.category || '기본'}"`);
+    const prepResult = await browserSession.prepareBlogPostUpdate({
+      blogId: options.blogId,
+      logNo: options.logNo,
+      title: options.title,
+      content,
+      tags: options.tags,
+      images,
+      links: []
+    });
+    console.log(`[publish-post] Prepared update:`, prepResult);
+    const result = await browserSession.confirmPreparedBlogPostUpdate(options.category);
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`[publish-post] Publishing: "${options.title}" to category: "${options.category || '기본'}"`);
+    const result = await browserSession.publishBlogPost({
+      title: options.title,
+      content,
+      tags: options.tags,
+      images,
+      categoryName: options.category
+    });
+    console.log(JSON.stringify(result, null, 2));
+  }
   await browserSession.close().catch(() => {});
 }
 

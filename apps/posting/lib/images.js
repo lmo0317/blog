@@ -19,16 +19,26 @@ export async function searchCommonsImages(query, { fetchImpl = fetch, limit = 9 
     const params = new URLSearchParams({
       action: 'query', generator: 'search', gsrsearch: searchQuery, gsrnamespace: '6',
       gsrlimit: String(Math.min(targetLimit * 2, 18)), prop: 'imageinfo',
-      iiprop: 'url|extmetadata|mime', iiurlwidth: '1600', format: 'json', origin: '*'
+      iiprop: 'url|extmetadata|mime|size', iiurlwidth: '1600', format: 'json'
     });
-    const response = await fetchImpl(`${COMMONS_API}?${params}`, {
-      headers: { 'User-Agent': 'NaverNeighborConsole/0.1 (+local image search)' },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!response.ok) throw new Error(`이미지 검색 오류 (${response.status})`);
-    const data = await response.json();
-    const images = Object.values(data.query?.pages || {}).map(normalizeCommonsImage).filter(Boolean).slice(0, targetLimit);
-    if (images.length) return images;
+    try {
+      const response = await fetchImpl(`${COMMONS_API}?${params}`, {
+        headers: {
+          'User-Agent': 'NaverBlogPostAssistant/1.1 (https://github.com/naver-post; blog-assistant@local.net) Node-Fetch/22.0',
+          'Accept': 'application/json'
+        },
+        signal: AbortSignal.timeout(12000)
+      });
+      if (!response.ok) {
+        console.warn(`[CommonsAPI] HTTP ${response.status} for query "${searchQuery}"`);
+        continue;
+      }
+      const data = await response.json();
+      const images = Object.values(data.query?.pages || {}).map(normalizeCommonsImage).filter(Boolean).slice(0, targetLimit);
+      if (images.length) return images;
+    } catch (err) {
+      console.warn(`[CommonsAPI] Fetch failed for query "${searchQuery}":`, err.message);
+    }
   }
   return [];
 }
@@ -80,15 +90,29 @@ function isSafeImage(image) {
 }
 
 export async function searchOpenImages(query, { fetchImpl = fetch, limit = 12, sourceUrl = '' } = {}) {
-  const [commons, openverse, sourceImages] = await Promise.allSettled([
-    searchCommonsImages(query, { fetchImpl, limit }),
+  let commons = [];
+  try {
+    commons = await searchCommonsImages(query, { fetchImpl, limit });
+  } catch {
+    commons = [];
+  }
+
+  if (commons.length >= 3 && !sourceUrl) {
+    const seen = new Set();
+    return commons
+      .filter((image) => image.downloadUrl && !seen.has(image.downloadUrl) && seen.add(image.downloadUrl))
+      .filter(isSafeImage)
+      .slice(0, Math.min(Math.max(Number(limit) || 12, 1), 18));
+  }
+
+  const [openverse, sourceImages] = await Promise.allSettled([
     searchOpenverseImages(query, { fetchImpl, limit }),
     fetchSourceArticleImages(sourceUrl, { fetchImpl })
   ]);
   const combined = [
     ...(sourceImages.status === 'fulfilled' ? sourceImages.value : []),
-    ...(openverse.status === 'fulfilled' ? openverse.value : []),
-    ...(commons.status === 'fulfilled' ? commons.value : [])
+    ...commons,
+    ...(openverse.status === 'fulfilled' ? openverse.value : [])
   ];
   const seen = new Set();
   return combined
@@ -101,20 +125,24 @@ export async function searchOpenverseImages(query, { fetchImpl = fetch, limit = 
   const cleanQuery = String(query || '').trim();
   if (cleanQuery.length < 2 || cleanQuery.length > 200) throw new Error('이미지 검색어를 2~200자로 입력해주세요.');
   for (const searchQuery of buildSearchVariants(cleanQuery)) {
-    const params = new URLSearchParams({
-      q: searchQuery,
-      page_size: String(Math.min(Math.max(Number(limit) || 12, 1), 20)),
-      license_type: 'commercial',
-      mature: 'false'
-    });
-    const response = await fetchImpl(`${OPENVERSE_API}?${params}`, {
-      headers: { 'User-Agent': 'NaverNeighborConsole/0.1 (+local image search)' },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!response.ok) throw new Error(`Openverse 이미지 검색 오류 (${response.status})`);
-    const data = await response.json();
-    const images = (data.results || []).map(normalizeOpenverseImage).filter(Boolean).filter(isSafeImage);
-    if (images.length) return images;
+    try {
+      const params = new URLSearchParams({
+        q: searchQuery,
+        page_size: String(Math.min(Math.max(Number(limit) || 12, 1), 20)),
+        license_type: 'commercial',
+        mature: 'false'
+      });
+      const response = await fetchImpl(`${OPENVERSE_API}?${params}`, {
+        headers: { 'User-Agent': 'NaverBlogPostAssistant/1.1 (https://github.com/naver-post; blog-assistant@local.net)' },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const images = (data.results || []).map(normalizeOpenverseImage).filter(Boolean).filter(isSafeImage);
+      if (images.length) return images;
+    } catch {
+      // Fall through to next variant or commons
+    }
   }
   return [];
 }
@@ -205,14 +233,14 @@ export async function cleanupDownloadedImages(images = []) {
 
 export function appendImageAttributions(content, images = []) {
   if (!images.length) return content;
-  if (images.every((image) => image.isAiGenerated || image.license?.includes('Gemma'))) {
+  if (images.every((image) => image.isAiGenerated || image.license?.includes('Gemini') || image.license?.includes('Imagen') || image.license?.includes('Gemma'))) {
     return String(content).trim();
   }
   if (images.every((image) => image.license === '핫딜 상품 이미지')) {
     return `${String(content).trim()}\n\n이미지 출처 | 각 상품 및 판매 페이지`;
   }
   const lines = images
-    .filter((image) => !image.isAiGenerated && !image.license?.includes('Gemma'))
+    .filter((image) => !image.isAiGenerated && !image.license?.includes('Gemini') && !image.license?.includes('Imagen') && !image.license?.includes('Gemma'))
     .map((image, index) => {
     const author = image.author || '상품/출처 페이지 참조';
     return `${index + 1}. ${image.title} — ${author} / ${image.license}\n출처: ${image.pageUrl}`;
@@ -226,20 +254,35 @@ function normalizeCommonsImage(page) {
   const metadata = info?.extmetadata || {};
   const license = stripHtml(metadata.LicenseShortName?.value);
   const mime = String(info?.mime || '').toLowerCase();
-  const downloadUrl = safeUrl(info?.thumburl || info?.url, 'upload.wikimedia.org');
-  const pageUrl = safeUrl(info?.descriptionurl, 'commons.wikimedia.org');
+  const downloadUrl = safeUrl(info?.thumburl || info?.url, 'wikimedia.org');
+  const pageUrl = safeUrl(info?.descriptionurl, 'wikimedia.org');
   if (!downloadUrl || !pageUrl || !MIME_EXTENSION[mime] || !ALLOWED_LICENSE.test(license)) return null;
+
+  const rawTitle = String(page.title || '').replace(/^File:/i, '').trim();
+  const nonPhotoRegex = /\b(map|diagram|coat[ _]of[ _]arms|flag|stamp|coin|banknote|currency|chart|graph|icon|logo|drawing|sketch|plan|floor[ _]plan|vector|svg)\b/i;
+  if (nonPhotoRegex.test(rawTitle)) return null;
+
+  const width = Number(info?.thumbwidth || info?.width) || 0;
+  const height = Number(info?.thumbheight || info?.height) || 0;
+  if (width > 0 && height > 0) {
+    if (width < 500 || height < 350) return null;
+    const ratio = width / height;
+    if (ratio < 0.55 || ratio > 2.2) return null;
+  }
+
   return {
     id: String(page.pageid || ''),
-    title: String(page.title || '').replace(/^File:/i, '').trim().slice(0, 200),
+    title: rawTitle.slice(0, 200),
     previewUrl: downloadUrl,
     downloadUrl,
     pageUrl,
     author: stripHtml(metadata.Artist?.value || metadata.Credit?.value).slice(0, 300),
     license,
     licenseUrl: safeUrl(metadata.LicenseUrl?.value),
-    description: stripHtml(metadata.ImageDescription?.value || metadata.ObjectName?.value).slice(0, 300)
-    , searchText: ''
+    description: stripHtml(metadata.ImageDescription?.value || metadata.ObjectName?.value).slice(0, 300),
+    width,
+    height,
+    searchText: ''
   };
 }
 
@@ -249,10 +292,15 @@ function normalizeOpenverseImage(item) {
   const pageUrl = safeUrl(item?.foreign_landing_url) || originalUrl;
   const license = formatOpenverseLicense(item?.license, item?.license_version);
   if (!originalUrl || !pageUrl || !ALLOWED_LICENSE.test(license) || item?.mature === true) return null;
+
+  const rawTitle = String(item.title || '고화질 이미지').trim();
+  const nonPhotoRegex = /\b(map|diagram|coat[ _]of[ _]arms|flag|stamp|coin|banknote|currency|chart|graph|icon|logo|drawing|sketch|plan)\b/i;
+  if (nonPhotoRegex.test(rawTitle)) return null;
+
   const tags = (Array.isArray(item.tags) ? item.tags : []).map((tag) => String(tag?.name || '')).filter(Boolean).slice(0, 12);
   return {
     id: String(item.id || ''),
-    title: String(item.title || '고화질 이미지').trim().slice(0, 200),
+    title: rawTitle.slice(0, 200),
     previewUrl: previewUrl,
     downloadUrl: originalUrl,
     pageUrl,
@@ -310,7 +358,14 @@ function formatOpenverseLicense(name, version) {
 function safeUrl(value, expectedHost = '') {
   try {
     const url = new URL(String(value || ''));
-    if (url.protocol !== 'https:' || (expectedHost && url.hostname !== expectedHost)) return '';
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return '';
+    if (expectedHost) {
+      if (expectedHost === 'wikimedia.org' || expectedHost === 'upload.wikimedia.org') {
+        if (!url.hostname.endsWith('wikimedia.org')) return '';
+      } else if (!url.hostname.endsWith(expectedHost)) {
+        return '';
+      }
+    }
     return url.href;
   } catch {
     return '';

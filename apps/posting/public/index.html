@@ -14,20 +14,20 @@
   <main class="shell">
     <header class="app-header">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <div class="brand"><span class="brand-mark">N</span> 이웃메이트 Post <span class="pill">LOCAL GPU</span></div>
-        <div class="header-engine-indicator" style="display:flex; align-items:center; gap:8px; background:#e6fffa; border:1px solid #b2f5ea; border-radius:10px; padding:6px 14px; cursor:pointer;" id="globalEngineStatusBox" title="클릭하여 AI 모델 설정을 확인하세요">
-          <span style="font-size:12px; color:#234e52; font-weight:600;">🚀 AI 엔진:</span>
-          <strong id="globalEngineStatusText" style="font-size:13px; color:#285e61;">⚡ 내 PC 로컬 GPU (모델 확인 중)</strong>
-          <span class="pill pill-green small" style="font-size:11px;">설정 ⚙️</span>
+        <div class="brand"><span class="brand-mark">N</span> 이웃메이트 Post <span class="pill" style="background:#e0e7ff; color:#3730a3; font-weight:700;">GEMINI AI</span></div>
+        <div class="header-engine-indicator" style="display:flex; align-items:center; gap:8px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:6px 14px; cursor:pointer;" id="globalEngineStatusBox" title="클릭하여 AI 모델 설정을 확인하세요">
+          <span style="font-size:12px; color:#1e40af; font-weight:600;">🚀 AI 엔진:</span>
+          <strong id="globalEngineStatusText" style="font-size:13px; color:#1d4ed8;">💎 Google Gemini (agy 연동)</strong>
+          <span class="pill pill-blue small" style="font-size:11px;">설정 ⚙️</span>
         </div>
       </div>
-      <p style="margin-top:6px;">네이버 블로그 AI 자동 포스팅 전용 프로그램</p>
+      <p style="margin-top:6px;">구글 Gemini (agy 구독 연동) AI 자동 포스팅 프로그램</p>
     </header>
 
     <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
       <button class="workspace-tab" id="settingsTab" type="button" role="tab" aria-selected="false" aria-controls="settingsWorkspace" data-tab="settings" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">⚙️</span>
-        <span><strong>공통 환경 설정</strong><small>네이버 계정 &amp; Gemma AI 모델</small></span>
+        <span><strong>공통 환경 설정</strong><small>네이버 계정 &amp; Gemini AI 설정</small></span>
       </button>
       <button class="workspace-tab active" id="neighborTab" type="button" role="tab" aria-selected="true" aria-controls="neighborWorkspace" data-tab="neighbor">
         <span class="tab-icon" aria-hidden="true">＋</span>
@@ -35,7 +35,7 @@
       </button>
       <button class="workspace-tab" id="engagementTab" type="button" role="tab" aria-selected="false" aria-controls="engagementWorkspace" data-tab="engagement" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">❤️</span>
-        <span><strong>공감 & AI 맞춤 댓글</strong><small>내 PC 로컬 GPU 자동 소통</small></span>
+        <span><strong>공감 & AI 맞춤 댓글</strong><small>Gemini 초고속 자동 소통</small></span>
       </button>
       <button class="workspace-tab" id="publishTab" type="button" role="tab" aria-selected="false" aria-controls="publishWorkspace" data-tab="publish" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">✍️</span>
@@ -80,36 +80,36 @@
         </div>
       </section>
 
-      <!-- Section 2: Pure Local GPU Gemma AI Model Hub -->
+      <!-- Section 2: Google Gemini (agy) Cloud AI Hub -->
       <section class="panel" style="margin-top:20px;">
         <div class="panel-heading">
-          <div><span class="eyebrow">CONFIG 02 · LOCAL GPU AI</span><h2>내 PC 로컬 GPU · 구글 Gemma AI 모델 관리</h2></div>
-          <span class="pill pill-green" id="currentEngineBadge">⚡ 내 PC 로컬 GPU</span>
+          <div><span class="eyebrow">CONFIG 02 · GEMINI AI ENGINE</span><h2>💎 Google Gemini (agy 연동) &amp; AI 엔진 설정</h2></div>
+          <span class="pill pill-blue" id="currentEngineBadge">💎 Google Gemini (agy)</span>
         </div>
 
         <!-- Current Active Model Summary Card -->
-        <div class="active-ai-summary-box" style="background:#f0fff4; border:2px solid #38a169; border-radius:12px; padding:16px 20px; margin-bottom:20px;">
+        <div class="active-ai-summary-box" style="background:#eff6ff; border:2px solid #3b82f6; border-radius:12px; padding:16px 20px; margin-bottom:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <strong style="color:#22543d; font-size:15px; display:flex; align-items:center; gap:6px;">
-              <span style="font-size:18px;">🟢</span> 내 PC 로컬 GPU 연산 가동 중
+            <strong style="color:#1e40af; font-size:15px; display:flex; align-items:center; gap:6px;">
+              <span style="font-size:18px;">💎</span> Google Gemini 클라우드 엔진 연동 활성화
             </strong>
-            <span class="pill pill-green" id="activeAiStatusPill" style="font-weight:700;">비용 0원 · 오프라인 완전 독립</span>
+            <span class="pill pill-blue" id="activeAiStatusPill" style="font-weight:700;">구독 연동 · PC 부하 0% · 초고속</span>
           </div>
-          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; font-size:13px; color:#276749;">
-            <div><strong>연산 방식:</strong> <span id="summaryEngineType">⚡ 내 PC 로컬 GPU (VRAM 가속)</span></div>
-            <div><strong>활성 모델:</strong> <span id="summaryModelName">모델 확인 중</span></div>
-            <div><strong>로컬 주소:</strong> <span id="summaryEndpointUrl">http://127.0.0.1:8089</span></div>
+          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; font-size:13px; color:#1e3a8a;">
+            <div><strong>연산 방식:</strong> <span id="summaryEngineType">💎 Google Gemini (agy CLI)</span></div>
+            <div><strong>활성 모델:</strong> <span id="summaryModelName">Gemini 3.8 Flash (High)</span></div>
+            <div><strong>응답 속도:</strong> <span id="summaryEndpointUrl">초고속 3초 (클라우드 가속)</span></div>
           </div>
-          <p style="margin:10px 0 0; font-size:12px; color:#2f855a; border-top:1px dashed #9ae6b4; padding-top:8px;" id="localGpuSummaryText">
-            GPU 사양 감지 중...
+          <p style="margin:10px 0 0; font-size:12px; color:#2563eb; border-top:1px dashed #bfdbfe; padding-top:8px;" id="localGpuSummaryText">
+            구독 중인 Gemini를 agy로 연동하여 로컬 VRAM/GPU 소모 없이 최고의 블로그 글과 맞춤 이미지를 생성합니다.
           </p>
         </div>
 
         <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
           <label style="font-size:14px; font-weight:700; color:#2d3748; margin:0;">
-            사용할 구글 Gemma 모델을 선택하세요
+            사용할 AI 엔진 및 Gemini 모델을 선택하세요
           </label>
-          <span style="font-size:12px; color:#718096;" id="hardwareRecommendText">100% GPU 가속으로 비용 0원에 1초 만에 생성</span>
+          <span style="font-size:12px; color:#718096;" id="hardwareRecommendText">구독 중인 Google Gemini로 3초 만에 완성</span>
         </div>
         <div class="ai-models-grid" id="settingsAiModelCardsGrid" aria-label="사용 가능한 AI 모델 목록"></div>
       </section>
@@ -119,7 +119,7 @@
           <div><span class="eyebrow">CONFIG 03 · IMAGE AI</span><h2>포스팅 이미지 모델 관리</h2></div>
           <span class="pill pill-green" id="currentImageEngineBadge">이미지 모델 확인 중</span>
         </div>
-        <p style="margin:0 0 14px; color:#4a5568; font-size:13px;">온라인 호환 엔진 또는 내 PC에서 실행하는 로컬 모델을 선택합니다. 로컬 모델과 실행 패키지는 이 프로그램의 전용 폴더에만 설치됩니다.</p>
+        <p style="margin:0 0 14px; color:#4a5568; font-size:13px;">Google Imagen(agy 연동) 또는 초고속 온라인 FLUX를 선택합니다. 클라우드에서 빠르고 아름답게 고화질 이미지를 완성합니다.</p>
         <div class="ai-models-grid" id="settingsImageModelCardsGrid" aria-label="사용 가능한 이미지 모델 목록"></div>
       </section>
     </section>
@@ -360,16 +360,16 @@
     <!-- ---------------------------------------------------------------------- -->
     <section class="workspace-panel hidden" id="engagementWorkspace" role="tabpanel" aria-labelledby="engagementTab" data-tab-panel="engagement">
       
-      <!-- Hardware & VRAM AI Model Hub Card -->
+      <!-- Gemini Cloud AI Hub Card -->
       <section class="panel" id="aiHardwarePanel">
         <div class="panel-heading">
           <div>
-            <span class="eyebrow">AI ENGINE & HARDWARE</span>
-            <h2>내 PC 그래픽(VRAM) & AI 모델 관리자</h2>
+            <span class="eyebrow">AI ENGINE · GOOGLE GEMINI</span>
+            <h2>💎 Google Gemini (agy 연동) AI 댓글 엔진</h2>
           </div>
           <div class="header-badges">
-            <span class="daily-badge" id="gpuSpecBadge">🎮 그래픽 감지 중...</span>
-            <span class="status online" id="aiEngineStatus"><i></i> AI 엔진 준비됨</span>
+            <span class="daily-badge" id="gpuSpecBadge" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;">💎 Google Cloud TPU 가속</span>
+            <span class="status online" id="aiEngineStatus"><i></i> Gemini 3.8 Flash 활성</span>
           </div>
         </div>
 
@@ -382,56 +382,10 @@
           <button type="button" class="button small primary" id="engGoLoginBtn">계정 연결하러 가기 →</button>
         </div>
 
-        <div class="model-hub-intro">
-          <p id="hardwareRecommendText">내 컴퓨터의 그래픽카드(VRAM)에 최적화된 로컬 AI 모델을 선택하여 <strong>비용 0원</strong>으로 블로그 사진과 본문을 분석하고 자연스러운 맞춤 댓글을 자동 작성합니다.</p>
-        </div>
-
-        <!-- 3-Tier Model Cards Grid -->
-        <div class="ai-model-cards-grid" id="aiModelCardsGrid">
-          <div class="ai-model-card" data-model="gemma-4-e2b">
-            <div class="model-card-header">
-              <div>
-                <strong>모델 목록 불러오는 중</strong>
-                <span class="model-badge-sub">2.3B Effective · 1.4 GB</span>
-              </div>
-              <span class="model-tier-pill">초고속 경량</span>
-            </div>
-            <p class="model-card-desc">저사양 노트북이나 내장 그래픽에서도 <strong>1초 컷</strong>으로 빠른 칭찬 댓글을 생성합니다. (RAM 2.5GB 소모)</p>
-            <div class="model-card-footer">
-              <span class="model-vram-hint">💡 권장: VRAM 3GB 이상 / CPU</span>
-              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-e2b">사용하기</button>
-            </div>
-          </div>
-
-          <div class="ai-model-card recommended" data-model="gemma-4-e4b">
-            <div class="model-card-header">
-              <div>
-                <strong>모델 목록 불러오는 중</strong>
-                <span class="model-badge-sub">4.5B Effective · 2.8 GB</span>
-              </div>
-              <span class="model-tier-pill pill-gold">밸런스 고품질</span>
-            </div>
-            <p class="model-card-desc">이미지 속 디테일(음식, 인테리어, 소품 등)을 정밀하게 파악하여 <strong>가장 자연스러운 감상평</strong>을 작성합니다.</p>
-            <div class="model-card-footer">
-              <span class="model-vram-hint">💡 권장: VRAM 6GB~8GB (RTX 3060/4060)</span>
-              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-e4b">사용하기</button>
-            </div>
-          </div>
-
-          <div class="ai-model-card" data-model="gemma-4-12b">
-            <div class="model-card-header">
-              <div>
-                <strong>모델 목록 불러오는 중</strong>
-                <span class="model-badge-sub">12B Flagship · 7.8 GB</span>
-              </div>
-              <span class="model-tier-pill pill-purple">최고급 고지능</span>
-            </div>
-            <p class="model-card-desc">최고 수준의 멀티모달 이해력과 장문 포스팅까지 완벽하게 소화하는 플래그십 모델입니다.</p>
-            <div class="model-card-footer">
-              <span class="model-vram-hint">💡 권장: VRAM 12GB~16GB+ (RTX 4070/5080)</span>
-              <button type="button" class="button small model-select-btn" data-action="select" data-id="gemma-4-12b">사용하기</button>
-            </div>
-          </div>
+        <div class="model-hub-intro" style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px 18px; margin-top:10px;">
+          <p id="hardwareRecommendText" style="margin:0; font-size:13.5px; color:#1e40af; line-height:1.5;">
+            구독 중인 <strong>Google Gemini (agy)</strong> 클라우드 AI 엔진으로 PC 그래픽카드(VRAM) 소모 없이 <strong>초고속 1초 만에</strong> 블로그 본문과 이미지를 분석하여 자연스러운 맞춤 댓글을 자동 작성합니다.
+          </p>
         </div>
       </section>
 
@@ -660,7 +614,7 @@
         <div class="panel-heading publish-heading">
           <div><span class="eyebrow">AI AUTO POSTING</span><h2>네이버 블로그 AI 자동 포스팅 (자동 게시)</h2></div>
           <div class="publish-statuses" style="display:flex; align-items:center; gap:8px;">
-            <span class="status" id="llmStatus"><i></i> 112 로컬 LLM</span>
+            <span class="status online" id="llmStatus"><i></i> 💎 Gemini 3.8 Flash (agy)</span>
             <span class="status" id="publishAccountStatus"><i></i> 네이버 연결 안 됨</span>
           </div>
         </div>
@@ -692,9 +646,39 @@
             </div>
 
             <div class="publish-step-heading" style="margin-top:20px;">
-              <div><b>2</b><span><strong>AI 글 재해석 스타일 및 그림 화풍 설정</strong><small>원하는 글 분위기와 AI 그림 화풍을 선택하세요.</small></span></div>
+              <div><b>2</b><span><strong>연재 기획 및 글 재해석 스타일 설정</strong><small>몇부작 연재 기획, 글의 깊이와 분위기, 맞춤 AI 그림 화풍을 선택하세요.</small></span></div>
             </div>
-            <div class="publish-options" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:16px; margin-top:12px;">
+
+            <!-- Series Config Card -->
+            <div class="series-config-card" style="margin-top:14px; padding:14px 16px; background:#f0f9f4; border:1.5px solid #cce8d9; border-radius:12px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                <span style="font-size:18px;">📚</span>
+                <div>
+                  <strong style="font-size:14px; color:#1a3d2e;">연재 기획 및 심층 깊이 설정</strong>
+                  <span style="font-size:12px; color:#4e7a64; margin-left:6px;">주제를 여러 회차로 나누어 겉핥기 없이 각 편마다 심층적으로 파고듭니다.</span>
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+                <label style="font-size:13px; font-weight:600; color:#2d4a3e;">연재 기획 (몇부작 설정)
+                  <select id="articleSeriesCount" class="custom-select" style="margin-top:6px;">
+                    <option value="1" selected>단편 완결형 (한 편에 집중 심층 분석)</option>
+                    <option value="2">2부작 기획 (상/하편 완벽 마스터)</option>
+                    <option value="3">3부작 정규 시리즈 (기초→실전→심화 완결)</option>
+                    <option value="5">5부작 대기획 (마스터클래스 풀코스)</option>
+                  </select>
+                </label>
+                <label id="seriesEpisodeWrap" class="hidden" style="font-size:13px; font-weight:600; color:#2d4a3e;">현재 작성할 회차 선택
+                  <select id="articleSeriesEpisode" class="custom-select" style="margin-top:6px;">
+                    <option value="1" selected>[1편] 기초 개념 및 핵심 원리</option>
+                  </select>
+                </label>
+              </div>
+              <div id="seriesGuidance" class="hidden" style="margin-top:10px; font-size:12px; color:#2e6a4b; background:#e2f4ea; padding:8px 12px; border-radius:8px; line-height:1.5;">
+                💡 <b>시리즈 연재 혜택:</b> 상단에 전체 연재 목차 배너가 자동 삽입되고, 하단에 다음 편 예고 및 이웃 추가 유도가 연결되어 방문자 체류 시간과 구독률이 극대화됩니다.
+              </div>
+            </div>
+
+            <div class="publish-options" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:16px; margin-top:14px;">
               <label>글 분위기 (말투)
                 <select id="articleTone" class="custom-select">
                   <option value="friendly" selected>친근한 대화체 (~해요, 꿀팁 공유)</option>
@@ -703,16 +687,16 @@
                   <option value="column">인사이트 칼럼형 (트렌드 분석 및 시각 제시)</option>
                 </select>
               </label>
-              <label>글 분량
+              <label>글 분량 (깊이)
                 <select id="articleLength" class="custom-select">
-                  <option value="short">짧게 (700~1,000자)</option>
-                  <option value="medium" selected>보통 (1,200~1,800자)</option>
-                  <option value="long">길게 (2,000~3,000자)</option>
+                  <option value="short">요약 압축형 (1,000~1,500자)</option>
+                  <option value="medium" selected>표준 심층 분석 (2,000~2,800자 · 권장)</option>
+                  <option value="long">전문가 마스터클래스 (3,200~4,500자)</option>
                 </select>
               </label>
               <label>AI 그림 화풍 (스타일)
                 <select id="articleImageStyle" class="custom-select">
-                  <option value="photorealistic" selected>📸 실사 고화질 사진</option>
+                  <option value="photorealistic" selected>📸 실사 고화질 사진 (생생한 실제 포토)</option>
                   <option value="cartoon_3d">🎨 3D 픽사/디즈니 카툰</option>
                   <option value="anime_webtoon">🖌️ 감성 애니/웹툰 일러스트</option>
                   <option value="digital_art">🖼️ 트렌디 디지털 아트</option>
@@ -720,12 +704,13 @@
               </label>
               <label>적용할 AI 모델
                 <select id="articleModelSelect" class="custom-select ai-model-global-select">
-                  <option value="" selected>현재 활성 로컬 모델</option>
+                  <option value="gemini-3.8-flash-high" selected>💎 Gemini 3.8 Flash (agy 권장)</option>
                 </select>
               </label>
-              <label>이미지 생성 모델
+              <label style="grid-column: 1 / -1;">이미지 생성 모델
                 <select id="articleImageModelSelect" class="custom-select image-model-global-select">
-                  <option value="pollinations" selected>온라인 FLUX 우선 이미지 (빠름)</option>
+                  <option value="gemini-imagen" selected>💎 Google Imagen (Gemini 구독 연동 · 스마트 고화질)</option>
+                  <option value="real-photo">📸 고화질 실사 라이프스타일 포토 (추천 · 100% 무결점)</option>
                 </select>
               </label>
             </div>
@@ -741,12 +726,12 @@
             </label>
             <div id="autoPostProgress" class="hidden" role="status" aria-live="polite" style="margin-top:14px; padding:12px 14px; border-radius:10px; background:#edf6ff; color:#24527a; font-weight:700;"></div>
             <div class="prompt-action-row">
-              <button class="button ghost" id="openPromptJsonBtn" type="button">⚙️ 시스템 프롬프트 JSON</button>
-              <small>JSON을 열어 현재 명령을 확인하고 직접 수정할 수 있습니다.</small>
+              <button class="button ghost" id="openPromptJsonBtn" type="button">⚙️ AI 프롬프트 설정 (글작성 / 이미지 분리)</button>
+              <small>글생성 프롬프트와 이미지 생성 프롬프트를 각각 일반 텍스트로 자유롭게 커스텀할 수 있습니다.</small>
             </div>
             <div class="draft-action" style="margin-top:18px;">
               <button class="button primary large" type="submit" id="articleDraftBtn" style="width:100%; height:50px; font-size:16px;">
-                <span class="btn-icon">✨</span> <strong>LLM 글 작성 + 이미지 자동 생성</strong>
+                <span class="btn-icon">✨</span> <strong>Gemini (agy) 글 작성 + 맞춤 이미지 자동 생성</strong>
               </button>
             </div>
           </form>
@@ -758,6 +743,73 @@
             <div><b>3</b><span><strong>검토하고 네이버 블로그에 발행</strong><small>작성된 글과 자동 배치된 고화질 이미지를 확인하고 내 블로그에 바로 게시합니다.</small></span></div>
             <span class="model-badge" id="draftModel"></span>
           </div>
+
+          <!-- Multi-Episode Series Overview & Navigation Dashboard -->
+          <div id="seriesPostBanner" class="hidden" style="
+            margin-top: 14px;
+            margin-bottom: 18px;
+            padding: 16px 20px;
+            background: #f8fafc;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+          ">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:24px;">📚</span>
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <strong id="seriesBannerTitle" style="font-size:16px; color:#0f172a; font-weight:700;">[기획 연재] 3부작 전편 완결</strong>
+                    <span id="seriesActiveEpBadge" style="font-size:12px; font-weight:700; color:#15803d; background:#dcfce7; border:1px solid #bbf7d0; border-radius:9999px; padding:2px 10px;">제1편 편집 중</span>
+                  </div>
+                  <div id="seriesBannerRoadmap" style="font-size:13px; color:#475569; margin-top:3px;"></div>
+                </div>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button type="button" id="nextSeriesPromptBtn" class="button ghost" style="padding:6px 12px; font-size:12px; height:auto; white-space:nowrap; border-color:#99d4b3; color:#1e5e3a; background:#ffffff;">다음 회차 이어서 작성 ➡️</button>
+                <button type="button" id="toggleAllSeriesViewBtn" class="button ghost" style="
+                  padding: 6px 14px;
+                  font-size: 13px;
+                  font-weight: 600;
+                  height: auto;
+                  border-color: #03c75a;
+                  color: #03c75a;
+                  border-radius: 8px;
+                  display: flex;
+                  align-items: center;
+                  gap: 6px;
+                  background: #ffffff;
+                ">
+                  <span>📖</span> <span id="toggleAllSeriesText">3부작 전편 한번에 펼쳐보기</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Series Episode Tab Navigation & Cards Grid (Shows all episodes at a glance) -->
+            <div id="seriesEpisodeTabsBar" class="series-tabs-bar">
+              <div id="seriesEpisodeCardsGrid" style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                gap: 12px;
+                margin-top: 14px;
+              "></div>
+            </div>
+
+            <!-- Hidden tabs container for legacy compatibility -->
+            <div id="seriesEpisodeTabs" class="hidden" style="display:none;"></div>
+
+            <!-- Series All Episodes Full Continuous View Drawer (Collapsible) -->
+            <div id="seriesAllContinuousView" class="hidden" style="
+              margin-top: 16px;
+              padding: 16px 20px;
+              background: #ffffff;
+              border: 1.5px solid #e2e8f0;
+              border-radius: 12px;
+              max-height: 560px;
+              overflow-y: auto;
+            "></div>
+          </div>
+
           <label>글 제목<input id="postTitle" required minlength="2" maxlength="200"></label>
           <label>글 본문<textarea id="postContent" required minlength="20" maxlength="50000"></textarea></label>
           <label>해시태그<input id="postTags" maxlength="300" placeholder="쉼표로 구분: 건강정보, 생활팁, 자기관리"></label>
@@ -765,6 +817,7 @@
             <div class="image-search-row">
               <label>관련 이미지 (소제목별 자동 배치)<input id="imageQuery" maxlength="200" placeholder="추가 검색어"></label>
               <button class="button ghost" id="imageSearchButton" type="button">이미지 추가 검색</button>
+              <button class="button ghost" id="generateEpisodeImagesBtn" type="button" style="border-color:#2db400; color:#1f8200;">🎨 이 회차 맞춤 AI 이미지 생성</button>
             </div>
             <p class="image-note">글의 각 소제목과 관련된 이미지가 자동 배치되며 블로그 발행 시 함께 등록됩니다.</p>
             <div class="image-empty" id="imageEmpty">글을 작성하면 관련 이미지를 자동으로 준비합니다.</div>
@@ -773,7 +826,19 @@
           <div class="source-card hidden" id="postSource"></div>
           <div class="publish-confirm">
             <label><input type="checkbox" id="publishConfirm"> 제목·본문·이미지를 검토했으며, 내 네이버 블로그에 바로 게시 발행하는 데 동의합니다.</label>
-            <button class="button primary" id="publishButton" type="submit" disabled>네이버 블로그에 게시 발행</button>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <button class="button primary" id="publishButton" type="submit" disabled>네이버 블로그에 게시 발행</button>
+              <button class="button secondary hidden" id="publishAllSeriesBtn" type="button" style="
+                background: #03c75a;
+                color: #ffffff;
+                font-weight: 700;
+                border: none;
+                padding: 10px 18px;
+                border-radius: 10px;
+                cursor: pointer;
+                box-shadow: 0 2px 6px rgba(3,199,90,0.25);
+              ">🚀 3부작 전편 순차 자동 발행</button>
+            </div>
           </div>
           <p class="publish-help hidden" id="publishHelp">네이버 계정 연결이 필요합니다. 상단 ‘환경 설정’에서 계정을 연결해주세요.</p>
           <a class="published-link hidden" id="publishedLink" target="_blank" rel="noopener noreferrer">발행된 글 보기 ↗</a>
@@ -783,15 +848,57 @@
 
     <footer>이 도구는 네이버 공식 서비스가 아닙니다. 자동입력 방지·2단계 인증을 우회하지 않습니다.</footer>
   </main>
-  <dialog id="promptJsonDialog" class="prompt-json-dialog">
-    <form method="dialog" class="prompt-json-card">
-      <div class="prompt-json-heading"><div><strong>시스템 프롬프트 JSON 편집</strong><small>주제와 내용은 템플릿 변수에 자동으로 들어갑니다.</small></div><button class="button ghost" value="cancel" type="submit">닫기</button></div>
-      <textarea id="promptJsonEditor" spellcheck="false" aria-label="시스템 프롬프트 JSON"></textarea>
-      <p class="prompt-json-help"><code>{{topic}}</code> = 포스팅 주제, <code>{{content}}</code> = 간략한 내용과 추가 요청. 올바른 JSON만 전달됩니다.</p>
-      <div class="prompt-json-actions"><button class="button ghost" id="resetPromptJsonBtn" type="button">기본값 복원</button><button class="button primary" id="usePromptPublishBtn" type="button">이 프롬프트로 발행</button></div>
+  <dialog id="promptJsonDialog" class="prompt-json-dialog" style="max-width:780px; width:92%;">
+    <form method="dialog" class="prompt-json-card" style="max-width:100%; padding:24px;">
+      <div class="prompt-json-heading" style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+        <div>
+          <strong style="font-size:17px; color:#15201a;">AI 프롬프트 설정 (글생성 / 이미지생성 분리)</strong>
+          <small style="display:block; color:#607369; margin-top:3px;">복잡한 JSON 없이, 글생성 프롬프트와 이미지 생성 프롬프트를 각각 일반 텍스트로 자유롭게 수정합니다.</small>
+        </div>
+        <button class="button ghost" value="cancel" type="submit" style="padding:4px 10px; font-size:13px;">닫기 ✕</button>
+      </div>
+
+      <!-- Prompt Tabs -->
+      <div class="prompt-tab-bar" style="display:flex; gap:8px; border-bottom:1.5px solid #e0e8e3; margin-bottom:14px; padding-bottom:8px;">
+        <button type="button" id="tabWritingPromptBtn" class="prompt-tab active" style="padding:8px 16px; border-radius:8px; font-weight:700; border:none; background:#03c75a; color:#fff; cursor:pointer;">
+          ✍️ 글생성 프롬프트
+        </button>
+        <button type="button" id="tabImagePromptBtn" class="prompt-tab" style="padding:8px 16px; border-radius:8px; font-weight:600; border:1px solid #dce3df; background:#f8faf9; color:#4a5568; cursor:pointer;">
+          🎨 이미지 생성 프롬프트
+        </button>
+      </div>
+
+      <!-- Tab 1: Writing Prompt -->
+      <div id="writingPromptTabContent">
+        <label style="display:block; font-size:13px; font-weight:700; color:#2d3748; margin-bottom:6px;">
+          글생성 지침 (문체, 단락 구성, 3대 원칙 및 작성 규칙)
+        </label>
+        <textarea id="writingPromptEditor" rows="13" spellcheck="false" style="width:100%; padding:12px 14px; border:1.5px solid #dce3df; border-radius:10px; font-size:13.5px; line-height:1.6; color:#1a202c; resize:vertical; box-sizing:border-box;" placeholder="글 작성 시 AI가 준수할 규칙을 입력하세요."></textarea>
+        <small style="display:block; color:#718096; margin-top:6px;">💡 어조(~해요 체), 소제목 구성, 구체적 수치 제시 및 실천 팁 등 글 작성에 반영될 핵심 지침입니다.</small>
+      </div>
+
+      <!-- Tab 2: Image Prompt -->
+      <div id="imagePromptTabContent" class="hidden">
+        <label style="display:block; font-size:13px; font-weight:700; color:#2d3748; margin-bottom:6px;">
+          이미지 생성 지침 (소제목별 영문 imageQuery 생성 및 화풍/구도 가이드)
+        </label>
+        <textarea id="imagePromptEditor" rows="13" spellcheck="false" style="width:100%; padding:12px 14px; border:1.5px solid #dce3df; border-radius:10px; font-size:13.5px; line-height:1.6; color:#1a202c; resize:vertical; box-sizing:border-box;" placeholder="이미지 생성 키워드를 유도할 규칙을 입력하세요."></textarea>
+        <small style="display:block; color:#718096; margin-top:6px;">💡 각 소제목에 어울리는 실사 라이프스타일 사진 묘사법, 조명, 인물 의상 및 금지 요소 지침입니다.</small>
+      </div>
+
+      <!-- Hidden JSON editor for sync and test compatibility -->
+      <textarea id="promptJsonEditor" class="hidden" spellcheck="false" aria-hidden="true" style="display:none;"></textarea>
+
+      <div class="prompt-json-actions" style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+        <button class="button ghost" id="resetPromptJsonBtn" type="button" style="color:#718096;">기본값으로 복원</button>
+        <div style="display:flex; gap:8px;">
+          <button class="button ghost" value="cancel" type="submit">취소</button>
+          <button class="button primary" id="usePromptPublishBtn" type="button">이 프롬프트 적용</button>
+        </div>
+      </div>
     </form>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/app.js?v=13"></script>
+  <script type="module" src="/app.js?v=15"></script>
 </body>
 </html>

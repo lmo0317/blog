@@ -4,38 +4,44 @@ const LENGTH_GUIDE = {
   long: '2,000~3,000자'
 };
 
+const writingPromptText = [
+  '당신은 네이버 블로그에서 수십만 명의 이웃에게 사랑받는 최고의 파워블로거이자 전문 콘텐츠 에디터입니다.',
+  '독자가 친한 친구나 친절한 전문가에게 직접 조언을 듣는 것처럼 편안하고 몰입감 넘치는 한국어 블로그 글을 작성합니다.',
+  '',
+  '[문체 및 어조 원칙]',
+  '1. 기계적인 AI 번역투(~하는 것입니다, ~할 수 있습니다, ~이 요구됩니다, ~에 해당합니다)는 절대 사용하지 마세요.',
+  '2. 자연스럽고 다정한 블로그 구어체(~해보셨나요?, ~하더라고요!, ~해보시는 걸 추천드려요, ~하면 훨씬 수월해요 :))를 풍부하게 사용합니다.',
+  '3. 독자가 모바일로 읽을 때 눈이 피로하지 않도록 2~3문장마다 자연스럽게 호흡을 나누어 줄바꿈합니다.',
+  '',
+  '[단락 구성 지침]',
+  '• 제목(title): 클릭을 부르는 매력적이고 호기심 넘치는 타이틀 (20~40자, 이모지 1개 포함 가능).',
+  '• 도입(lead): 다정한 이웃 인사("안녕하세요 이웃님들!")로 시작하여, 독자가 겪고 있을 현실적인 고민에 깊이 공감하고("저도 얼마 전까지 ~했거든요"), 오늘 소개할 내용의 기대감을 자연스럽게 전달합니다.',
+  '• 핵심 요약(summaryPoints): 바쁜 독자를 위해 글의 핵심 가치 3가지를 친근하고 실용적인 문장으로 요약합니다.',
+  '• 본문(sections): 3~4개의 매력적인 소제목(heading)과 함께, 단순히 지식을 나열하는 것이 아니라 [1. 왜 중요한지/원리] + [2. 구체적인 실천/따라하기 단계] + [3. 저만의 꿀팁과 흔한 실수 주의점]을 스토리텔링하듯 친절하게 풀어냅니다.',
+  '• 마무리(closing): 따뜻한 응원의 말과 함께 독자의 생각이나 경험을 묻는 질문("이웃님들은 평소에 어떻게 관리하고 계신가요? 더 좋은 방법이 있다면 댓글로 편하게 나눠주세요 💕")으로 공감과 소통을 유도합니다.',
+  '• 태그(tags): 네이버 검색 유입에 최적화된 인기 해시태그 8~10개.',
+  '',
+  '[안전 및 무결성]',
+  '• 마크다운 기호(#, **, __ 등)를 본문에 쓰지 말고 순수 텍스트로만 내용을 채우며, 지정된 JSON 출력 스키마를 완벽히 준수합니다.',
+  '• 확인되지 않은 사실, 수치, 사용 경험은 만들어내지 않는다.'
+].join('\n');
+
+const imagePromptText = [
+  '[블로그 맞춤 고화질 이미지 프롬프트(imageQuery) 작성 지침]',
+  '각 본문 section마다 해당 소제목과 본문 내용에 100% 어울리는 실사 라이프스타일 사진 프롬프트(imageQuery)를 영문 10~20단어로 구체적으로 작성하세요.',
+  '1. 인물/동작 묘사: 건강, 운동, 스트레칭, 일상 주제는 실제 동작을 시각적으로 명확히 묘사해야 합니다. 단정한 일상복 또는 애슬레저룩을 입은 인물이 올바른 자세를 취하는 모습 (예: "A Korean young adult in clean casual sportswear gently stretching neck sideways with one hand", "A person in comfortable clothes doing gentle shoulder rolls in bright room")으로 작성하세요.',
+  '2. 공간 및 분위기: 밝고 따뜻하며 감성적인 모던 실내/거실 공간, 창가로 들어오는 부드러운 아침 자연광, 아늑한 우드 인테리어를 포함하세요 (예: "bright modern minimalist living room, warm morning sunlight filtering through window, cozy wooden interior").',
+  '3. 카메라 스타일: 인스타그램/블로그 감성 스냅 사진 스타일 (예: "shot on 35mm lens, f/2.0, natural soft lighting, candid lifestyle photography, sharp details, photorealistic").',
+  '4. 절대 금지: 노출, 속옷, 수영복, 가슴 강조, 선정적 자세, 신체 부위 클로즈업, 투명한 옷을 절대 지시하지 않으며, 소제목과 무관한 엉뚱한 사물(물레방아, 유아/애기엄마, 카메라 장비 등)은 일절 포함하지 마세요.',
+  '5. 글 본문(body) 안에는 imageQuery나 프롬프트 영문 문구를 일절 노출하지 마세요.'
+].join('\n');
+
 export const DEFAULT_PROMPT_CONFIG = Object.freeze({
-  systemPrompt: [
-    '당신은 네이버 블로그에서 수십만 명의 이웃에게 사랑받는 최고의 파워블로거이자 전문 콘텐츠 에디터입니다.',
-    '독자가 친한 친구나 친절한 전문가에게 직접 조언을 듣는 것처럼 편안하고 몰입감 넘치는 한국어 블로그 글을 작성합니다.',
-    '',
-    '[문체 및 어조 원칙]',
-    '1. 기계적인 AI 번역투(~하는 것입니다, ~할 수 있습니다, ~이 요구됩니다, ~에 해당합니다)는 절대 사용하지 마세요.',
-    '2. 자연스럽고 다정한 블로그 구어체(~해보셨나요?, ~하더라고요!, ~해보시는 걸 추천드려요, ~하면 훨씬 수월해요 :))를 풍부하게 사용합니다.',
-    '3. 독자가 모바일로 읽을 때 눈이 피로하지 않도록 2~3문장마다 자연스럽게 호흡을 나누어 줄바꿈합니다.',
-    '',
-    '[단락 구성 지침]',
-    '• 제목(title): 클릭을 부르는 매력적이고 호기심 넘치는 타이틀 (20~40자, 이모지 1개 포함 가능).',
-    '• 도입(lead): 다정한 이웃 인사("안녕하세요 이웃님들!")로 시작하여, 독자가 겪고 있을 현실적인 고민에 깊이 공감하고("저도 얼마 전까지 ~했거든요"), 오늘 소개할 내용의 기대감을 자연스럽게 전달합니다.',
-    '• 핵심 요약(summaryPoints): 바쁜 독자를 위해 글의 핵심 가치 3가지를 친근하고 실용적인 문장으로 요약합니다.',
-    '• 본문(sections): 3~4개의 매력적인 소제목(heading)과 함께, 단순히 지식을 나열하는 것이 아니라 [1. 왜 중요한지/원리] + [2. 구체적인 실천/따라하기 단계] + [3. 저만의 꿀팁과 흔한 실수 주의점]을 스토리텔링하듯 친절하게 풀어냅니다.',
-    '• 마무리(closing): 따뜻한 응원의 말과 함께 독자의 생각이나 경험을 묻는 질문("이웃님들은 평소에 어떻게 관리하고 계신가요? 더 좋은 방법이 있다면 댓글로 편하게 나눠주세요 💕")으로 공감과 소통을 유도합니다.',
-    '• 태그(tags): 네이버 검색 유입에 최적화된 인기 해시태그 8~10개.',
-    '',
-    '[안전 및 무결성]',
-    '• 마크다운 기호(#, **, __ 등)를 본문에 쓰지 말고 순수 텍스트로만 내용을 채우며, 지정된 JSON 출력 스키마를 완벽히 준수합니다.',
-    '• 확인되지 않은 사실, 수치, 사용 경험은 만들어내지 않는다.'
-  ].join('\n'),
-  userPromptTemplate: '다음 주제와 요청 내용으로 네이버 블로그 글을 작성하라.\n\n주제:\n{{topic}}\n\n내용 및 사용자 요청:\n{{content}}',
-  imagePromptInstructions: [
-    '[블로그 맞춤 고화질 이미지 프롬프트(imageQuery) 작성 지침]',
-    '각 본문 section마다 해당 소제목과 본문 내용에 100% 어울리는 실사 라이프스타일 사진 프롬프트(imageQuery)를 영문 10~20단어로 구체적으로 작성하세요.',
-    '1. 인물/동작 묘사: 건강, 운동, 스트레칭, 일상 주제는 실제 동작을 시각적으로 명확히 묘사해야 합니다. 단정한 일상복 또는 애슬레저룩을 입은 인물이 올바른 자세를 취하는 모습 (예: "A Korean young adult in clean casual sportswear gently stretching neck sideways with one hand", "A person in comfortable clothes doing gentle shoulder rolls in bright room")으로 작성하세요.',
-    '2. 공간 및 분위기: 밝고 따뜻하며 감성적인 모던 실내/거실 공간, 창가로 들어오는 부드러운 아침 자연광, 아늑한 우드 인테리어를 포함하세요 (예: "bright modern minimalist living room, warm morning sunlight filtering through window, cozy wooden interior").',
-    '3. 카메라 스타일: 인스타그램/블로그 감성 스냅 사진 스타일 (예: "shot on 35mm lens, f/2.0, natural soft lighting, candid lifestyle photography, sharp details, photorealistic").',
-    '4. 절대 금지: 노출, 속옷, 수영복, 가슴 강조, 선정적 자세, 신체 부위 클로즈업, 투명한 옷을 절대 지시하지 않으며, 소제목과 무관한 엉뚱한 사물(물레방아, 유아/애기엄마, 카메라 장비 등)은 일절 포함하지 마세요.',
-    '5. 글 본문(body) 안에는 imageQuery나 프롬프트 영문 문구를 일절 노출하지 마세요.'
-  ].join('\n')
+  writingPrompt: writingPromptText,
+  imagePrompt: imagePromptText,
+  systemPrompt: writingPromptText,
+  imagePromptInstructions: imagePromptText,
+  userPromptTemplate: '다음 주제와 요청 내용으로 네이버 블로그 글을 작성하라.\n\n주제:\n{{topic}}\n\n내용 및 사용자 요청:\n{{content}}'
 });
 
 function buildConfiguredUserPrompt(promptConfig, context) {
@@ -46,15 +52,87 @@ function buildConfiguredUserPrompt(promptConfig, context) {
   return `${expanded}\n\n구조화 입력 JSON:\n${JSON.stringify(context)}`;
 }
 
+function parseMarkdownToPost(raw) {
+  const lines = String(raw || '').split('\n');
+  let title = '';
+  const sections = [];
+  let currentHeading = '';
+  let currentBodyLines = [];
+  const tags = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!title && /^#\s+(.+)$/.test(trimmed)) {
+      title = trimmed.replace(/^#\s+/, '').trim();
+    } else if (/^##+\s+(.+)$/.test(trimmed)) {
+      if (currentHeading || currentBodyLines.length) {
+        sections.push({
+          heading: currentHeading || '소제목',
+          body: currentBodyLines.join('\n').trim(),
+          imageQuery: currentHeading || title
+        });
+        currentBodyLines = [];
+      }
+      currentHeading = trimmed.replace(/^##+\s+/, '').trim();
+    } else if (/#([a-zA-Z0-9가-힣_]+)/.test(trimmed) && trimmed.includes('#')) {
+      const matchedTags = trimmed.match(/#([a-zA-Z0-9가-힣_]+)/g);
+      if (matchedTags) {
+        tags.push(...matchedTags.map((t) => t.replace('#', '')));
+      }
+      currentBodyLines.push(line);
+    } else {
+      currentBodyLines.push(line);
+    }
+  }
+
+  if (currentHeading || currentBodyLines.length) {
+    sections.push({
+      heading: currentHeading || '마무리 실천 팁',
+      body: currentBodyLines.join('\n').trim(),
+      imageQuery: currentHeading || title
+    });
+  }
+
+  if (!title) {
+    title = lines.find((l) => l.trim().length > 3 && !l.trim().startsWith('{'))?.trim() || '블로그 포스팅';
+  }
+
+  return {
+    title: title.slice(0, 100),
+    content: raw,
+    sections,
+    tags: tags.length ? tags.slice(0, 10) : ['정보', '일상', '추천', '꿀팁'],
+    summaryPoints: []
+  };
+}
+
 export function parseLlmJson(content = '') {
   const raw = String(content || '').trim();
   if (!raw) throw new Error('LLM 응답이 비어있습니다.');
 
+  // Check if raw is already an error payload from agy CLI
+  if (raw.startsWith('{') && raw.includes('"status"') && (raw.includes('"ERROR"') || raw.includes('"error"'))) {
+    try {
+      const errObj = JSON.parse(raw);
+      if (errObj.status === 'ERROR' || errObj.error) {
+        throw new Error(`AI 모델 오류: ${errObj.error || errObj.message || '오류 발생'}`);
+      }
+    } catch (e) {
+      if (e.message?.startsWith('AI 모델 오류:')) throw e;
+    }
+  }
+
   // 1. Strip markdown code block wrappers
   const direct = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/g, '').trim();
   try {
-    return JSON.parse(direct);
-  } catch {}
+    const parsed = JSON.parse(direct);
+    if (parsed && (parsed.status === 'ERROR' || parsed.error) && !parsed.title && !parsed.sections) {
+      throw new Error(`AI 모델 오류: ${parsed.error || parsed.message || '오류 발생'}`);
+    }
+    return parsed;
+  } catch (e) {
+    if (e.message?.startsWith('AI 모델 오류:')) throw e;
+  }
 
   // 2. Search for outermost JSON object { ... }
   const start = raw.indexOf('{');
@@ -62,25 +140,59 @@ export function parseLlmJson(content = '') {
   if (start >= 0 && end > start) {
     const candidate = raw.slice(start, end + 1);
     try {
-      return JSON.parse(candidate);
-    } catch {}
+      const parsed = JSON.parse(candidate);
+      if (parsed && (parsed.status === 'ERROR' || parsed.error) && !parsed.title && !parsed.sections) {
+        throw new Error(`AI 모델 오류: ${parsed.error || parsed.message || '오류 발생'}`);
+      }
+      return parsed;
+    } catch (e) {
+      if (e.message?.startsWith('AI 모델 오류:')) throw e;
+    }
   }
 
-  throw new Error(`로컬 LLM이 올바른 JSON 형식으로 글을 완성하지 못했습니다: ${raw.slice(0, 120)}...`);
+  // 3. Fallback: Parse markdown if LLM returned structured markdown instead of JSON
+  if (raw.length > 50) {
+    return parseMarkdownToPost(raw);
+  }
+
+  throw new Error(`AI 모델이 올바른 JSON 형식으로 글을 완성하지 못했습니다: ${raw.slice(0, 120)}...`);
 }
 
 export function normalizeGeneratedPost(value = {}, deals = []) {
+  if (value && (value.status === 'ERROR' || (value.error && !value.title && !value.sections))) {
+    throw new Error(`AI 모델 오류: ${value.error || value.message || '오류 발생'}`);
+  }
+
   const isDealsPost = Array.isArray(deals) && deals.length > 0;
-  const title = (isDealsPost ? cleanDealTitle(value.title) : sanitizeGeneratedText(value.title)).slice(0, 200);
+  const rawTitle = value.title
+    || value.postTitle
+    || value.subject
+    || value.Title
+    || value.headline
+    || value.name
+    || value.topic
+    || (Array.isArray(value.sections) && value.sections[0]?.heading ? `${value.sections[0].heading} 가이드` : '')
+    || '';
+  const title = (isDealsPost ? cleanDealTitle(rawTitle) : sanitizeGeneratedText(rawTitle)).slice(0, 200);
+
+  const rawContent = value.content
+    || value.body
+    || value.text
+    || value.post
+    || value.article
+    || value.markdown
+    || '';
+
   const content = sanitizeGeneratedText(isDealsPost
     ? composeStructuredPost(value, deals)
-    : (value.content || composeStructuredPost(value, deals))).slice(0, 50000);
-  const sections = (Array.isArray(value.sections) ? value.sections : []);
+    : (rawContent || composeStructuredPost(value, deals))).slice(0, 50000);
+
+  const sections = (Array.isArray(value.sections) ? value.sections : (Array.isArray(value.paragraphs) ? value.paragraphs : []));
   const sectionHeadings = sections
-    .map((section) => String(section?.heading || '').trim())
+    .map((section) => String(section?.heading || section?.title || section?.subheading || section?.header || '').trim())
     .filter(Boolean)
     .slice(0, 6);
-  const requestedTags = (Array.isArray(value.tags) ? value.tags : [])
+  const requestedTags = (Array.isArray(value.tags) ? value.tags : (Array.isArray(value.hashtags) ? value.hashtags : []))
     .map((tag) => String(tag).replace(/^#+/, '').trim())
     .filter(Boolean);
   const tags = [...new Set((isDealsPost
@@ -95,7 +207,7 @@ export function normalizeGeneratedPost(value = {}, deals = []) {
     const section = sections[index] || {};
     const heading = isDealsPost
       ? dealSectionHeading(deals[index], index)
-      : String(section?.heading || '').trim();
+      : String(section?.heading || section?.title || section?.subheading || '').trim();
     const afterHeading = isDealsPost
       ? dealInfoLine(section, deals[index])
       : heading;
@@ -122,10 +234,33 @@ export function normalizeGeneratedPost(value = {}, deals = []) {
   }
 
   const imageQueries = imagePlans.map((plan) => plan.query);
-  const summaryPoints = Array.isArray(value.summaryPoints) ? value.summaryPoints.map((s) => String(s || '').trim()).filter(Boolean) : [];
+  const summaryPoints = Array.isArray(value.summaryPoints)
+    ? value.summaryPoints.map((s) => String(s || '').trim()).filter(Boolean)
+    : (Array.isArray(value.summary) ? value.summary.map((s) => String(s || '').trim()).filter(Boolean) : []);
   const visualCards = Array.isArray(value.visualCards) ? value.visualCards : [];
-  if (title.length < 2 || content.length < 100) throw new Error('로컬 LLM이 완성된 글을 반환하지 못했습니다. 다시 작성해주세요.');
-  return { title, content, tags, imageQueries, sectionHeadings, imagePlans, summaryPoints, visualCards };
+
+  const finalTitle = title.length >= 2 ? title : (sanitizeGeneratedText(value.topic || '네이버 블로그 포스팅').slice(0, 100));
+  if (finalTitle.length < 2 || content.length < 50) {
+    const detail = value.error || `수신된 내용 부족 (제목: ${finalTitle.length}자, 본문: ${content.length}자)`;
+    throw new Error(`AI 모델이 완성된 글을 반환하지 못했습니다 (${detail}). 다시 작성해주세요.`);
+  }
+
+  return {
+    title: finalTitle,
+    content,
+    tags: tags.length ? tags : ['정보', '일상', '블로그', '추천'],
+    sections,
+    imageQueries,
+    sectionHeadings,
+    imagePlans,
+    summaryPoints,
+    visualCards,
+    seriesTitle: String(value.seriesTitle || '').trim(),
+    seriesCount: Number(value.seriesCount) || 1,
+    seriesEpisode: Number(value.seriesEpisode) || 1,
+    seriesRoadmap: Array.isArray(value.seriesRoadmap) ? value.seriesRoadmap.map((s) => String(s).trim()).filter(Boolean) : [],
+    nextEpisodeTeaser: String(value.nextEpisodeTeaser || '').trim()
+  };
 }
 
 export class LocalLlmClient {
@@ -521,14 +656,17 @@ function composeStructuredPost(value, deals = []) {
   const isDealsPost = Array.isArray(deals) && deals.length > 0;
   const lead = isDealsPost
     ? sanitizePublicDealText(value.lead)
-    : String(value.lead || '').trim();
+    : String(value.lead || value.intro || value.introduction || value.opening || '').trim();
 
-  const generatedSections = Array.isArray(value.sections) ? value.sections : [];
+  const generatedSections = Array.isArray(value.sections)
+    ? value.sections
+    : (Array.isArray(value.paragraphs) ? value.paragraphs : (Array.isArray(value.items) ? value.items : []));
+
   const sections = (isDealsPost ? deals : generatedSections)
     .map((_item, index) => {
       const section = generatedSections[index] || {};
-      const heading = String(section?.heading || '').trim();
-      const body = String(section?.body || '').trim();
+      const heading = String(section?.heading || section?.title || section?.subheading || section?.header || section?.subtitle || '').trim();
+      const body = String(section?.body || section?.content || section?.text || section?.paragraph || section?.description || section?.desc || '').trim();
 
       if (isDealsPost) {
         const deal = deals[index];
@@ -551,16 +689,35 @@ function composeStructuredPost(value, deals = []) {
         ].filter(Boolean).join('\n');
       }
 
-      if (!heading || !body) return null;
-      return `✨ ${heading}\n\n${body}`;
+      if (!heading && !body) return null;
+      if (heading && body) return `✨ ${heading}\n\n${body}`;
+      return heading ? `✨ ${heading}` : body;
     })
     .filter(Boolean);
 
   const closing = isDealsPost
     ? sanitizePublicDealText(value.closing)
-    : String(value.closing || '').trim();
+    : String(value.closing || value.outro || value.conclusion || value.ending || '').trim();
 
   const blocks = [];
+
+  // 1. Series Roadmap Banner (if multi-part series)
+  if (!isDealsPost && Array.isArray(value.seriesRoadmap) && value.seriesRoadmap.length > 1) {
+    const seriesTitle = value.seriesTitle || value.title || '기획 연재 시리즈';
+    const curEp = Number(value.seriesEpisode) || 1;
+    const totalEp = Number(value.seriesCount) || value.seriesRoadmap.length;
+    blocks.push([
+      `📚 [기획 연재] ${seriesTitle} (${curEp}/${totalEp}부작)`,
+      '────────────────────────',
+      '📌 [시리즈 연재 목차 안내]',
+      ...value.seriesRoadmap.map((item, idx) => {
+        const isCurrent = (idx + 1) === curEp;
+        return `${item}${isCurrent ? ' 👈 (현재 읽고 계신 글)' : ''}`;
+      }),
+      '────────────────────────'
+    ].join('\n'));
+  }
+
   if (lead) blocks.push(lead);
   
   if (summaryPoints.length) {
@@ -570,11 +727,22 @@ function composeStructuredPost(value, deals = []) {
         ...deals.map((deal) => `- ${sanitizePublicDealText(deal?.title) || '상품명 확인 필요'} | ${sanitizePublicDealText(deal?.price) || '가격 확인 필요'}`)
       ].join('\n'));
     } else {
-      blocks.push(`📌 오늘의 핵심 요약\n\n${summaryPoints.map((point) => `• ${point}`).join('\n')}`);
+      blocks.push(`📌 오늘의 핵심 요약 브리핑\n\n${summaryPoints.map((point) => `• ${point}`).join('\n')}`);
     }
   }
 
   blocks.push(...sections);
+
+  // 2. Series Next Episode Teaser
+  if (!isDealsPost && value.nextEpisodeTeaser && String(value.nextEpisodeTeaser).trim()) {
+    blocks.push([
+      '────────────────────────',
+      '🔜 [다음 편 예고]',
+      String(value.nextEpisodeTeaser).trim(),
+      '이웃 추가(서로이웃)를 해두시면 다음 연재 편을 놓치지 않고 가장 빠르게 받아보실 수 있습니다 💕',
+      '────────────────────────'
+    ].join('\n'));
+  }
 
   if (closing) {
     if (isDealsPost) {

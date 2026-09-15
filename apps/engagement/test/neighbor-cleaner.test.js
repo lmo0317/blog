@@ -193,3 +193,63 @@ test('NeighborCleanerManager manages state, logs, and pause/resume/stop', () => 
   assert.equal(manager.state, 'stopped');
   assert.equal(manager.shouldStop, true);
 });
+
+test('NeighborCleanerManager accepts every received request when both AI filters are off', async () => {
+  let acceptClicked = false;
+  let aiCalled = false;
+  const popup = {
+    async waitForURL() {},
+    async waitForLoadState() {},
+    on() {},
+    async $() {
+      return { async click() {} };
+    },
+    async evaluate() {},
+    isClosed() { return false; },
+    async close() {}
+  };
+  const page = {
+    async goto() {},
+    async waitForTimeout() {},
+    async content() {
+      return '<table><tr><td><input name="targetBlogId" value="spam_user"></td><td><span class="nickname">광고 계정</span></td><td class="msg">대출 상담</td><td class="date">26.09.13.</td></tr></table>';
+    },
+    async waitForEvent() { return popup; },
+    async $(selector) {
+      assert.match(selector, /_acceptBuddy/);
+      return { async click() { acceptClicked = true; } };
+    },
+    async close() {}
+  };
+  const manager = new NeighborCleanerManager({
+    browserSession: {
+      connected: true,
+      accountLabel: 'owner',
+      context: { async newPage() { return page; } }
+    },
+    embeddedLlama: {
+      async chatCompletion() {
+        aiCalled = true;
+        throw new Error('accept-all mode must not call AI');
+      }
+    },
+    neighborGroupStore: {
+      getActiveGroupName() { return '소통이웃-1'; }
+    }
+  });
+
+  const result = await manager.startCleanReceived({
+    acceptGenuine: false,
+    rejectSpam: false,
+    minDelaySec: 0,
+    maxDelaySec: 0
+  });
+
+  assert.equal(result.stats.accepted, 1);
+  assert.equal(result.stats.rejected, 0);
+  assert.equal(result.stats.skipped, 0);
+  assert.equal(acceptClicked, true);
+  assert.equal(aiCalled, false);
+  assert.equal(manager.logs.some((entry) => entry.message.includes('조건 없이')), true);
+  assert.equal(manager.logs.some((entry) => entry.message.includes('그룹: 소통이웃-1')), true);
+});

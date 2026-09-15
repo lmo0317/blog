@@ -89,7 +89,7 @@ test('EngagementAutomationManager validates configuration', async () => {
   );
 });
 
-test('EngagementAutomationManager caps the overall target at 100 posts', async () => {
+test('EngagementAutomationManager accepts up to 500 target posts independently of the neighbor limit', async () => {
   let requestedDisplay = 0;
   const manager = new EngagementAutomationManager({
     browserSession: { connected: true, async searchBlogs({ display }) { requestedDisplay = display; return []; } },
@@ -98,12 +98,12 @@ test('EngagementAutomationManager caps the overall target at 100 posts', async (
   });
   await manager.start({ keyword: '육아', targetCount: 500, doLike: true, doComment: false, doNeighbor: false });
   while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
-  assert.equal(manager.config.targetCount, 100);
-  assert.equal(manager.stats.targetCount, 100);
-  assert.equal(requestedDisplay, 200);
+  assert.equal(manager.config.targetCount, 500);
+  assert.equal(manager.stats.targetCount, 500);
+  assert.equal(requestedDisplay, 1000);
 });
 
-test('engagement campaign caps the total target and daily neighbor ceiling at 100', async () => {
+test('engagement campaign keeps a 300-post target while capping the daily neighbor ceiling at 100', async () => {
   const manager = new EngagementAutomationManager({
     browserSession: { connected: true, async searchBlogs() { return []; } },
     embeddedLlama: null,
@@ -115,7 +115,7 @@ test('engagement campaign caps the total target and daily neighbor ceiling at 10
     sessionBreakMinSeconds: 600, sessionBreakMaxSeconds: 1200
   });
   while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
-  assert.equal(manager.config.targetCount, 100);
+  assert.equal(manager.config.targetCount, 300);
   assert.equal(manager.config.dailyNeighborLimit, 100);
   assert.equal(manager.config.minDelay, 120);
   assert.equal(manager.config.maxDelay, 180);
@@ -124,7 +124,8 @@ test('engagement campaign caps the total target and daily neighbor ceiling at 10
   assert.equal(manager.config.sessionBreakMaxSeconds, 1200);
 
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  assert.match(html, /id="engTargetCount"[^>]*max="100"[^>]*value="100"/);
+  assert.match(html, /id="engTargetCount"[^>]*max="500"[^>]*value="100"/);
+  assert.match(html, /data-val="300">300건/);
   assert.match(html, /id="engDailyNeighborLimit"[^>]*max="100"/);
   assert.match(html, /id="engNeighborUsed"/);
   assert.match(html, /id="engNeighborRemaining"/);
@@ -132,6 +133,75 @@ test('engagement campaign caps the total target and daily neighbor ceiling at 10
   assert.match(html, /id="engSessionPosts"/);
   assert.match(html, /id="engBreakMinMinutes"/);
   assert.match(html, /보호조치 경고/);
+});
+
+test('engagement campaign stops all work when the daily neighbor limit is already reached', async () => {
+  let reactionCalls = 0;
+  const manager = new EngagementAutomationManager({
+    browserSession: {
+      connected: true,
+      async searchBlogs() {
+        return [{ blogId: 'neighbor-limit-target', title: '테스트 글', url: 'https://blog.naver.com/neighbor-limit-target/1' }];
+      },
+      async likeAndCommentPost() {
+        reactionCalls += 1;
+        return { liked: true, commented: false, message: '완료' };
+      }
+    },
+    embeddedLlama: null,
+    historyStore: {
+      async hasEngagedPost() { return false; },
+      async getSummary() { return { todayLikes: 0, todayComments: 0, todayNeighbors: 100 }; }
+    }
+  });
+
+  await manager.start({ keyword: '육아', targetCount: 300, doLike: true, doComment: false, doNeighbor: true });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+
+  assert.equal(manager.state, 'completed');
+  assert.equal(manager.config.targetCount, 300);
+  assert.equal(manager.stats.neighborLimitReached, true);
+  assert.equal(manager.stats.processedCount, 0);
+  assert.equal(reactionCalls, 0);
+  assert.match(manager.logs.map((entry) => entry.message).join('\n'), /서로이웃 신청 100명에 도달해 전체 자동 작업을 종료/);
+});
+
+test('engagement campaign stops immediately after the 100th successful neighbor request', async () => {
+  let todayNeighbors = 99;
+  let neighborCalls = 0;
+  const posts = [1, 2].map((index) => ({
+    blogId: `neighbor-target-${index}`,
+    title: `테스트 글 ${index}`,
+    url: `https://blog.naver.com/neighbor-target-${index}/${index}`
+  }));
+  const manager = new EngagementAutomationManager({
+    browserSession: {
+      connected: true,
+      async searchBlogs() { return posts; },
+      async inspectPostForEngagement() { return { title: '테스트 글', snippet: '본문', images: [], recentComments: [] }; },
+      async likeAndCommentPost() { return { liked: false, commented: false, message: '반응 없음' }; },
+      async addNeighbor() {
+        neighborCalls += 1;
+        return { status: 'requested', message: '서로이웃 신청 완료' };
+      }
+    },
+    embeddedLlama: null,
+    historyStore: {
+      async hasEngagedPost() { return false; },
+      async getSummary() { return { todayLikes: 0, todayComments: 0, todayNeighbors }; },
+      async addRecord(record) { if (record.neighborRequested) todayNeighbors += 1; }
+    }
+  });
+  manager.countdownDelay = async () => {};
+
+  await manager.start({ keyword: '육아', targetCount: 300, doLike: false, doComment: false, doNeighbor: true });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 1));
+
+  assert.equal(todayNeighbors, 100);
+  assert.equal(neighborCalls, 1);
+  assert.equal(manager.stats.neighborLimitReached, true);
+  assert.equal(manager.stats.processedCount, 1);
+  assert.match(manager.logs.map((entry) => entry.message).join('\n'), /서로이웃 신청 100명에 도달해 전체 자동 작업을 종료/);
 });
 
 test('multi-keyword harness treats the target as an overall total', async () => {

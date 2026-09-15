@@ -5,47 +5,32 @@ import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
 import sharp from 'sharp';
 import { NaverBrowserSession } from './lib/naver.js';
-import { DEFAULT_PROMPT_CONFIG, LocalLlmClient } from './lib/llm.js';
+import { DEFAULT_PROMPT_CONFIG } from './lib/llm.js';
 import { fetchKoreanTrends } from './lib/trends.js';
 import { fetchAlgumonRankDeals, isDirectProductUrl, unwrapKnownRedirectUrl } from './lib/algumon.js';
 import { appendImageAttributions, cleanupDownloadedImages, downloadCommonsImages, searchOpenImages } from './lib/images.js';
 import { extractArticleContent } from './lib/article-scraper.js';
 import { NeighborHistoryStore, EngagementHistoryStore } from './lib/history.js';
 import { NeighborAutomationManager } from './lib/automation.js';
-import { getSystemHardwareSummary, MODEL_CATALOG } from './lib/hardware.js';
-import { ModelManager } from './lib/model-manager.js';
-import { EmbeddedLlamaServer } from './lib/embedded-llama.js';
 import { EngagementAutomationManager } from './lib/engagement-automation.js';
 import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { ImageModelManager } from './lib/image-model-manager.js';
 import { contentSimilarity, PostHistoryStore } from './lib/post-history.js';
+import { AgyClient, AGY_GEMINI_MODELS } from './lib/agy-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
 const app = express();
 const port = Number(process.env.PORT || 4310);
 
-const modelManager = new ModelManager(
-  path.join(__dirname, '..', '..', 'windows', '.models'),
-  path.join(__dirname, '.data', 'ai-config.json')
-);
-const embeddedLlama = new EmbeddedLlamaServer({ 
-  modelManager, 
-  binDir: path.join(__dirname, '..', '..', 'windows', 'bin'),
-  port: 8089,
-  host: '127.0.0.1'
-});
-
-const llmClient = new LocalLlmClient({ 
-  baseUrl: `http://${embeddedLlama.host}:${embeddedLlama.port}`, 
-  model: 'gemma-4-12b' 
-});
+const agyClient = new AgyClient();
 const imageModelManager = new ImageModelManager({
   engineDir: path.join(__dirname, '.image-engine'),
   configPath: path.join(__dirname, '.data', 'image-config.json')
 });
 await imageModelManager.init();
+imageModelManager.agyClient = agyClient;
 const postHistoryStore = new PostHistoryStore(path.join(__dirname, '.data', 'published-post-history.json'));
 
 const browserSession = new NaverBrowserSession({
@@ -57,36 +42,38 @@ const historyStore = new NeighborHistoryStore(path.join(__dirname, '.data', 'nei
 const automationManager = new NeighborAutomationManager({ browserSession, historyStore });
 
 const engagementHistoryStore = new EngagementHistoryStore(path.join(__dirname, '.data', 'engagement-history.json'));
-const engagementManager = new EngagementAutomationManager({ browserSession, embeddedLlama, historyStore: engagementHistoryStore });
+const engagementManager = new EngagementAutomationManager({ browserSession, agyClient, historyStore: engagementHistoryStore });
 
 function normalizePromptConfig(value) {
   if (value == null) return null;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('프롬프트 설정은 JSON 객체여야 합니다.');
-  const systemPrompt = String(value.systemPrompt || '').trim();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('프롬프트 설정은 올바른 객체 형식이어야 합니다.');
+  const writingPrompt = String(value.writingPrompt || value.systemPrompt || '').trim();
+  const imagePrompt = String(value.imagePrompt || value.imagePromptInstructions || '').trim();
   const userPromptTemplate = String(value.userPromptTemplate || '').trim();
-  const imagePromptInstructions = String(value.imagePromptInstructions || '').trim();
-  if (systemPrompt.length < 10 || systemPrompt.length > 12000) throw new Error('systemPrompt는 10~12,000자로 입력해주세요.');
-  if (!userPromptTemplate || userPromptTemplate.length > 4000) throw new Error('userPromptTemplate은 1~4,000자로 입력해주세요.');
-  if (imagePromptInstructions.length > 6000) throw new Error('imagePromptInstructions는 6,000자 이하로 입력해주세요.');
-  return { systemPrompt, userPromptTemplate, imagePromptInstructions };
+  if (writingPrompt && (writingPrompt.length < 10 || writingPrompt.length > 20000)) throw new Error('글생성 프롬프트는 10~20,000자로 입력해주세요.');
+  if (imagePrompt && imagePrompt.length > 10000) throw new Error('이미지 생성 프롬프트는 10,000자 이하로 입력해주세요.');
+  return {
+    writingPrompt,
+    imagePrompt,
+    systemPrompt: writingPrompt,
+    imagePromptInstructions: imagePrompt,
+    userPromptTemplate: userPromptTemplate || undefined
+  };
 }
 
+let selectedGeminiModel = 'gemini-3.8-flash-high';
+
 async function resolveActiveLlmEndpoint() {
-  const activeModel = await modelManager.getActiveModel();
-  if (activeModel && activeModel.actualPath) {
-    if (embeddedLlama.status !== 'running') {
-      await embeddedLlama.start().catch((err) => {
-        console.error('Failed to start embedded llama-server:', err);
-      });
-    }
-    return {
-      type: 'local_gpu',
-      label: `내 PC 로컬 GPU (${activeModel.name})`,
-      baseUrl: `http://${embeddedLlama.host}:${embeddedLlama.port}`,
-      model: activeModel.id
-    };
-  }
-  throw new Error('내 PC에 다운로드된 Gemma 모델이 없습니다. [⚙️ 공통 환경 설정]에서 Gemma 모델을 다운로드해주세요.');
+  const isAgy = await agyClient.isAvailable();
+  const modelObj = agyClient.getModels().find((m) => m.id === selectedGeminiModel) || agyClient.getModels()[0];
+  return {
+    type: 'gemini_agy',
+    label: `💎 Google Gemini (${modelObj.name})`,
+    model: modelObj.id,
+    provider: 'Google Antigravity (구독 연동)',
+    baseUrl: 'https://antigravity.google',
+    isAvailable: isAgy
+  };
 }
 
 browserSession.restoreSession().then((res) => {
@@ -94,7 +81,7 @@ browserSession.restoreSession().then((res) => {
 }).catch(() => {});
 setInterval(() => {
   browserSession.keepAlive().catch(() => {});
-}, 20 * 60 * 1000);
+}, 20 * 60 * 1000).unref();
 let publishing = false;
 let trendCache = { loadedAt: 0, items: [] };
 const generationProgress = new Map();
@@ -406,62 +393,66 @@ app.post('/api/neighbors/history/clear', async (_req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Hardware & Embedded AI Models Routes
+// Google Gemini & Cloud AI Engine Routes
 // ---------------------------------------------------------------------------
 
-app.get('/api/hardware/specs', async (_req, res, next) => {
-  try {
-    const summary = await getSystemHardwareSummary();
-    res.json(summary);
-  } catch (error) {
-    next(error);
-  }
+app.get('/api/hardware/specs', (_req, res) => {
+  res.json({
+    engine: 'gemini',
+    type: 'cloud',
+    name: 'Google Gemini (구독 연동)',
+    status: 'online',
+    gpu: {
+      primaryGpu: { name: 'Google Cloud TPU/GPU' },
+      vramFormatted: '클라우드 가속 (내 PC 부하 0%)'
+    },
+    recommendedModel: {
+      id: 'gemini-3.8-flash-high',
+      modelInfo: { name: 'Gemini 3.8 Flash (High)' }
+    }
+  });
 });
 
 app.get('/api/models/list', async (_req, res, next) => {
   try {
-    const models = await modelManager.getInstalledModels();
-    const active = await modelManager.getActiveModel();
-    res.json({ models, activeModel: active, serverStatus: embeddedLlama.status });
+    const models = agyClient.getModels().map((m) => ({
+      id: m.id,
+      name: m.name,
+      sizeFormatted: '구독 연동',
+      description: m.desc,
+      speed: m.speed,
+      quality: m.quality,
+      isInstalled: true,
+      isActive: m.id === selectedGeminiModel
+    }));
+    const active = models.find((m) => m.id === selectedGeminiModel) || models[0];
+    res.json({ models, activeModel: active, serverStatus: 'running', provider: 'gemini' });
   } catch (error) {
     next(error);
   }
 });
 
-app.post('/api/models/download', async (req, res, next) => {
-  try {
-    const { modelId } = req.body || {};
-    if (!modelId) return res.status(400).json({ error: '다운로드할 모델 ID를 지정해주세요.' });
-    // Start download asynchronously
-    modelManager.downloadModel(modelId).catch(() => {});
-    res.json({ ok: true, message: '모델 다운로드가 시작되었습니다.', modelId });
-  } catch (error) {
-    next(error);
-  }
+app.post('/api/models/download', async (_req, res) => {
+  res.json({ ok: true, message: 'Google Gemini는 구독 연동 클라우드 모델로 별도 다운로드가 필요 없습니다.' });
 });
 
-app.post('/api/models/cancel', async (req, res, next) => {
-  try {
-    const { modelId } = req.body || {};
-    const success = modelManager.cancelDownload(modelId);
-    res.json({ ok: success });
-  } catch (error) {
-    next(error);
-  }
+app.post('/api/models/cancel', async (_req, res) => {
+  res.json({ ok: true });
+});
+
+app.post('/api/models/delete', async (_req, res) => {
+  res.json({ ok: true, message: '클라우드 모델은 삭제할 수 없습니다.' });
 });
 
 app.post('/api/models/select', async (req, res, next) => {
   try {
     const { modelId } = req.body || {};
-    if (!modelId) return res.status(400).json({ error: '선택할 모델 ID를 지정해주세요.' });
-    const selected = await modelManager.setActiveModel(modelId);
-    const engineMode = 'local_gpu';
-    llmClient.model = modelId;
-    llmClient.baseUrl = `http://${embeddedLlama.host}:${embeddedLlama.port}`;
-    // Restart embedded llama-server with new model
-    embeddedLlama.restartWithModel(modelId).catch(() => {});
+    const valid = agyClient.getModels().find((m) => m.id === modelId);
+    if (!valid) return res.status(400).json({ error: '선택할 수 없는 Gemini 모델입니다.' });
+    selectedGeminiModel = modelId;
+    agyClient.defaultModel = modelId;
     const activeEndpoint = await resolveActiveLlmEndpoint();
-    res.json({ ok: true, model: selected, engineMode, activeEndpoint });
+    res.json({ ok: true, model: valid, engineMode: 'gemini_agy', activeEndpoint });
   } catch (error) {
     next(error);
   }
@@ -478,80 +469,70 @@ app.post('/api/image-models/select', async (req, res, next) => {
   try { res.json({ ok: true, model: await imageModelManager.select(String(req.body?.modelId || '')) }); } catch (error) { next(error); }
 });
 
-app.post('/api/image-models/download', async (req, res, next) => {
-  try { const modelId = String(req.body?.modelId || ''); await imageModelManager.download(modelId); res.json({ ok: true, modelId }); } catch (error) { next(error); }
+app.post('/api/image-models/download', async (req, res) => {
+  res.json({ ok: true, message: '클라우드 이미지 모델은 다운로드가 필요 없습니다.' });
 });
 
 app.get('/api/image-models/events', (req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-  const makeHandler = (event) => (data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  const handlers = { progress: makeHandler('progress'), complete: makeHandler('complete'), error: makeHandler('model-error') };
-  Object.entries(handlers).forEach(([event, handler]) => imageModelManager.on(event, handler));
-  req.on('close', () => Object.entries(handlers).forEach(([event, handler]) => imageModelManager.off(event, handler)));
-});
-
-app.post('/api/models/delete', async (req, res, next) => {
-  try {
-    const { modelId } = req.body || {};
-    if (!modelId) return res.status(400).json({ error: '삭제할 모델 ID를 지정해주세요.' });
-    await modelManager.deleteModel(modelId);
-    const installed = await modelManager.getInstalledModels();
-    res.json({ ok: true, message: '모델 파일이 삭제되었습니다.' });
-  } catch (error) {
-    next(error);
-  }
+  res.write('retry: 5000\n\n');
+  const timer = setInterval(() => res.write(': keepalive\n\n'), 20000);
+  req.on('close', () => clearInterval(timer));
 });
 
 // Common Settings & LLM Endpoints
 app.get('/api/settings', async (_req, res, next) => {
   try {
-    const activeModel = await modelManager.getActiveModel();
-    const installedModels = await modelManager.getInstalledModels();
-    let activeEndpoint = null;
-    try {
-      activeEndpoint = await resolveActiveLlmEndpoint();
-    } catch {}
+    const isAgy = await agyClient.isAvailable();
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    const geminiModels = agyClient.getModels();
+    const activeModel = geminiModels.find((m) => m.id === selectedGeminiModel) || geminiModels[0];
     res.json({
       connected: browserSession.connected,
       accountLabel: browserSession.accountLabel || '',
-      engineMode: 'local_gpu',
-      activeModel,
-      installedCount: installedModels.filter((m) => m.isInstalled).length,
-      activeEndpoint
+      engineMode: 'gemini_agy',
+      activeModel: {
+        id: activeModel.id,
+        name: activeModel.name,
+        sizeFormatted: '구독 연동',
+        isInstalled: true
+      },
+      installedCount: geminiModels.length,
+      activeEndpoint,
+      geminiInfo: {
+        available: isAgy,
+        activeModel: selectedGeminiModel,
+        models: geminiModels
+      }
     });
   } catch (error) {
     next(error);
   }
 });
 
-// SSE Stream for AI Model Downloads
+app.post('/api/ai/engine-mode', async (req, res, next) => {
+  try {
+    const { modelId } = req.body || {};
+    if (modelId && agyClient.getModels().some((m) => m.id === modelId)) {
+      selectedGeminiModel = modelId;
+      agyClient.defaultModel = modelId;
+    }
+    const activeEndpoint = await resolveActiveLlmEndpoint();
+    res.json({ ok: true, engineMode: 'gemini_agy', activeEndpoint });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/models/events', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive'
   });
-  res.write('retry: 3000\n\n');
-
-  const onProgress = (data) => {
-    res.write(`event: progress\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-  const onComplete = (data) => {
-    res.write(`event: complete\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-  const onError = (data) => {
-    res.write(`event: error\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-
-  modelManager.on('download_progress', onProgress);
-  modelManager.on('download_complete', onComplete);
-  modelManager.on('download_error', onError);
-
-  req.on('close', () => {
-    modelManager.off('download_progress', onProgress);
-    modelManager.off('download_complete', onComplete);
-    modelManager.off('download_error', onError);
-  });
+  res.write('retry: 5000\n\n');
+  const timer = setInterval(() => res.write(': keepalive\n\n'), 20000);
+  req.on('close', () => clearInterval(timer));
 });
 
 // ---------------------------------------------------------------------------
@@ -756,10 +737,7 @@ app.post('/api/blog/deals/draft', async (req, res, next) => {
 
     const activeEndpoint = await resolveActiveLlmEndpoint();
     const targetModel = activeEndpoint.model;
-    llmClient.baseUrl = activeEndpoint.baseUrl;
-    llmClient.model = targetModel;
-
-    const post = await llmClient.generateDealsBlogPost({
+    const post = await agyClient.generateDealsBlogPost({
       deals: deals.slice(0, 5),
       tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
       length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
@@ -822,75 +800,153 @@ app.post('/api/blog/draft', async (req, res, next) => {
     let sourceUrl = normalizeHttpUrl(req.body?.sourceUrl);
     const newsTitle = String(req.body?.newsTitle || '').trim().slice(0, 500);
     const source = String(req.body?.source || '').trim().slice(0, 100);
-    const promptConfig = normalizePromptConfig(req.body?.promptConfig);
+    const rawWritingPrompt = String(req.body?.writingPrompt || req.body?.promptConfig?.writingPrompt || req.body?.promptConfig?.systemPrompt || '').trim();
+    const rawImagePrompt = String(req.body?.imagePrompt || req.body?.promptConfig?.imagePrompt || req.body?.promptConfig?.imagePromptInstructions || '').trim();
+    const promptConfig = normalizePromptConfig(rawWritingPrompt || rawImagePrompt ? { writingPrompt: rawWritingPrompt, imagePrompt: rawImagePrompt, ...req.body?.promptConfig } : req.body?.promptConfig);
+    const writingPrompt = promptConfig?.writingPrompt || '';
+    const imagePrompt = promptConfig?.imagePrompt || '';
+
+    const seriesCount = Math.max(1, Math.min(10, parseInt(req.body?.seriesCount, 10) || 1));
+    const seriesEpisode = Math.max(1, Math.min(seriesCount, parseInt(req.body?.seriesEpisode, 10) || 1));
 
     const activeEndpoint = await resolveActiveLlmEndpoint();
     const targetModel = activeEndpoint.model;
-    llmClient.baseUrl = activeEndpoint.baseUrl;
-    llmClient.model = targetModel;
 
     const avoidHistory = await postHistoryStore.recent(25);
     const promptUrl = `${topic}\n${notes}`.match(/https?:\/\/[^\s<>()]+/i)?.[0] || '';
     sourceUrl = sourceUrl || normalizeHttpUrl(promptUrl);
-    let post;
     let resolvedSourceTitle = newsTitle || source || '';
+    let extractedContent = '';
+
     if (sourceUrl) {
       setGenerationProgress(generationId, { phase: 'source', message: '링크의 원문 내용을 분석하는 중' });
       const extracted = await extractArticleContent(sourceUrl);
       resolvedSourceTitle = extracted.title || resolvedSourceTitle;
-      const promptWithoutUrl = notes.replace(promptUrl, '').trim();
-      setGenerationProgress(generationId, { phase: 'writing', message: 'Gemma 4 12B가 원문을 재해석해 본문을 작성하는 중' });
-      post = await llmClient.generateArticleRewriteBlogPost({
-        sourceTitle: extracted.title || newsTitle || topic,
-        sourceContent: extracted.content,
-        sourceUrl,
-        tone: ['informative', 'friendly', 'review', 'column'].includes(req.body?.tone) ? req.body.tone : 'friendly',
-        length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
-        notes: promptWithoutUrl,
-        customFocus: topic,
-        model: targetModel,
-        avoidHistory,
-        promptConfig
-      });
-    } else {
-      setGenerationProgress(generationId, { phase: 'writing', message: 'Gemma 4 12B가 제목과 본문을 작성하는 중' });
-      post = await llmClient.generateBlogPost({
-        topic,
-        newsTitle,
-        source,
-        sourceUrl,
-        tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
-        length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
-        notes,
-        model: targetModel,
-        avoidHistory,
-        promptConfig
-      });
-    }
-    const duplicate = await postHistoryStore.findSimilar({ topic, title: post.title, content: post.content });
-    if (duplicate) throw new Error(`기존 발행 글 "${duplicate.record.title}"과 내용이 너무 비슷해 생성을 중단했습니다. 주제나 강조점을 조금 다르게 입력해주세요.`);
-    if (sourceUrl) {
-      post.content = `${post.content}\n\n참고 자료\n${resolvedSourceTitle || '관련 자료'}\n${sourceUrl}`;
+      extractedContent = extracted.content || '';
     }
 
+    const episodes = [];
+    let sharedSeriesTitle = '';
+    const seriesRoadmap = [];
+
+    for (let ep = 1; ep <= seriesCount; ep += 1) {
+      const seriesBadgeText = seriesCount > 1 ? `[${seriesCount}부작 중 제${ep}편] ` : '';
+      setGenerationProgress(generationId, {
+        phase: 'writing',
+        current: ep,
+        total: seriesCount,
+        message: `💎 Google Gemini가 ${seriesBadgeText}고품질 글을 집필하는 중 (${ep}/${seriesCount})`
+      });
+
+      const epNotes = ep === 1
+        ? notes
+        : [
+            notes,
+            sharedSeriesTitle ? `시리즈 대표명: ${sharedSeriesTitle}` : '',
+            seriesRoadmap.length ? `시리즈 전체 로드맵: ${seriesRoadmap.join(' -> ')}` : '',
+            `[연재 지침] 본 글은 전체 ${seriesCount}부작 중 제${ep}편입니다. 이번 회차 배정 테마(${seriesRoadmap[ep - 1] || `제${ep}부`})에 깊이 있게 집중하여 이전 편과 차별화된 심층 글을 작성하세요.`
+          ].filter(Boolean).join('\n');
+
+      let currentPost;
+      if (sourceUrl) {
+        const promptWithoutUrl = epNotes.replace(promptUrl, '').trim();
+        currentPost = await agyClient.generateArticleRewriteBlogPost({
+          sourceTitle: resolvedSourceTitle || newsTitle || topic,
+          sourceContent: extractedContent,
+          sourceUrl,
+          tone: ['informative', 'friendly', 'review', 'column'].includes(req.body?.tone) ? req.body.tone : 'friendly',
+          length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
+          seriesCount,
+          seriesEpisode: ep,
+          notes: promptWithoutUrl,
+          customFocus: topic,
+          model: targetModel,
+          avoidHistory: [...avoidHistory, ...episodes.map((e) => e.title)],
+          writingPrompt,
+          imagePrompt,
+          promptConfig
+        });
+      } else {
+        currentPost = await agyClient.generateBlogPost({
+          topic,
+          newsTitle,
+          source,
+          sourceUrl,
+          tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'informative',
+          length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium',
+          seriesCount,
+          seriesEpisode: ep,
+          notes: epNotes,
+          model: targetModel,
+          avoidHistory: [...avoidHistory, ...episodes.map((e) => e.title)],
+          writingPrompt,
+          imagePrompt,
+          promptConfig
+        });
+      }
+
+      if (sourceUrl) {
+        currentPost.content = `${currentPost.content}\n\n참고 자료\n${resolvedSourceTitle || '관련 자료'}\n${sourceUrl}`;
+      }
+
+      if (currentPost.seriesTitle && !sharedSeriesTitle) sharedSeriesTitle = currentPost.seriesTitle;
+      if (Array.isArray(currentPost.seriesRoadmap) && currentPost.seriesRoadmap.length > seriesRoadmap.length) {
+        seriesRoadmap.splice(0, seriesRoadmap.length, ...currentPost.seriesRoadmap);
+      }
+
+      episodes.push(currentPost);
+    }
+
+    const firstPost = episodes[0];
+    const duplicate = await postHistoryStore.findSimilar({ topic, title: firstPost.title, content: firstPost.content });
+    if (duplicate) throw new Error(`기존 발행 글 "${duplicate.record.title}"과 내용이 너무 비슷해 생성을 중단했습니다. 주제나 강조점을 조금 다르게 입력해주세요.`);
+
     const imageStyle = String(req.body?.imageStyle || 'photorealistic');
-    let autoImages = [];
-    try {
-      setGenerationProgress(generationId, { phase: 'image', current: 0, total: 3, message: '본문 작성 완료 · 이미지 생성을 준비하는 중' });
-      if (imageModelManager.activeModelId !== 'pollinations') await embeddedLlama.stop();
-      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle, imageModelManager });
-    } catch (err) {
-      console.error('Failed to generate local AI drawings:', err);
-      if (imageModelManager.activeModelId !== 'pollinations') {
-        throw new Error(`로컬 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
+
+    // Generate distinct AI images for all episodes (shared exclude sets guarantee zero duplicates across all episodes)
+    const sharedExcludeUrls = new Set();
+    const sharedExcludeTitles = new Set();
+    for (let i = 0; i < episodes.length; i += 1) {
+      setGenerationProgress(generationId, {
+        phase: 'image',
+        current: i + 1,
+        total: episodes.length,
+        message: episodes.length > 1
+          ? `제${i + 1}편 맞춤 고화질 이미지 준비 중 (${i + 1}/${episodes.length})`
+          : '본문 작성 완료 · 맞춤 고화질 이미지 준비 중'
+      });
+      try {
+        const epImages = await generateAiDrawingsForPost(episodes[i], path.join(__dirname, '.images'), {
+          style: imageStyle,
+          imageModelManager,
+          imagePrompt,
+          excludeUrls: sharedExcludeUrls,
+          excludeTitles: sharedExcludeTitles
+        });
+        episodes[i].autoImages = epImages;
+        episodes[i].images = epImages;
+      } catch (err) {
+        console.error(`Failed to generate AI drawings for episode ${i + 1}:`, err);
+        episodes[i].autoImages = [];
+        episodes[i].images = [];
       }
     }
 
-    setGenerationProgress(generationId, { status: 'complete', phase: 'complete', current: 3, total: 3, message: '글과 이미지 3장 생성 완료' });
+    setGenerationProgress(generationId, {
+      status: 'complete',
+      phase: 'complete',
+      current: seriesCount,
+      total: seriesCount,
+      message: seriesCount > 1
+        ? `총 ${seriesCount}부작 전편 집필 및 각 편 맞춤 이미지 생성 완료`
+        : '글과 이미지 3장 생성 완료'
+    });
+
     res.json({
-      ...post,
-      autoImages,
-      images: autoImages,
+      ...firstPost,
+      episodes,
+      autoImages: firstPost.autoImages || [],
+      images: firstPost.images || [],
       model: targetModel,
       engineType: activeEndpoint.type,
       engineLabel: activeEndpoint.label,
@@ -938,11 +994,8 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
 
     const activeEndpoint = await resolveActiveLlmEndpoint();
     const targetModel = activeEndpoint.model;
-    llmClient.baseUrl = activeEndpoint.baseUrl;
-    llmClient.model = targetModel;
-
     const avoidHistory = await postHistoryStore.recent(25);
-    const post = await llmClient.generateArticleRewriteBlogPost({
+    const post = await agyClient.generateArticleRewriteBlogPost({
       sourceTitle,
       sourceContent,
       sourceUrl,
@@ -964,13 +1017,9 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
     let autoImages = [];
 
     try {
-      if (imageModelManager.activeModelId !== 'pollinations') await embeddedLlama.stop();
       autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle, imageModelManager });
     } catch (err) {
-      console.error('Failed to generate local AI drawings:', err);
-      if (imageModelManager.activeModelId !== 'pollinations') {
-        throw new Error(`로컬 이미지 생성에 실패해 발행을 중단했습니다: ${err.message}`);
-      }
+      console.error('Failed to generate AI drawings:', err);
     }
 
     res.json({
@@ -993,15 +1042,31 @@ app.post('/api/blog/images/generate', async (req, res, next) => {
     const { prompt, title, style = 'photorealistic', afterHeading } = req.body || {};
     const textPrompt = prompt || title;
     if (!textPrompt) return res.status(400).json({ error: '생성할 그림 프롬프트를 입력해주세요.' });
-    if (imageModelManager.activeModelId !== 'pollinations') await embeddedLlama.stop();
     const image = await generateAiDrawing({
       prompt: textPrompt,
       style,
       outputDir: path.join(__dirname, '.images'),
-      imageModelManager
+      imageModelManager,
+      afterHeading,
+      postTitle: title || textPrompt
     });
     if (afterHeading) image.afterHeading = afterHeading;
     res.json({ ok: true, image });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/blog/series/generate-images', async (req, res, next) => {
+  try {
+    const { episodePost, imageStyle = 'photorealistic', imagePrompt = '' } = req.body || {};
+    if (!episodePost) return res.status(400).json({ error: '포스팅 정보가 필요합니다.' });
+    const images = await generateAiDrawingsForPost(episodePost, path.join(__dirname, '.images'), {
+      style: imageStyle,
+      imageModelManager,
+      imagePrompt
+    });
+    res.json({ ok: true, images });
   } catch (error) {
     next(error);
   }
@@ -1040,21 +1105,22 @@ app.post('/api/blog/images/auto', async (req, res, next) => {
         provider: image.provider || 'Wikimedia Commons'
       }))
     }));
-    const selections = await llmClient.selectRelevantImages({ topic, plans: rankingPlans });
     const used = new Set();
-    const items = selections.map((selection) => {
-      const planIndex = Number(selection.planIndex);
-      const image = candidateGroups[planIndex]?.find((candidate) => candidate.id === String(selection.imageId || ''));
-      if (!image || used.has(image.downloadUrl)) return null;
-      used.add(image.downloadUrl);
-      return {
-        ...image,
-        afterHeading: plans[planIndex]?.afterHeading || '',
-        caption: String(selection.caption || '').trim().slice(0, 300),
-        autoSelected: true
-      };
-    }).filter(Boolean).slice(0, 3);
-    res.json({ topic, items });
+    const items = [];
+    for (let index = 0; index < plans.length; index += 1) {
+      const group = candidateGroups[index] || [];
+      const image = group.find((candidate) => candidate.downloadUrl && !used.has(candidate.downloadUrl));
+      if (image) {
+        used.add(image.downloadUrl);
+        items.push({
+          ...image,
+          afterHeading: plans[index]?.afterHeading || '',
+          caption: image.title ? String(image.title).slice(0, 100) : '',
+          autoSelected: true
+        });
+      }
+    }
+    res.json({ topic, items: items.slice(0, 3) });
   } catch (error) {
     next(error);
   }
@@ -1194,7 +1260,6 @@ export function startServer(customPort = port) {
 export async function shutdown() {
   try {
     await browserSession.close();
-    await embeddedLlama.stop();
   } catch {}
   if (serverInstance) {
     serverInstance.close();
@@ -1219,7 +1284,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-export { app, browserSession, modelManager, embeddedLlama, engagementManager };
+export { app, browserSession, agyClient, imageModelManager, engagementManager, postHistoryStore };
 
 function normalizeHttpUrl(value) {
   try {

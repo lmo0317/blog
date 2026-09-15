@@ -4,6 +4,7 @@
   "private": true,
   "workspaces": ["windows", "apps/engagement", "apps/posting", "apps/license-server"],
   "scripts": {
+    "start": "npm --prefix apps/posting start",
     "start:windows": "npm --prefix windows start",
     "start:engagement": "npm --prefix apps/engagement start",
     "start:posting": "npm --prefix apps/posting start",

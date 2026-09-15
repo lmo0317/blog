@@ -39,7 +39,7 @@ test('auto posting client routes the unified user prompt through draft, image, a
   assert.match(script, /경과 시간/);
   assert.match(script, /오류 발생/);
   assert.match(script, /\/api\/image-models\/select/);
-  assert.match(script, /\/api\/image-models\/download/);
+  assert.match(script, /gemini-imagen/);
   assert.match(script, /function resetPublishedPostWorkspace\(\)/);
   assert.match(script, /resetPublishedPostWorkspace\(\)/);
   assert.match(script, /promptConfig/);
@@ -67,35 +67,30 @@ test('editable prompt JSON exposes the complete writing and image instructions',
   assert.match(llm, /노출, 속옷, 수영복/);
 });
 
-test('image model catalog exposes online, Z-Image-Turbo, and FLUX local choices', async () => {
+test('image model catalog exposes Google Imagen and online FLUX choices without ComfyUI', async () => {
   const manager = await readFile(path.join(appRoot, 'lib', 'image-model-manager.js'), 'utf8');
-  const worker = await readFile(path.join(appRoot, '.image-engine', 'worker.py'), 'utf8');
-  assert.match(manager, /Tongyi-MAI\/Z-Image-Turbo/);
-  assert.match(manager, /black-forest-labs\/FLUX\.2-klein-4B/);
-  assert.match(manager, /UV_DEFAULT_INDEX:'https:\/\/download\.pytorch\.org\/whl\/cu128'/);
-  assert.match(manager, /torch==2\.10\.0\+cu128/);
-  assert.doesNotMatch(worker, /ComfyUI/i);
+  assert.match(manager, /gemini-imagen/);
+  assert.match(manager, /pollinations/);
+  assert.doesNotMatch(manager, /ComfyUI/i);
+  assert.doesNotMatch(manager, /diffusers/i);
   const generator = await readFile(path.join(appRoot, 'lib', 'ai-image-generator.js'), 'utf8');
   assert.match(generator, /strictly family-friendly editorial still life/);
   assert.match(generator, /ABSOLUTELY NO PEOPLE/);
   assert.match(generator, /HUMAN_IMAGE_WORDS/);
-  assert.match(manager, /await this\.select\(id\)/);
-  assert.match(manager, /이미지 생성이 5분을 초과해 자동 중단/);
 });
 
-test('Gemma 4 server disables reasoning so JSON output is not consumed by hidden thinking', async () => {
-  const server = await readFile(path.join(appRoot, 'lib', 'embedded-llama.js'), 'utf8');
-  assert.match(server, /'--reasoning-budget', '0'/);
-  assert.match(server, /'--chat-template-kwargs', '\{"enable_thinking":false\}'/);
-  assert.match(server, /waitForReady\(120000\)/);
-  assert.match(server, /'-c', '8192'/);
+test('AgyClient generates Naver blog posts and comments via Google Gemini CLI', async () => {
+  const agy = await readFile(path.join(appRoot, 'lib', 'agy-client.js'), 'utf8');
+  assert.match(agy, /generateBlogPost/);
+  assert.match(agy, /generateBlogComment/);
+  assert.match(agy, /gemini-3\.8-flash-high/);
 });
 
-test('posting app shares the single local LLM port without duplicate model loading', async () => {
+test('posting app server uses pure Gemini and Google Imagen without local llama or ComfyUI', async () => {
   const server = await readFile(path.join(appRoot, 'server.js'), 'utf8');
-  const embedded = await readFile(path.join(appRoot, 'lib', 'embedded-llama.js'), 'utf8');
-  assert.match(server, /port: 8089/);
-  assert.match(embedded, /shared: true/);
+  assert.match(server, /AgyClient/);
+  assert.doesNotMatch(server, /embedded-llama/i);
+  assert.doesNotMatch(server, /comfyui/i);
 });
 
 test('LLM client retries a truncated structured response with a larger output budget', async () => {
@@ -120,4 +115,74 @@ test('markdown batch parser supports labeled and heading post formats', () => {
   assert.deepEqual(labeled.map((item) => item.topic), ['첫 글', '둘째 글']);
   const headings = parseMarkdownBatch('# 세 번째 글\n세 번째 내용\n\n# 네 번째 글\n네 번째 내용');
   assert.deepEqual(headings.map((item) => item.topic), ['세 번째 글', '네 번째 글']);
+});
+
+test('multi-part series configuration and roadmap banner are fully supported in UI and workflow', async () => {
+  const html = await readFile(path.join(appRoot, 'public', 'index.html'), 'utf8');
+  assert.match(html, /id="articleSeriesCount"/);
+  assert.match(html, /id="articleSeriesEpisode"/);
+  assert.match(html, /id="seriesEpisodeWrap"/);
+  assert.match(html, /id="seriesGuidance"/);
+  assert.match(html, /id="seriesPostBanner"/);
+  assert.match(html, /id="nextSeriesPromptBtn"/);
+  assert.match(html, /3부작 정규 시리즈/);
+  assert.match(html, /5부작 대기획/);
+
+  const script = await readFile(path.join(appRoot, 'public', 'app.js'), 'utf8');
+  assert.match(script, /updateSeriesEpisodeOptions/);
+  assert.match(script, /seriesCount/);
+  assert.match(script, /seriesEpisode/);
+  assert.match(script, /seriesPostBanner/);
+
+  const server = await readFile(path.join(appRoot, 'server.js'), 'utf8');
+  assert.match(server, /seriesCount = Math\.max\(1/);
+  assert.match(server, /seriesEpisode = Math\.max\(1/);
+});
+
+test('writingPrompt and imagePrompt are separated in UI, server, and agyClient', async () => {
+  const html = await readFile(path.join(appRoot, 'public', 'index.html'), 'utf8');
+  assert.match(html, /id="tabWritingPromptBtn"/);
+  assert.match(html, /id="tabImagePromptBtn"/);
+  assert.match(html, /id="writingPromptEditor"/);
+  assert.match(html, /id="imagePromptEditor"/);
+
+  const script = await readFile(path.join(appRoot, 'public', 'app.js'), 'utf8');
+  assert.match(script, /switchPromptTab/);
+  assert.match(script, /writingPrompt/);
+  assert.match(script, /imagePrompt/);
+
+  const server = await readFile(path.join(appRoot, 'server.js'), 'utf8');
+  assert.match(server, /writingPrompt/);
+  assert.match(server, /imagePrompt/);
+
+  const agy = await readFile(path.join(appRoot, 'lib', 'agy-client.js'), 'utf8');
+  assert.match(agy, /\[글생성 프롬프트 지침\]/);
+  assert.match(agy, /\[이미지 생성 프롬프트 지침\]/);
+});
+
+test('multi-part series generates all episodes, supports interactive episode tabs, and distinct images', async () => {
+  const html = await readFile(path.join(appRoot, 'public', 'index.html'), 'utf8');
+  assert.match(html, /id="seriesEpisodeTabsBar"/);
+  assert.match(html, /id="seriesEpisodeTabs"/);
+  assert.match(html, /id="seriesActiveEpBadge"/);
+  assert.match(html, /id="generateEpisodeImagesBtn"/);
+
+  const script = await readFile(path.join(appRoot, 'public', 'app.js'), 'utf8');
+  assert.match(script, /renderSeriesTabs/);
+  assert.match(script, /switchToEpisode/);
+  assert.match(script, /saveCurrentEpisodeState/);
+  assert.match(script, /updatePublishButtonLabel/);
+  assert.match(script, /state\.seriesEpisodes/);
+
+  const server = await readFile(path.join(appRoot, 'server.js'), 'utf8');
+  assert.match(server, /episodes\.push\(currentPost\)/);
+  assert.match(server, /\/api\/blog\/series\/generate-images/);
+
+  const agy = await readFile(path.join(appRoot, 'lib', 'agy-client.js'), 'utf8');
+  assert.match(agy, /fst\.mtimeMs < callStartTime/);
+  assert.match(agy, /RESOURCE_EXHAUSTED/);
+
+  const imageGen = await readFile(path.join(appRoot, 'lib', 'ai-image-generator.js'), 'utf8');
+  assert.match(imageGen, /visualPerspectives/);
+  assert.match(imageGen, /seed:\s*Math\.floor/);
 });

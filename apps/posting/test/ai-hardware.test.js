@@ -2,54 +2,58 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { rm } from 'node:fs/promises';
-import { detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG } from '../lib/hardware.js';
-import { ModelManager } from '../lib/model-manager.js';
-import { EmbeddedLlamaServer } from '../lib/embedded-llama.js';
+import { AgyClient, AGY_GEMINI_MODELS } from '../lib/agy-client.js';
+import { ImageModelManager, IMAGE_MODEL_CATALOG } from '../lib/image-model-manager.js';
 import { EngagementAutomationManager } from '../lib/engagement-automation.js';
 
-test('detectGpuSpecs and getSystemHardwareSummary return valid system metrics and model recommendations', async () => {
-  const summary = await getSystemHardwareSummary();
-  assert.ok(summary.cpu.model);
-  assert.ok(summary.cpu.cores > 0);
-  assert.ok(summary.ram.totalGb > 0);
-  assert.ok(summary.recommendedModel.id in MODEL_CATALOG);
-  assert.ok(Array.isArray(summary.catalog));
-  assert.equal(summary.catalog.length, 3);
+test('AgyClient exposes Gemini models and cloud configuration', async () => {
+  const agy = new AgyClient();
+  const models = agy.getModels();
+  assert.ok(Array.isArray(models));
+  assert.equal(models.length, 3);
+  assert.equal(agy.defaultModel, 'gemini-3.8-flash-high');
+  assert.ok(models.some((m) => m.id === 'gemini-3.8-flash-high'));
+  assert.ok(models.some((m) => m.id === 'gemini-3.7-flash-high'));
+  assert.ok(models.some((m) => m.id === 'gemini-3.1-pro-high'));
 });
 
-test('ModelManager handles local models catalog and active model selection', async () => {
-  const testModelsDir = path.join(process.cwd(), '.models-test');
-  const testConfigPath = path.join(process.cwd(), '.data', 'test-ai-config.json');
-  await rm(testModelsDir, { recursive: true, force: true }).catch(() => {});
+test('ImageModelManager manages Google Imagen and cloud FLUX options', async () => {
+  const testConfigPath = path.join(process.cwd(), '.data', 'test-image-config.json');
   await rm(testConfigPath, { force: true }).catch(() => {});
 
-  const manager = new ModelManager(testModelsDir, testConfigPath);
+  const manager = new ImageModelManager({ configPath: testConfigPath });
   await manager.init();
 
-  const installed = await manager.getInstalledModels();
-  assert.equal(installed.length, 3);
-  assert.equal(installed.every((m) => m.isInstalled === false), true);
+  const list = await manager.list();
+  assert.ok(list.length >= 2);
+  assert.equal(manager.activeModelId, 'gemini-imagen');
+  assert.ok(list.some((m) => m.id === 'gemini-imagen' && m.isActive));
+  assert.ok(list.some((m) => m.id === 'pollinations'));
 
-  await rm(testModelsDir, { recursive: true, force: true }).catch(() => {});
+  await manager.select('pollinations');
+  assert.equal(manager.activeModelId, 'pollinations');
+
   await rm(testConfigPath, { force: true }).catch(() => {});
 });
 
-test('EmbeddedLlamaServer generates clean human-like comment templates', async () => {
-  const server = new EmbeddedLlamaServer({ modelManager: null, fallbackExternalUrl: '' });
-  const comment = await server.generateBlogComment({
+test('AgyClient builds clean human-like comment templates without local LLM', async () => {
+  const agy = new AgyClient();
+  const prompt = agy.buildCommentPrompt({
     title: '강남역 수플레 팬케이크 맛집 탐방',
     contentSnippet: '폭신폭신한 수플레와 딸기 토핑이 너무 맛있었습니다.',
+    imageSummary: '딸기가 얹어진 수플레 팬케이크 사진',
     tone: 'friendly'
   });
 
-  assert.ok(comment.length > 5);
-  assert.equal(server.cleanCommentOutput('"정말 맛있는 후기네요!"'), '정말 맛있는 후기네요!');
-  assert.equal(server.cleanCommentOutput('댓글 : 유익한 정보 감사합니다.'), '유익한 정보 감사합니다.');
+  assert.ok(prompt.includes('강남역 수플레 팬케이크 맛집 탐방'));
+  assert.ok(prompt.includes('폭신폭신한 수플레'));
+  assert.ok(prompt.includes('자연스럽고 따뜻한 공감 댓글'));
+  assert.ok(prompt.includes('친근한'));
 });
 
 test('EngagementAutomationManager validates configuration', async () => {
   const mockSession = { connected: false };
-  const manager = new EngagementAutomationManager({ browserSession: mockSession, embeddedLlama: null, historyStore: null });
+  const manager = new EngagementAutomationManager({ browserSession: mockSession, agyClient: null, historyStore: null });
 
   await assert.rejects(
     async () => manager.start({ keyword: '맛집' }),
@@ -83,8 +87,8 @@ test('EngagementAutomationManager counts completed posts once, not likes and com
     async hasEngagedPost() { return false; },
     async addRecord() {}
   };
-  const mockLlm = { async generateBlogComment() { return '좋은 글 감사합니다.'; } };
-  const manager = new EngagementAutomationManager({ browserSession: mockSession, embeddedLlama: mockLlm, historyStore: mockHistory });
+  const mockAgy = { async generateBlogComment() { return '좋은 글 감사합니다.'; } };
+  const manager = new EngagementAutomationManager({ browserSession: mockSession, agyClient: mockAgy, historyStore: mockHistory });
   manager.countdownDelay = async () => {};
 
   await manager.start({ keyword: '테스트', targetCount: 3, doLike: true, doComment: true, doNeighbor: true, minDelay: 5, maxDelay: 5 });
@@ -174,21 +178,21 @@ test('visual-renderer generates valid 1200x800 card HTML and structure', async (
   const { generateCardHtml } = await import('../lib/visual-renderer.js');
   const html = generateCardHtml({
     type: 'summary_card',
-    badge: '⚡ Gemma 4 12B AI 인포그래픽',
+    badge: '💎 Google Gemini AI 인포그래픽',
     title: '성공적인 블로그 운영 핵심 가이드',
-    subtitle: '100% 로컬 연산으로 완성하는 비주얼 콘텐츠',
+    subtitle: '클라우드 연산으로 완성하는 고화질 비주얼 콘텐츠',
     items: [
       { title: '핵심 1', desc: '고품질 글과 이미지의 완벽한 조화' },
       { title: '핵심 2', desc: '독자의 시선을 사로잡는 인포그래픽' }
     ],
-    highlight: 'Gemma 4 12B가 직접 디자인한 인포그래픽입니다.',
+    highlight: 'Google Gemini가 직접 디자인한 인포그래픽입니다.',
     theme: 'indigo'
   });
 
   assert.ok(html.includes('1200px'));
   assert.ok(html.includes('800px'));
   assert.ok(html.includes('성공적인 블로그 운영 핵심 가이드'));
-  assert.ok(html.includes('Gemma 4 12B Local AI Studio'));
+  assert.ok(html.includes('Google Gemini AI Studio'));
 });
 
 test('ai-image-generator builds rich artistic prompts for multiple styles', async () => {

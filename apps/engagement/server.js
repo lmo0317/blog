@@ -20,7 +20,7 @@ import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-re
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { CommentReplyStore } from './lib/comment-replies.js';
 import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManager } from './lib/naver-feed-engage.js';
-import { fetchReceivedBuddyRequests, fetchSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
+import { acceptReceivedBuddyRequest, fetchReceivedBuddyRequests, fetchSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
 import { LicenseClientManager } from './lib/license-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -855,6 +855,42 @@ app.post('/api/cleaner/received/start', async (req, res, next) => {
   try {
     const result = await neighborCleanerManager.startCleanReceived(req.body || {});
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/cleaner/received/accept', async (req, res, next) => {
+  try {
+    if (!browserSession.connected) {
+      return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않습니다.' });
+    }
+    if (neighborCleanerManager.state === 'running' || neighborCleanerManager.state === 'paused') {
+      return res.status(409).json({ error: 'AI 자동 처리 중에는 개별 수락을 사용할 수 없습니다.' });
+    }
+
+    const targetBlogId = String(req.body?.targetBlogId || '').trim();
+    if (!/^[a-zA-Z0-9_-]{2,50}$/.test(targetBlogId)) {
+      return res.status(400).json({ error: '수락할 블로그 ID가 올바르지 않습니다.' });
+    }
+
+    const blogId = browserSession.accountLabel || 'lmo0317';
+    const page = await browserSession.context.newPage();
+    try {
+      const requests = await fetchReceivedBuddyRequests(page, blogId);
+      const target = requests.find((item) => item.targetBlogId === targetBlogId);
+      if (!target) {
+        return res.status(404).json({ error: '대기 중인 서로이웃 신청을 찾을 수 없습니다. 목록을 새로고침해주세요.' });
+      }
+
+      const activeGroup = browserSession.groupStore
+        ? browserSession.groupStore.getActiveGroupName?.() || ''
+        : '';
+      const result = await acceptReceivedBuddyRequest(page, targetBlogId, { activeGroup });
+      res.json({ ...result, nickname: target.nickname || targetBlogId, activeGroup });
+    } finally {
+      await page.close().catch(() => {});
+    }
   } catch (error) {
     next(error);
   }

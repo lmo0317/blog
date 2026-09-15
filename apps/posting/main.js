@@ -5,90 +5,115 @@ import { startServer, shutdown } from './server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Give this desktop product its own Electron identity. Without this, Electron
-// treats it as the legacy combined app and only focuses that existing window.
+// Give this desktop product its own Electron identity.
 app.setName('Naver Posting Desktop');
 app.setPath('userData', path.join(__dirname, '.electron'));
 
-let mainWindow = null;
-let serverPort = null;
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  let mainWindow = null;
+  let serverPort = null;
 
-async function createWindow() {
-  // Start backend server on safe internal port
-  try {
-    const { port } = await startServer(4314);
-    serverPort = port;
-  } catch (err) {
-    // If port 4310 is busy, use an open port
-    const { port } = await startServer(0);
-    serverPort = port;
-  }
-
-  // Create native desktop window
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 880,
-    minWidth: 980,
-    minHeight: 700,
-    title: '이웃메이트 Post - AI 자동 포스팅',
-    autoHideMenuBar: true,
-    show: false, // Show when ready
-    backgroundColor: '#f8f9fa',
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true
-    }
-  });
-
-  Menu.setApplicationMenu(null);
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
-  // Open external links in user's default browser
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http:') || url.startsWith('https:')) {
-      shell.openExternal(url);
-    }
-    return { action: 'deny' };
-  });
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-
-  // Load the desktop interface with retry
-  const targetUrl = `http://127.0.0.1:${serverPort}`;
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    try {
-      await mainWindow.loadURL(targetUrl);
-      break;
-    } catch (err) {
-      if (attempt === 5) throw err;
-      await new Promise((r) => setTimeout(r, 400));
-    }
-  }
-}
-
-app.whenReady().then(async () => {
-  await createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
       createWindow();
     }
   });
-});
 
-app.on('window-all-closed', async () => {
-  await shutdown();
-  if (process.platform !== 'darwin') {
-    app.quit();
+  async function createWindow() {
+    // Start backend server on safe internal port
+    try {
+      const { port } = await startServer(4314);
+      serverPort = port;
+    } catch (err) {
+      // If port 4314 is busy, use an open port
+      const { port } = await startServer(0);
+      serverPort = port;
+    }
+
+    // Create native desktop window
+    mainWindow = new BrowserWindow({
+      width: 1200,
+      height: 880,
+      minWidth: 980,
+      minHeight: 700,
+      title: '이웃메이트 Post - AI 자동 포스팅',
+      autoHideMenuBar: true,
+      show: true,
+      backgroundColor: '#f8f9fa',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true
+      }
+    });
+
+    Menu.setApplicationMenu(null);
+
+    mainWindow.once('ready-to-show', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+
+    // Open external links in user's default browser
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+      if (url.startsWith('http:') || url.startsWith('https:')) {
+        shell.openExternal(url);
+      }
+      return { action: 'deny' };
+    });
+
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+    });
+
+    // Load the desktop interface with retry
+    const targetUrl = `http://127.0.0.1:${serverPort}`;
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      try {
+        await mainWindow.loadURL(targetUrl);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+        break;
+      } catch (err) {
+        if (attempt === 5) throw err;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
   }
-});
 
-app.on('before-quit', async () => {
-  await shutdown();
-});
+  app.whenReady().then(async () => {
+    await createWindow();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+
+  app.on('window-all-closed', async () => {
+    try {
+      await shutdown();
+    } catch {}
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+
+  app.on('before-quit', async () => {
+    try {
+      await shutdown();
+    } catch {}
+  });
+}

@@ -18,7 +18,6 @@ test('trend RSS parser extracts Korean topic and source safely', () => {
   assert.equal(items[0].newsTitle, '휴가 준비 & 체크리스트');
   assert.equal(items[0].sourceUrl, 'https://example.com/news?id=1&from=rss');
 });
-
 test('LLM JSON parser accepts fenced JSON and normalizes tags', () => {
   const parsed = parseLlmJson('```json\n{"title":"테스트 제목","content":"충분히 긴 본문입니다. ".repeat(10),"tags":[]}\n```'.replace('"충분히 긴 본문입니다. ".repeat(10)', `"${'충분히 긴 본문입니다. '.repeat(10)}"`));
   assert.equal(parsed.title, '테스트 제목');
@@ -39,8 +38,8 @@ test('structured LLM response becomes a readable fixed-form post', () => {
     tags: ['가이드'],
     imageQueries: ['Korean summer beach']
   });
-  assert.match(post.content, /\[한눈에 보기\]\n• 첫 번째 핵심/);
-  assert.match(post.content, /\[ 첫 번째 소제목 \]\n\n구체적인 설명/);
+  assert.match(post.content, /오늘의 핵심 요약 브리핑\n\n• 첫 번째 핵심/);
+  assert.match(post.content, /첫 번째 소제목\n\n구체적인 설명/);
   assert.deepEqual(post.imageQueries, ['Korean summer beach']);
 });
 
@@ -64,7 +63,7 @@ test('Commons image search keeps reusable images and builds attribution', async 
   }) });
   assert.equal(images.length, 1);
   assert.equal(images[0].author, 'Photo Author');
-  assert.match(appendImageAttributions('본문', images), /이미지 출처 및 라이선스/);
+  assert.match(appendImageAttributions('본문', images), /이미지 출처 및 안내/);
   assert.match(appendImageAttributions('본문', images), /CC BY-SA 4.0/);
 });
 
@@ -227,4 +226,36 @@ test('community source links are rejected while known warning redirects unwrap t
     'https://shopping.naver.com/festa/onsale/example'
   );
   assert.equal(isDirectProductUrl('https://unsafelink.com/https://shopping.naver.com/festa/onsale/example'), true);
+});
+
+test('normalizeGeneratedPost composes structured series roadmap banner and teaser', () => {
+  const post = normalizeGeneratedPost({
+    title: '[블로그 글쓰기 2편] 독자를 사로잡는 마법의 서론 작성법',
+    lead: '많은 분들이 글의 도입부에서 고민합니다. 첫 문장을 어떻게 시작해야 할까요?',
+    summaryPoints: ['핵심 포인트 1', '핵심 포인트 2', '핵심 포인트 3'],
+    sections: [
+      { heading: '1. 서론의 기본 공식', body: '서론은 3단계로 구성됩니다. 첫째 문제 공감, 둘째 해결책 제시, 셋째 기대 효과입니다. 이 방식을 적용하면 독자의 이탈률을 획기적으로 낮출 수 있습니다.', imageQuery: 'writing a blog post' },
+      { heading: '2. 실패하지 않는 예시', body: '실제 파워블로거들의 서론 작성 사례를 살펴보면 공통점이 있습니다. 바로 질문형 시작과 구체적인 수치 제시입니다.', imageQuery: 'blogger typing on laptop' }
+    ],
+    closing: '오늘 알려드린 팁으로 멋진 서론을 작성해보세요.',
+    tags: ['블로그글쓰기', '서론작성법'],
+    seriesTitle: '블로그 글쓰기 마스터클래스',
+    seriesCount: 3,
+    seriesEpisode: 2,
+    seriesRoadmap: [
+      '1부: 클릭을 부르는 황금 키워드 발굴법',
+      '2부: 독자를 사로잡는 마법의 서론 작성법',
+      '3부: 체류 시간 5분을 넘기는 본문 구성 테크닉'
+    ],
+    nextEpisodeTeaser: '다음 3편에서는 체류 시간을 5분 이상 늘려주는 본문 구성 비법을 공개합니다.'
+  });
+
+  assert.equal(post.seriesCount, 3);
+  assert.equal(post.seriesEpisode, 2);
+  assert.match(post.content, /\[기획 연재\] 블로그 글쓰기 마스터클래스 \(2\/3부작\)/);
+  assert.match(post.content, /\[시리즈 연재 목차 안내\]/);
+  assert.match(post.content, /\(현재 읽고 계신 글\)/);
+  assert.match(post.content, /\[다음 편 예고\]/);
+  assert.match(post.content, /체류 시간을 5분 이상 늘려주는/);
+  assert.match(post.content, /이웃 추가\(서로이웃\)를 해두시면/);
 });

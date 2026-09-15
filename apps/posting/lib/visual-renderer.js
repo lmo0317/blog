@@ -107,7 +107,7 @@ function escapeHtml(value) {
 }
 
 export function generateCardHtml({
-  badge = '⚡ Gemma 4 12B AI 인포그래픽',
+  badge = '💎 Google Gemini AI 인포그래픽',
   title = '블로그 핵심 가이드',
   subtitle = '',
   items = [],
@@ -115,7 +115,7 @@ export function generateCardHtml({
   theme = 'indigo'
 }) {
   const palette = THEME_PALETTES[theme] || THEME_PALETTES.indigo;
-  const safeBadge = escapeHtml(badge || '⚡ Gemma 4 12B AI 요약');
+  const safeBadge = escapeHtml(badge || '💎 Google Gemini AI 요약');
   const safeTitle = escapeHtml(title || '핵심 인사이트 가이드');
   const safeSubtitle = escapeHtml(subtitle || '');
   const safeHighlight = escapeHtml(highlight || '');
@@ -340,7 +340,7 @@ export function generateCardHtml({
       </div>
     ` : '<div style="flex:1;"></div>'}
     <div class="watermark">
-      <span>⚡ Gemma 4 12B Local AI Studio</span>
+      <span>💎 Google Gemini AI Studio</span>
     </div>
   </div>
 </body>
@@ -371,11 +371,11 @@ export async function renderVisualCardToPng(cardData, outputDir, { filename = ''
     downloadUrl: `/generated-images/${finalFilename}`,
     thumbnailUrl: `/generated-images/thumb/${finalFilename}`,
     pageUrl: '',
-    author: 'Gemma 4 12B Local AI Engine',
-    license: 'Gemma 4 12B AI 직접 생성',
+    author: 'Google Gemini Cloud AI Engine',
+    license: 'Google Gemini AI 직접 생성',
     licenseUrl: '',
     afterHeading: cardData.afterHeading || '',
-    caption: cardData.caption || `⚡ Gemma 4 12B AI 요약 인포그래픽: ${cardData.title}`,
+    caption: cardData.caption || `💎 Google Gemini AI 요약 인포그래픽: ${cardData.title}`,
     isAiGenerated: true,
     autoSelected: true
   };
@@ -401,7 +401,7 @@ export async function renderVisualCardsForPost(post, outputDir) {
         badge: '✨ 3줄 핵심 요약 브리핑',
         title: post.title,
         items: post.summaryPoints.map((pt, i) => ({ title: `핵심 요약 ${i + 1}`, desc: pt })),
-        highlight: 'Gemma 4 12B가 핵심 내용을 빠르게 정리했습니다.',
+        highlight: 'Google Gemini가 핵심 내용을 빠르게 정리했습니다.',
         theme: 'indigo',
         afterHeading: post.sectionHeadings?.[0] || ''
       });
