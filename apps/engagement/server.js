@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
 import { NaverBrowserSession, normalizeAutocompleteKeywords } from './lib/naver.js';
+import { discoverGoldenKeywords } from './lib/golden-keyword.js';
 import { LocalLlmClient } from './lib/llm.js';
 import { fetchKoreanTrends } from './lib/trends.js';
 import { fetchAlgumonRankDeals, isDirectProductUrl, unwrapKnownRedirectUrl } from './lib/algumon.js';
@@ -1203,6 +1204,20 @@ app.get('/api/blog/related-keywords', async (req, res, next) => {
     if (!response.ok) throw new Error(`네이버 검색 제안 응답 오류 (${response.status})`);
     const keywords = normalizeAutocompleteKeywords(await response.json(), keyword, 20);
     res.json({ keyword, keywords, count: keywords.length, source: 'naver-search-suggestions', searchedAt: new Date().toISOString() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/blog/golden-keywords', async (req, res, next) => {
+  try {
+    const keyword = String(req.query?.keyword || '').replace(/\s+/g, ' ').trim();
+    if (keyword.length < 1 || keyword.length > 50) {
+      return res.status(400).json({ error: '황금 키워드 검색어는 1~50자로 입력해주세요.' });
+    }
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 20, 5), 30);
+    const result = await discoverGoldenKeywords({ keyword, limit });
+    res.json(result);
   } catch (error) {
     next(error);
   }
