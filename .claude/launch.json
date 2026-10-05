@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "engagement",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["apps/engagement/server.js"],
+      "port": 4310
+    }
+  ]
+}
