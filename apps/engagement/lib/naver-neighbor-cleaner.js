@@ -349,50 +349,140 @@ async function fetchSentBuddyRequests(page, blogId, currentPage = 1) {
   await page.waitForTimeout(1000);
 
   const html = await page.content();
-  const items = parseSentRequestsHtml(html);
+  const items = parseSentRequestsHtml(html).map((item) => ({
+    ...item,
+    sourcePage: currentPage
+  }));
 
-  // Check max pagination
-  const maxPage = await page.evaluate(() => {
+  // Naver displays pagination in blocks (1~10, then 11~20). Keep both the
+  // largest visible page and the next-block target so callers can walk every
+  // block instead of mistaking the first block for the full list.
+  const pagination = await page.evaluate((requestedPage) => {
     const pageNums = Array.from(document.querySelectorAll('.paginate a, .paginate strong'))
       .map((el) => parseInt(el.innerText.trim(), 10))
       .filter((n) => !isNaN(n));
-    return pageNums.length ? Math.max(...pageNums) : 1;
-  });
+    const nextLink = Array.from(document.querySelectorAll('.paginate a')).find((el) => {
+      const label = `${el.innerText || ''} ${el.getAttribute('title') || ''}`.trim();
+      return /(^|\s)next(\s|$)/i.test(el.className || '') || label.includes('다음');
+    });
+    const nextMatch = nextLink?.getAttribute('href')?.match(/goPage\((\d+)\)/i);
+    return {
+      maxPage: pageNums.length ? Math.max(...pageNums) : requestedPage,
+      nextPage: nextMatch ? Number(nextMatch[1]) : null
+    };
+  }, currentPage);
 
-  return { items, currentPage, maxPage };
+  return {
+    items,
+    currentPage,
+    maxPage: Math.max(currentPage, Number(pagination?.maxPage) || currentPage),
+    nextPage: Number(pagination?.nextPage) || null
+  };
+}
+
+async function fetchAllSentBuddyRequests(page, blogId, options = {}) {
+  const {
+    include = () => true,
+    maxItems = Number.POSITIVE_INFINITY,
+    maxPages = 200
+  } = options;
+  const items = [];
+  let pageNo = 1;
+  let maxDiscoveredPage = 1;
+
+  while (pageNo <= maxDiscoveredPage && pageNo <= maxPages) {
+    const pageData = await fetchSentBuddyRequests(page, blogId, pageNo);
+    maxDiscoveredPage = Math.max(
+      maxDiscoveredPage,
+      pageData.maxPage || pageNo,
+      pageData.nextPage || 0
+    );
+
+    for (const item of pageData.items) {
+      if (include(item) && items.length < maxItems) items.push(item);
+    }
+
+    if (items.length >= maxItems) break;
+    pageNo++;
+  }
+
+  return {
+    items,
+    totalPages: maxDiscoveredPage,
+    scannedPages: Math.min(pageNo, maxDiscoveredPage, maxPages),
+    truncated: pageNo >= maxPages && maxDiscoveredPage > maxPages
+  };
+}
+
+async function locateSentBuddyRequest(page, blogId, item, maxPageHint = 1) {
+  const sourcePage = Math.max(1, Number(item.sourcePage) || 1);
+  const maxPage = Math.max(sourcePage, Number(maxPageHint) || 1);
+  const candidates = [sourcePage];
+
+  // Earlier cancellations can pull an item toward a previous page. Search those
+  // pages first, then later pages as a defensive fallback for live list changes.
+  for (let pageNo = sourcePage - 1; pageNo >= 1; pageNo--) candidates.push(pageNo);
+  for (let pageNo = sourcePage + 1; pageNo <= maxPage; pageNo++) candidates.push(pageNo);
+
+  for (const pageNo of candidates) {
+    const pageData = await fetchSentBuddyRequests(page, blogId, pageNo);
+    const matched = pageData.items.find((candidate) => (
+      candidate.buddyBlogNo === item.buddyBlogNo
+      || (candidate.targetBlogId === item.targetBlogId && !item.buddyBlogNo)
+    ));
+    if (matched) return { item: matched, pageNo, maxPage: pageData.maxPage };
+  }
+
+  return null;
 }
 
 /**
  * Cancel a single sent buddy request
  */
-async function cancelSingleSentBuddyRequest(page, item) {
-  const { buddyBlogNo, targetBlogId } = item;
+async function cancelSingleSentBuddyRequest(page, item, options = {}) {
+  const { blogId = '', maxPage = item.sourcePage || 1, dialogTimeoutMs = 5000 } = options;
+  let activeItem = item;
+  let activePage = Math.max(1, Number(item.sourcePage) || 1);
+
+  if (blogId) {
+    const located = await locateSentBuddyRequest(page, blogId, item, maxPage);
+    if (!located) {
+      throw new Error(`@${item.targetBlogId}의 대기 중인 신청을 현재 보낸 신청 목록에서 찾을 수 없습니다.`);
+    }
+    activeItem = located.item;
+    activePage = located.pageNo;
+  }
+
+  const { buddyBlogNo, targetBlogId } = activeItem;
   if (!buddyBlogNo) {
     throw new Error(`@${targetBlogId}의 취소 식별 번호(buddyBlogNo)가 없습니다.`);
   }
 
-  const dialogPromise = new Promise((resolve) => {
-    const handler = async (dialog) => {
-      await dialog.accept().catch(() => {});
-      resolve(dialog.message());
-    };
-    page.once('dialog', handler);
-  });
-
   const cancelBtn = await page.$(`button._cancleInvite._param\\(${buddyBlogNo}\\)`);
   if (!cancelBtn) {
-    throw new Error(`@${targetBlogId}의 신청취소 버튼을 찾을 수 없습니다.`);
+    throw new Error(`@${targetBlogId}의 신청취소 버튼을 ${activePage}페이지에서 찾을 수 없습니다.`);
   }
 
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {}),
-    cancelBtn.click()
-  ]);
+  const dialogPromise = page.waitForEvent('dialog', { timeout: dialogTimeoutMs })
+    .then(async (dialog) => {
+      const message = dialog.message();
+      await dialog.accept();
+      return message;
+    })
+    .catch(() => null);
 
-  await dialogPromise.catch(() => {});
-  await page.waitForTimeout(1000);
+  await Promise.all([cancelBtn.click(), dialogPromise]);
+  await page.waitForTimeout(500);
 
-  return { ok: true, action: 'canceled', targetBlogId, buddyBlogNo };
+  if (blogId) {
+    const verifiedPage = await fetchSentBuddyRequests(page, blogId, activePage);
+    const stillPending = verifiedPage.items.some((candidate) => candidate.buddyBlogNo === buddyBlogNo);
+    if (stillPending) {
+      throw new Error(`@${targetBlogId}의 신청이 취소 후에도 목록에 남아 있습니다.`);
+    }
+  }
+
+  return { ok: true, action: 'canceled', targetBlogId, buddyBlogNo, sourcePage: activePage };
 }
 
 /**
@@ -652,21 +742,11 @@ class NeighborCleanerManager {
     try {
       this.log('🔍 보낸 신청 목록을 조회하고 경과일을 분석합니다...', 'info');
       
-      const initial = await fetchSentBuddyRequests(page, blogId, 1);
-      const allExpired = [];
-
-      // Collect expired items across pages up to maxCancelCount
-      for (let p = 1; p <= initial.maxPage; p++) {
-        if (this.shouldStop) break;
-        const pageData = p === 1 ? initial : await fetchSentBuddyRequests(page, blogId, p);
-        
-        for (const item of pageData.items) {
-          if (item.daysAgo >= olderThanDays) {
-            allExpired.push(item);
-          }
-        }
-        if (allExpired.length >= maxCancelCount) break;
-      }
+      const collected = await fetchAllSentBuddyRequests(page, blogId, {
+        include: (item) => item.daysAgo >= olderThanDays,
+        maxItems: maxCancelCount
+      });
+      const allExpired = collected.items;
 
       this.stats.total = allExpired.length;
       if (!allExpired.length) {
@@ -684,6 +764,10 @@ class NeighborCleanerManager {
         return { ok: true, stats: this.stats, expiredItems: allExpired };
       }
 
+      // Start from later pages so earlier-page deletions do not shift pending
+      // targets away from the page on which they were collected.
+      allExpired.sort((a, b) => (b.sourcePage || 1) - (a.sourcePage || 1));
+
       // Execute cancellations
       for (let i = 0; i < allExpired.length; i++) {
         if (this.shouldStop) break;
@@ -697,13 +781,17 @@ class NeighborCleanerManager {
         this.log(`[${i + 1}/${allExpired.length}] @${item.targetBlogId} (${item.nickname}, ${item.daysAgo}일 경과) 취소 중...`, 'info');
 
         try {
-          await cancelSingleSentBuddyRequest(page, item);
+          await cancelSingleSentBuddyRequest(page, item, {
+            blogId,
+            maxPage: collected.totalPages
+          });
           this.stats.canceled++;
-          this.stats.processed++;
           this.log(`🗑️ @${item.targetBlogId} 보낸 신청을 성공적으로 취소하여 슬롯을 복구했습니다.`, 'success');
         } catch (err) {
           this.stats.errors++;
           this.log(`❌ @${item.targetBlogId} 취소 실패: ${err.message}`, 'error');
+        } finally {
+          this.stats.processed++;
         }
 
         // Delay between cancellations
@@ -716,7 +804,8 @@ class NeighborCleanerManager {
         }
       }
 
-      this.log(`🎉 보낸 신청 회수 완료: 총 ${this.stats.canceled}건 취소 완료 (이웃 추가 슬롯 복구)`, 'success');
+      const failedSummary = this.stats.errors ? `, ${this.stats.errors}건 실패` : '';
+      this.log(`🎉 보낸 신청 회수 완료: 총 ${this.stats.canceled}건 취소 완료${failedSummary} (이웃 추가 슬롯 복구)`, this.stats.errors ? 'warn' : 'success');
       this.state = this.shouldStop ? 'stopped' : 'completed';
       return { ok: true, stats: this.stats };
     } catch (error) {
@@ -740,6 +829,7 @@ export {
   acceptReceivedBuddyRequest,
   rejectReceivedBuddyRequest,
   fetchSentBuddyRequests,
+  fetchAllSentBuddyRequests,
   cancelSingleSentBuddyRequest,
   NeighborCleanerManager
 };

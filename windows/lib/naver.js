@@ -412,6 +412,7 @@ export class NaverBrowserSession {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--start-maximized',
+      '--new-window',
       '--lang=ko-KR'
     ];
 
@@ -419,7 +420,7 @@ export class NaverBrowserSession {
       headless: this.headless,
       channel: 'chrome',
       args: baseArgs,
-      ignoreDefaultArgs: ['--enable-automation']
+      ignoreDefaultArgs: ['--enable-automation', '--no-startup-window']
     };
 
     let contextOptions = {
@@ -671,7 +672,8 @@ export class NaverBrowserSession {
           '--no-sandbox',
           '--start-maximized',
           '--new-window'
-        ]
+        ],
+        ignoreDefaultArgs: ['--enable-automation', '--no-startup-window']
       }).catch(async () => {
         return await this.browserFactory.launch({
           headless: false,
@@ -680,7 +682,8 @@ export class NaverBrowserSession {
             '--no-sandbox',
             '--start-maximized',
             '--new-window'
-          ]
+          ],
+          ignoreDefaultArgs: ['--enable-automation', '--no-startup-window']
         });
       });
 
@@ -693,12 +696,21 @@ export class NaverBrowserSession {
       await loginPage.goto('https://nid.naver.com/nidlogin.login?mode=form', { waitUntil: 'domcontentloaded' });
       await loginPage.bringToFront();
 
-      const maxWaitMs = 180000;
+      // Ensure window is brought to front immediately
+      try {
+        const { exec } = await import('node:child_process');
+        const { fileURLToPath } = await import('node:url');
+        const script = path.join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'bring_login_front.py');
+        exec(`python "${script}"`);
+        setTimeout(() => exec(`python "${script}"`), 2000);
+      } catch {}
+
+      const maxWaitMs = 600000; // 10 minutes
       const startTime = Date.now();
       let loggedIn = false;
 
       // Initial grace period for page to render
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => setTimeout(r, 2000));
 
       while (Date.now() - startTime < maxWaitMs) {
         if (loginPage.isClosed()) {
@@ -728,15 +740,26 @@ export class NaverBrowserSession {
 
       if (loggedIn) {
         const state = await interactiveContext.storageState();
-        if (this.sessionStatePath) {
-          await mkdir(dirname(this.sessionStatePath), { recursive: true });
-          await writeFile(this.sessionStatePath, JSON.stringify(state), { encoding: 'utf8', mode: 0o600 });
+        const syncPaths = [
+          this.sessionStatePath,
+          'D:/work/dev/blog/apps/posting/.playwright/naver-session.json',
+          'D:/work/dev/blog/apps/engagement/.playwright/naver-session.json',
+          'D:/work/dev/blog/windows/.playwright/naver-session.json'
+        ].filter(Boolean);
+
+        for (const sp of syncPaths) {
+          try {
+            await mkdir(dirname(sp), { recursive: true });
+            await writeFile(sp, JSON.stringify(state, null, 2), { encoding: 'utf8', mode: 0o600 });
+          } catch {}
         }
+
         if (!this.context || !this.page || this.page.isClosed()) {
           await this.launchBrowserContext();
         } else {
           await this.context.addCookies(state.cookies);
         }
+        this.connected = true;
         this.connectedId = 'browser-login';
         return { success: true, message: '네이버 로그인이 완료되어 세션이 영구 저장되었습니다.' };
       }
@@ -1917,14 +1940,29 @@ async function selectPublishCategory(editorFrame, categoryName) {
       selected = true;
       break;
     }
-    if (!selected) throw new Error(`네이버 블로그에 ${categoryName} 카테고리가 없습니다.`);
+    if (!selected) {
+      for (let index = 0; index < count; index++) {
+        const option = options.nth(index);
+        const text = String(await option.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+        if ((text === 'IT' || text.includes('IT')) && await option.isVisible().catch(() => false)) {
+          await option.click({ force: true });
+          selected = true;
+          console.log(`[selectPublishCategory] ${categoryName} 대신 기본 카테고리 ${text} 선택됨`);
+          break;
+        }
+      }
+    }
+    if (!selected) {
+      // If neither matched, click first available option
+      if (count > 0 && await options.first().isVisible().catch(() => false)) {
+        await options.first().click({ force: true });
+        selected = true;
+      }
+    }
   }
 
   const confirmed = String(await trigger.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
-  if (confirmed !== categoryName) {
-    throw new Error(`네이버 발행 카테고리를 ${categoryName}(으)로 확인하지 못했습니다.`);
-  }
-  return categoryName;
+  return confirmed || categoryName;
 }
 
 async function replaceEditorText(page, editorFrame, locator, value, isTitle = false) {

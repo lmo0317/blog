@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   parseBuddyDate,
   getDaysAgo,
@@ -7,8 +8,22 @@ import {
   evaluateBuddyRequestWithAI,
   parseReceivedRequestsHtml,
   parseSentRequestsHtml,
+  fetchAllSentBuddyRequests,
+  cancelSingleSentBuddyRequest,
   NeighborCleanerManager
 } from '../lib/naver-neighbor-cleaner.js';
+
+test('sent cleanup UI restores the primary action after every terminal state', async () => {
+  const appSource = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const sentDashboardBranch = appSource.slice(
+    appSource.indexOf("} else if (stats.type === 'sent')"),
+    appSource.indexOf('\n  }\n}', appSource.indexOf("} else if (stats.type === 'sent')"))
+  );
+
+  assert.match(sentDashboardBranch, /if \(isIdle\) \{/);
+  assert.match(sentDashboardBranch, /startBtn\.disabled = false/);
+  assert.match(sentDashboardBranch, /오래된 신청 취소/);
+});
 
 test('parseBuddyDate parses Korean 2-digit and 4-digit date formats', () => {
   const d1 = parseBuddyDate('26.09.07.');
@@ -169,6 +184,159 @@ test('parseSentRequestsHtml extracts sent items with buddyBlogNo and date', () =
   assert.equal(items[0].buddyBlogNo, '12345678');
   assert.equal(items[0].dateStr, '26.08.20.');
   assert.ok(items[0].daysAgo >= 10);
+});
+
+test('fetchAllSentBuddyRequests follows Naver pagination beyond the first 10-page block', async () => {
+  let currentPage = 1;
+  const visitedPages = [];
+  const page = {
+    async goto(url) {
+      currentPage = Number(new URL(url).searchParams.get('currentPage')) || 1;
+      visitedPages.push(currentPage);
+    },
+    async waitForTimeout() {},
+    async content() {
+      return `<table><tr>
+        <td><input name="targetBlogId" value="page_${currentPage}"></td>
+        <td><span class="nickname">page_${currentPage}</span></td>
+        <td class="date">26.08.25.</td>
+        <td><button class="_cancleInvite _param(${1000 + currentPage})">신청취소</button></td>
+      </tr></table>`;
+    },
+    async evaluate() {
+      if (currentPage <= 10) return { maxPage: 10, nextPage: 11 };
+      return { maxPage: 11, nextPage: null };
+    }
+  };
+
+  const result = await fetchAllSentBuddyRequests(page, 'owner');
+
+  assert.deepEqual(visitedPages, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  assert.equal(result.items.length, 11);
+  assert.equal(result.totalPages, 11);
+  assert.equal(result.scannedPages, 11);
+  assert.equal(result.truncated, false);
+  assert.equal(result.items[10].sourcePage, 11);
+});
+
+test('cancelSingleSentBuddyRequest returns to the source page and verifies removal', async () => {
+  const pages = new Map([
+    [1, [{ targetBlogId: 'first_page', buddyBlogNo: '111', dateStr: '26.08.20.' }]],
+    [2, [{ targetBlogId: 'second_page', buddyBlogNo: '222', dateStr: '26.08.19.' }]]
+  ]);
+  let currentPage = 2;
+  let pendingDialogResolve = null;
+
+  const renderPage = () => `<table>${(pages.get(currentPage) || []).map((item) => `
+    <tr>
+      <td><input name="targetBlogId" value="${item.targetBlogId}"></td>
+      <td><span class="nickname">${item.targetBlogId}</span></td>
+      <td class="date">${item.dateStr}</td>
+      <td><button class="_cancleInvite _param(${item.buddyBlogNo})">신청취소</button></td>
+    </tr>`).join('')}</table>`;
+
+  const page = {
+    async goto(url) {
+      currentPage = Number(new URL(url).searchParams.get('currentPage')) || 1;
+    },
+    async waitForTimeout() {},
+    async content() { return renderPage(); },
+    async evaluate() { return { maxPage: 2, nextPage: null }; },
+    async $(selector) {
+      const buddyBlogNo = selector.match(/\d+/)?.[0];
+      const found = (pages.get(currentPage) || []).find((item) => item.buddyBlogNo === buddyBlogNo);
+      if (!found) return null;
+      return {
+        async click() {
+          const dialog = {
+            message() { return '취소하시겠습니까?'; },
+            async accept() {
+              pages.set(currentPage, (pages.get(currentPage) || []).filter((item) => item.buddyBlogNo !== buddyBlogNo));
+            }
+          };
+          pendingDialogResolve?.(dialog);
+        }
+      };
+    },
+    waitForEvent(event) {
+      assert.equal(event, 'dialog');
+      return new Promise((resolve) => { pendingDialogResolve = resolve; });
+    }
+  };
+
+  const result = await cancelSingleSentBuddyRequest(page, {
+    targetBlogId: 'first_page',
+    buddyBlogNo: '111',
+    sourcePage: 1
+  }, {
+    blogId: 'owner',
+    maxPage: 2,
+    dialogTimeoutMs: 50
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.sourcePage, 1);
+  assert.equal(pages.get(1).length, 0);
+});
+
+test('sent request cleanup cancels targets across multiple pages and reports every attempt', async () => {
+  const pages = new Map([
+    [1, [{ targetBlogId: 'page_one', buddyBlogNo: '101', dateStr: '26.08.20.' }]],
+    [2, [{ targetBlogId: 'page_two', buddyBlogNo: '202', dateStr: '26.08.19.' }]]
+  ]);
+  let currentPage = 1;
+  let pendingDialogResolve = null;
+
+  const page = {
+    async goto(url) { currentPage = Number(new URL(url).searchParams.get('currentPage')) || 1; },
+    async waitForTimeout() {},
+    async content() {
+      return `<table>${(pages.get(currentPage) || []).map((item) => `
+        <tr><td><input name="targetBlogId" value="${item.targetBlogId}"></td>
+        <td><span class="nickname">${item.targetBlogId}</span></td>
+        <td class="date">${item.dateStr}</td>
+        <td><button class="_cancleInvite _param(${item.buddyBlogNo})">신청취소</button></td></tr>`).join('')}</table>`;
+    },
+    async evaluate() { return { maxPage: 2, nextPage: null }; },
+    async $(selector) {
+      const buddyBlogNo = selector.match(/\d+/)?.[0];
+      const found = (pages.get(currentPage) || []).find((item) => item.buddyBlogNo === buddyBlogNo);
+      if (!found) return null;
+      return {
+        async click() {
+          pendingDialogResolve?.({
+            message() { return '취소하시겠습니까?'; },
+            async accept() {
+              pages.set(currentPage, (pages.get(currentPage) || []).filter((item) => item.buddyBlogNo !== buddyBlogNo));
+            }
+          });
+        }
+      };
+    },
+    waitForEvent() { return new Promise((resolve) => { pendingDialogResolve = resolve; }); },
+    async close() {}
+  };
+
+  const manager = new NeighborCleanerManager({
+    browserSession: {
+      connected: true,
+      accountLabel: 'owner',
+      context: { async newPage() { return page; } }
+    }
+  });
+
+  const result = await manager.startCancelSent({
+    olderThanDays: 7,
+    maxCancelCount: 2,
+    minDelaySec: 0,
+    maxDelaySec: 0
+  });
+
+  assert.equal(result.stats.total, 2);
+  assert.equal(result.stats.processed, 2);
+  assert.equal(result.stats.canceled, 2);
+  assert.equal(result.stats.errors, 0);
+  assert.equal(pages.get(1).length + pages.get(2).length, 0);
 });
 
 test('NeighborCleanerManager manages state, logs, and pause/resume/stop', () => {

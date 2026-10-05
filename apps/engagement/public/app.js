@@ -3114,7 +3114,13 @@ function updateCleanerDashboard(statusData) {
     const startBtn = $('#startSentCancelBtn');
     const stopBtn = $('#stopSentCancelBtn');
 
-    if (startBtn) startBtn.classList.toggle('hidden', !isIdle);
+    if (startBtn) {
+      startBtn.classList.toggle('hidden', !isIdle);
+      if (isIdle) {
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<strong>오래된 신청 취소</strong>';
+      }
+    }
     if (stopBtn) stopBtn.classList.toggle('hidden', isIdle);
 
     if ($('#cleanerStatSentTotal')) $('#cleanerStatSentTotal').textContent = String(stats.total || 0);
@@ -3595,13 +3601,18 @@ function initNeighborCleaner() {
         body: JSON.stringify({ olderThanDays })
       });
 
-      toast(`보낸 신청 회수 작업을 시작합니다. (${olderThanDays}일 이상 경과 대상)`);
+      const statusBadge = $('#sentCleanAutoStatus');
+      if (statusBadge) {
+        statusBadge.className = 'status active';
+        statusBadge.innerHTML = '<i></i> 목록 분석 중';
+      }
+      toast(`보낸 신청 회수 작업을 시작합니다. 진행 상황을 실시간으로 표시합니다. (${olderThanDays}일 이상 경과 대상)`);
       startCleanerPolling('sent');
     } catch (err) {
       toast(`회수 시작 실패: ${err.message}`, true);
       if (startBtn) {
         startBtn.disabled = false;
-        startBtn.innerHTML = '<span class="btn-icon">🗑️</span> <strong>오래된 신청 일괄 취소 (슬롯 복구)</strong>';
+        startBtn.innerHTML = '<strong>오래된 신청 취소</strong>';
       }
     }
   });

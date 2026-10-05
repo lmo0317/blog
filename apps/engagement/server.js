@@ -21,7 +21,7 @@ import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-re
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { CommentReplyStore } from './lib/comment-replies.js';
 import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManager } from './lib/naver-feed-engage.js';
-import { acceptReceivedBuddyRequest, fetchReceivedBuddyRequests, fetchSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
+import { acceptReceivedBuddyRequest, fetchReceivedBuddyRequests, fetchAllSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
 import { LicenseClientManager } from './lib/license-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -906,22 +906,17 @@ app.get('/api/cleaner/sent/preview', async (req, res, next) => {
     const olderThanDays = Number(req.query.olderThanDays) || 7;
     const page = await browserSession.context.newPage();
     try {
-      const initial = await fetchSentBuddyRequests(page, blogId, 1);
-      const allExpired = [];
-      for (let p = 1; p <= initial.maxPage; p++) {
-        const pageData = p === 1 ? initial : await fetchSentBuddyRequests(page, blogId, p);
-        for (const item of pageData.items) {
-          if (item.daysAgo >= olderThanDays) {
-            allExpired.push(item);
-          }
-        }
-        if (allExpired.length >= 100) break;
-      }
+      const result = await fetchAllSentBuddyRequests(page, blogId, {
+        include: (item) => item.daysAgo >= olderThanDays
+      });
+      const allExpired = result.items;
       res.json({
         ok: true,
         requests: allExpired,
         total: allExpired.length,
-        totalPages: initial.maxPage,
+        totalPages: result.totalPages,
+        scannedPages: result.scannedPages,
+        truncated: result.truncated,
         olderThanDays
       });
     } finally {
@@ -934,8 +929,18 @@ app.get('/api/cleaner/sent/preview', async (req, res, next) => {
 
 app.post('/api/cleaner/sent/start', async (req, res, next) => {
   try {
-    const result = await neighborCleanerManager.startCancelSent(req.body || {});
-    res.json(result);
+    if (!browserSession.connected) {
+      return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않습니다.' });
+    }
+    if (neighborCleanerManager.state === 'running' || neighborCleanerManager.state === 'paused') {
+      return res.status(409).json({ error: '이미 이웃 관리 작업이 실행 중입니다.' });
+    }
+
+    const task = neighborCleanerManager.startCancelSent(req.body || {});
+    task.catch((error) => {
+      console.error(`[NeighborCleaner] Sent request cleanup failed: ${error.message}`);
+    });
+    res.status(202).json({ ok: true, state: 'running' });
   } catch (error) {
     next(error);
   }
