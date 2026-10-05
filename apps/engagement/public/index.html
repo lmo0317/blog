@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/login.css">
   <link rel="stylesheet" href="/refresh.css">
-  <link rel="stylesheet" href="/app-mode.css?v=22">
+  <link rel="stylesheet" href="/app-mode.css?v=23">
 </head>
 <body>
   <main class="shell">
@@ -36,6 +36,9 @@
     <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
       <button class="workspace-tab active" id="engagementTab" type="button" role="tab" aria-selected="true" aria-controls="engagementWorkspace" data-tab="engagement">
         <span class="tab-copy"><strong>소통</strong><small>주제 기반 댓글 · 서로이웃</small></span>
+      </button>
+      <button class="workspace-tab" id="keywordTab" type="button" role="tab" aria-selected="false" aria-controls="keywordWorkspace" data-tab="keyword" tabindex="-1">
+        <span class="tab-copy"><strong>키워드</strong><small>황금 키워드 · 주제 발굴</small></span>
       </button>
       <button class="workspace-tab" id="feedTab" type="button" role="tab" aria-selected="false" aria-controls="commentsWorkspace" data-tab="comments" tabindex="-1">
         <span class="tab-copy"><strong>댓글</strong><small>이웃 새글 · 내 글 대댓글</small></span>
@@ -819,6 +822,198 @@
               <button type="button" class="button ghost" id="cancelTargetFinderBtn">취소</button>
               <button type="button" class="button primary" id="applyTargetFinderBtn" disabled>
                 <span id="applyTargetBtnText">선택 키워드 적용</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Workspace: Golden Keyword & Topic Discovery Panel -->
+    <section class="workspace-panel hidden" id="keywordWorkspace" role="tabpanel" aria-labelledby="keywordTab" data-tab-panel="keyword">
+      <!-- Top Hero Search Card -->
+      <section class="panel keyword-hero-panel">
+        <div class="keyword-hero-header">
+          <div class="keyword-hero-title-box">
+            <span class="eyebrow"><span class="badge-icon">🏆</span> 0원 실시간 네이버 블로그 분석</span>
+            <h2>황금 키워드 &amp; 소통 주제 발굴</h2>
+            <p class="panel-sub">검색 수요는 높고 문서 경쟁이 적어 상위 노출이 유력한 <strong>'빈집 롱테일 키워드'</strong>와 내 블로그 맞춤 주제를 찾아보세요.</p>
+          </div>
+          <div class="keyword-hero-actions">
+            <span class="pill pill-green">🟢 0원 무제한 실시간 분석</span>
+          </div>
+        </div>
+
+        <!-- Search Bar Form -->
+        <form class="keyword-search-form" id="keywordSearchForm" onsubmit="return false;">
+          <div class="keyword-search-input-wrap">
+            <span class="search-input-icon">🔍</span>
+            <input type="text" id="keywordSearchInput" class="keyword-search-input" placeholder="분석할 주제나 씨앗 키워드를 입력하세요 (예: 성수동 맛집, 다이어트 식단, 제주도 여행, 직장인 점심)" autocomplete="off">
+            <button type="submit" class="button primary keyword-submit-btn" id="keywordSubmitBtn">
+              <span class="btn-icon">⚡</span> <strong>황금 키워드 발굴</strong>
+            </button>
+          </div>
+        </form>
+
+        <!-- Quick Seed Recommendation Chips -->
+        <div class="keyword-quick-seeds">
+          <span class="seed-label">💡 추천 시드:</span>
+          <div class="seed-chips-wrap">
+            <button type="button" class="seed-chip" data-seed="성수동 맛집">성수동 맛집</button>
+            <button type="button" class="seed-chip" data-seed="다이어트 식단">다이어트 식단</button>
+            <button type="button" class="seed-chip" data-seed="제주도 여행 코스">제주도 여행 코스</button>
+            <button type="button" class="seed-chip" data-seed="직장인 점심 도시락">직장인 점심</button>
+            <button type="button" class="seed-chip" data-seed="피부과 레이저 후기">피부과 후기</button>
+            <button type="button" class="seed-chip" data-seed="아이폰 꿀팁 모음">아이폰 꿀팁</button>
+            <button type="button" class="seed-chip" data-seed="캠핑 장비 추천">캠핑 장비</button>
+          </div>
+        </div>
+
+        <!-- Sub Segment Tabs -->
+        <div class="keyword-sub-tabs" role="tablist">
+          <button type="button" class="keyword-sub-tab active" id="subTabGolden" data-subtab="golden">
+            <span>🏆 황금 키워드 발굴</span>
+          </button>
+          <button type="button" class="keyword-sub-tab" id="subTabMyBlog" data-subtab="myblog">
+            <span>🎯 내 블로그 AI 맞춤 분석</span>
+          </button>
+          <button type="button" class="keyword-sub-tab" id="subTabTrends" data-subtab="trends">
+            <span>🔥 실시간 급상승 트렌드</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Main 2-Column Dashboard Layout -->
+      <div class="keyword-dashboard-grid" id="keywordDashboardGrid">
+        <!-- Left Panel: Ranking & Keyword Cards -->
+        <div class="keyword-main-col">
+          <!-- Summary Header Bar -->
+          <div class="keyword-results-toolbar" id="keywordResultsToolbar">
+            <div class="results-stats">
+              <span class="results-query" id="keywordCurrentQueryBadge">탐색 대기</span>
+              <span class="results-count" id="keywordResultsCount">키워드를 검색하면 분석이 시작됩니다.</span>
+            </div>
+            <div class="results-filters" id="keywordFilterChips">
+              <button type="button" class="filter-pill active" data-filter="all">전체 보기</button>
+              <button type="button" class="filter-pill" data-filter="S">🏆 S등급 (대박)</button>
+              <button type="button" class="filter-pill" data-filter="vacant">🏚️ 빈집 키워드</button>
+              <button type="button" class="filter-pill" data-filter="micro">📚 문서 1천건 미만</button>
+            </div>
+          </div>
+
+          <!-- Loading State Box -->
+          <div class="keyword-loading-box hidden" id="keywordLoadingBox">
+            <div class="finder-spinner"></div>
+            <div class="loading-text">
+              <strong>네이버 실시간 검색량 및 블로그 상위 노출 경쟁 분석 중...</strong>
+              <small>실시간 자동완성 확장과 공식 블로그 섹션 데이터를 대조하여 황금 지수를 계산하고 있습니다.</small>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div class="keyword-empty-box" id="keywordEmptyBox">
+            <div class="empty-icon">💡</div>
+            <h3>씨앗 키워드를 입력하고 황금 키워드를 발굴하세요</h3>
+            <p>검색창에 관심 있는 키워드를 입력하거나 상단의 추천 시드 칩을 클릭하세요.<br>
+            네이버 공식 블로그 섹션 API를 통해 총 문서 수, 상위 글 발행일, 빈집 여부를 0.5초 만에 진단합니다.</p>
+          </div>
+
+          <!-- Keyword Cards List Container -->
+          <div class="keyword-cards-list hidden" id="keywordCardsList"></div>
+
+          <!-- Subtab Panels (Embedded MyBlog / Trends) -->
+          <div class="keyword-myblog-panel hidden" id="keywordMyBlogPanel">
+            <div class="finder-hero-banner" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:14px; padding:18px 22px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <strong style="color:#166534; font-size:15px; display:block; margin-bottom:4px;">내 블로그 글을 AI로 분석해 맞춤 주제를 추천합니다</strong>
+                <p style="color:#15803d; font-size:13px; margin:0;">최근 작성하신 포스팅의 주제와 키워드를 읽고 가장 효과적인 소통 대상을 찾습니다.</p>
+              </div>
+              <button type="button" class="button primary" id="kwStartMyBlogAnalysisBtn" style="white-space:nowrap;">
+                🎯 블로그 분석 시작
+              </button>
+            </div>
+            <div class="keyword-myblog-loading hidden" id="kwMyBlogLoading" style="text-align:center; padding:40px 20px;">
+              <div class="finder-spinner" style="margin:0 auto 14px;"></div>
+              <strong>내 블로그 최근 포스팅 분석 중...</strong>
+            </div>
+            <div class="keyword-myblog-results hidden" id="kwMyBlogResults" style="margin-top:16px;">
+              <div class="myblog-summary-card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:14px; padding:16px; margin-bottom:16px;">
+                <div style="margin-bottom:8px;"><span class="badge" style="background:#e0e7ff; color:#3730a3; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:700;">블로그 정체성</span> <span id="kwMyBlogSummaryText" style="font-size:13px; font-weight:600; color:#1e293b; margin-left:6px;"></span></div>
+                <div><span class="badge" style="background:#fef3c7; color:#92400e; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:700;">추천 타겟 이웃</span> <span id="kwMyBlogAudienceText" style="font-size:13px; font-weight:600; color:#1e293b; margin-left:6px;"></span></div>
+              </div>
+              <div class="myblog-keywords-grid" id="kwMyBlogKeywordsGrid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:10px;"></div>
+            </div>
+          </div>
+
+          <div class="keyword-trends-panel hidden" id="keywordTrendsPanel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+              <div>
+                <strong style="font-size:15px; color:#0f172a;">🔥 네이버 실시간 급상승 키워드</strong>
+                <p style="font-size:12px; color:#64748b; margin:2px 0 0;">현재 사람들이 가장 많이 찾는 실시간 트렌드 주제입니다.</p>
+              </div>
+              <button type="button" class="button ghost small" id="kwRefreshTrendsBtn">↻ 트렌드 새로고침</button>
+            </div>
+            <div class="trends-grid" id="kwTrendsGrid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px;"></div>
+          </div>
+        </div>
+
+        <!-- Right Panel: Live SERP Deep Diagnostic Detail -->
+        <div class="keyword-sidebar-col">
+          <div class="keyword-detail-card" id="keywordDetailCard">
+            <div class="detail-header">
+              <span class="eyebrow">실시간 SERP 진단</span>
+              <h3 id="detailKeywordTitle">키워드를 선택하세요</h3>
+              <div class="detail-badge-row" id="detailBadgeRow">
+                <span class="pill pill-green" id="detailScorePill">점수 대기</span>
+              </div>
+            </div>
+
+            <!-- Detail Metrics Summary -->
+            <div class="detail-metrics-grid">
+              <div class="metric-box">
+                <span class="metric-label">총 문서 수</span>
+                <strong class="metric-val" id="detailDocCount">-</strong>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">상위글 평균 수명</span>
+                <strong class="metric-val" id="detailAvgAge">-</strong>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">제목 일치율</span>
+                <strong class="metric-val" id="detailMatchRate">-</strong>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">내돈내산 탭</span>
+                <strong class="metric-val" id="detailBuyOwnMoney">-</strong>
+              </div>
+            </div>
+
+            <!-- AI Action Strategy -->
+            <div class="detail-strategy-box">
+              <div class="strategy-head">
+                <span class="strategy-icon">🤖</span>
+                <strong>AI 상위 노출 공략 팁</strong>
+              </div>
+              <p class="strategy-body" id="detailStrategyAdvice">
+                좌측 목록에서 분석할 키워드를 클릭하면 상위 1~5위 포스팅의 노후화와 제목 최적화 상태를 실시간 진단해 드립니다.
+              </p>
+            </div>
+
+            <!-- Top 5 Posts Preview -->
+            <div class="detail-top-posts">
+              <div class="top-posts-head">
+                <strong>네이버 상위 1~5위 포스팅 현황</strong>
+                <a href="#" target="_blank" id="detailNaverSearchLink" class="naver-link" rel="noopener noreferrer">네이버 검색 ↗</a>
+              </div>
+              <div class="top-posts-list" id="detailTopPostsList">
+                <p class="empty-hint">키워드를 클릭하면 상위 글이 표시됩니다.</p>
+              </div>
+            </div>
+
+            <!-- 1-Click Action Buttons -->
+            <div class="detail-actions-bar">
+              <button type="button" class="button primary" id="detailStartEngagementBtn" style="width:100%; justify-content:center;">
+                <span class="btn-icon">🤝</span> <strong>이 키워드로 소통 시작</strong>
               </button>
             </div>
           </div>
@@ -1739,6 +1934,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/app.js?v=22"></script>
+  <script type="module" src="/app.js?v=23"></script>
 </body>
 </html>

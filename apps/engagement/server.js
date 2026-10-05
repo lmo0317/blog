@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
 import { NaverBrowserSession, normalizeAutocompleteKeywords } from './lib/naver.js';
-import { discoverGoldenKeywords } from './lib/golden-keyword.js';
+import { discoverGoldenKeywords, analyzeBlogSectionData, evaluateGoldenKeyword } from './lib/golden-keyword.js';
 import { LocalLlmClient } from './lib/llm.js';
 import { fetchKoreanTrends } from './lib/trends.js';
 import { fetchAlgumonRankDeals, isDirectProductUrl, unwrapKnownRedirectUrl } from './lib/algumon.js';
@@ -1181,7 +1181,7 @@ app.get('/api/blog/trends', async (_req, res, next) => {
     if (forceRefresh || !trendCache.items.length || cacheAge > 5 * 60 * 1000) {
       trendCache = { loadedAt: Date.now(), items: await fetchKoreanTrends({ limit: 12 }) };
     }
-    res.json({ items: trendCache.items, refreshedAt: new Date(trendCache.loadedAt).toISOString() });
+    res.json({ items: trendCache.items, trends: trendCache.items, refreshedAt: new Date(trendCache.loadedAt).toISOString() });
   } catch (error) {
     next(error);
   }
@@ -1218,6 +1218,20 @@ app.get('/api/blog/golden-keywords', async (req, res, next) => {
     const limit = Math.min(Math.max(Number(req.query?.limit) || 20, 5), 30);
     const result = await discoverGoldenKeywords({ keyword, limit });
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/blog/keyword-detail', async (req, res, next) => {
+  try {
+    const keyword = String(req.query?.keyword || '').replace(/\s+/g, ' ').trim();
+    if (!keyword) {
+      return res.status(400).json({ error: '키워드를 입력해주세요.' });
+    }
+    const serpData = await analyzeBlogSectionData(keyword);
+    const evaluation = evaluateGoldenKeyword(keyword, serpData, true);
+    res.json(evaluation);
   } catch (error) {
     next(error);
   }

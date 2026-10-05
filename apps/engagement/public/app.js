@@ -4287,6 +4287,433 @@ function initLicenseManagement() {
   setInterval(refreshLicenseStatus, 60 * 1000);
 }
 
+/* ==========================================================================
+   Keyword & Topic Discovery Controller (Elite UI Designer Standard)
+   ========================================================================== */
+
+function initKeywordWorkspaceController() {
+  let currentKeywordItems = [];
+  let selectedKeywordItem = null;
+  let activeFilter = 'all';
+
+  const searchInput = $('#keywordSearchInput');
+  const searchForm = $('#keywordSearchForm');
+  const loadingBox = $('#keywordLoadingBox');
+  const emptyBox = $('#keywordEmptyBox');
+  const cardsList = $('#keywordCardsList');
+  const resultsToolbar = $('#keywordResultsToolbar');
+
+  // Wire existing "주제 추천" buttons across engagement workspace to switch to the new full-page Keyword tab
+  $('#openTargetFinderBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    setActiveTab('keyword');
+  });
+  $('#openTargetFinderInlineBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    setActiveTab('keyword');
+  });
+  $('#openAutoTargetFinderBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    setActiveTab('keyword');
+  });
+  $('#openAutoTargetFinderInlineBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    setActiveTab('keyword');
+  });
+
+  // Quick Seed Chips
+  $$('#keywordWorkspace .seed-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const seed = chip.dataset.seed;
+      if (searchInput) searchInput.value = seed;
+      runGoldenKeywordDiscovery(seed);
+    });
+  });
+
+  // Search Submit
+  searchForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const query = (searchInput?.value || '').trim();
+    if (!query) {
+      toast('분석할 씨앗 키워드를 입력해주세요.', 'warn');
+      return;
+    }
+    runGoldenKeywordDiscovery(query);
+  });
+
+  // Filter Pills (All / S / Vacant / Micro)
+  $$('#keywordFilterChips .filter-pill').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      $$('#keywordFilterChips .filter-pill').forEach((p) => p.classList.remove('active'));
+      pill.classList.add('active');
+      activeFilter = pill.dataset.filter;
+      renderKeywordCards();
+    });
+  });
+
+  // Subsegment Tabs (Golden / MyBlog / Trends)
+  $$('#keywordWorkspace .keyword-sub-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      $$('#keywordWorkspace .keyword-sub-tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      const sub = tab.dataset.subtab;
+
+      const isGolden = sub === 'golden';
+      const isMyBlog = sub === 'myblog';
+      const isTrends = sub === 'trends';
+
+      resultsToolbar?.classList.toggle('hidden', !isGolden);
+      cardsList?.classList.toggle('hidden', !isGolden || currentKeywordItems.length === 0);
+      emptyBox?.classList.toggle('hidden', !isGolden || currentKeywordItems.length > 0);
+      $('#keywordDetailCard')?.closest('.keyword-sidebar-col')?.classList.toggle('hidden', !isGolden);
+
+      $('#keywordMyBlogPanel')?.classList.toggle('hidden', !isMyBlog);
+      $('#keywordTrendsPanel')?.classList.toggle('hidden', !isTrends);
+
+      if (isTrends) loadKeywordTrends();
+    });
+  });
+
+  // Discover Golden Keywords
+  async function runGoldenKeywordDiscovery(keyword) {
+    const clean = String(keyword || '').trim();
+    if (!clean) return;
+
+    // Switch to Golden subtab if on other subtabs
+    const subGolden = $('#subTabGolden');
+    if (subGolden && !subGolden.classList.contains('active')) {
+      subGolden.click();
+    }
+
+    loadingBox?.classList.remove('hidden');
+    emptyBox?.classList.add('hidden');
+    cardsList?.classList.add('hidden');
+
+    const submitBtn = $('#keywordSubmitBtn');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="finder-spinner-sm"></span> 분석 중...';
+    }
+
+    try {
+      const data = await api(`/api/blog/golden-keywords?keyword=${encodeURIComponent(clean)}&limit=25`);
+      currentKeywordItems = Array.isArray(data.items) ? data.items : [];
+
+      // Update Toolbar Stats
+      if ($('#keywordCurrentQueryBadge')) $('#keywordCurrentQueryBadge').textContent = `#${data.query || clean}`;
+      if ($('#keywordResultsCount')) {
+        $('#keywordResultsCount').textContent = `총 ${data.totalCount || currentKeywordItems.length}개 발굴 (🏆 S등급 ${data.goldenCount || 0}개 · 🏚️ 빈집 ${data.vacantCount || 0}개)`;
+      }
+
+      renderKeywordCards();
+
+      // Auto-select first item for SERP diagnostic sidebar
+      if (currentKeywordItems.length > 0) {
+        selectKeywordDetail(currentKeywordItems[0]);
+      }
+    } catch (err) {
+      toast(`키워드 분석 실패: ${err.message || '네트워크 오류'}`, true);
+      emptyBox?.classList.remove('hidden');
+    } finally {
+      loadingBox?.classList.add('hidden');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span class="btn-icon">⚡</span> <strong>황금 키워드 발굴</strong>';
+      }
+    }
+  }
+
+  // Render Keyword Cards with active filter
+  function renderKeywordCards() {
+    if (!cardsList) return;
+
+    let items = currentKeywordItems;
+    if (activeFilter === 'S') {
+      items = items.filter((it) => it.grade === 'S');
+    } else if (activeFilter === 'vacant') {
+      items = items.filter((it) => it.isVacant);
+    } else if (activeFilter === 'micro') {
+      items = items.filter((it) => it.isMicroDoc);
+    }
+
+    if (items.length === 0) {
+      cardsList.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; color: #64748b;">
+          <strong>선택한 필터 조건에 해당하는 키워드가 없습니다.</strong>
+          <p style="margin: 6px 0 0; font-size: 13px;">'전체 보기' 필터를 선택하거나 다른 씨앗 키워드로 검색해보세요.</p>
+        </div>
+      `;
+      cardsList.classList.remove('hidden');
+      return;
+    }
+
+    cardsList.innerHTML = items.map((it) => {
+      const isSelected = selectedKeywordItem && selectedKeywordItem.keyword === it.keyword;
+      const gradeClass = `grade-${(it.grade || 'b').toLowerCase()}`;
+      const scoreWidth = Math.min(Math.max(Number(it.score) || 60, 10), 100);
+
+      const tagsHtml = (it.tags || []).map((t) => {
+        const isHighlight = t.includes('빈집') || t.includes('극세사') || t.includes('틈새');
+        return `<span class="kw-tag ${isHighlight ? 'highlight' : ''}">${t}</span>`;
+      }).join('');
+
+      return `
+        <div class="kw-card ${isSelected ? 'selected' : ''}" data-kw="${encodeURIComponent(it.keyword)}">
+          <div class="kw-card-head">
+            <div class="kw-card-title-box">
+              <span class="kw-grade-badge ${gradeClass}">${it.gradeBadge || it.grade}</span>
+              <strong class="kw-card-title">${it.keyword}</strong>
+            </div>
+            <div class="kw-score-wrap" title="황금 지수: 100점 만점에 ${it.score}점">
+              <span class="kw-score-text">${it.score}점</span>
+              <div class="kw-score-track">
+                <div class="kw-score-bar" style="width: ${scoreWidth}%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kw-tags-row">
+            ${tagsHtml}
+          </div>
+
+          <div class="kw-card-foot">
+            <p class="kw-opportunity-text">💡 ${it.opportunity}</p>
+            <div class="kw-card-actions">
+              <button type="button" class="kw-btn-copy" data-action="copy" title="키워드 복사">📋 복사</button>
+              <button type="button" class="kw-btn-engage" data-action="engage" title="이 키워드로 소통 시작">🤝 소통 시작</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    cardsList.classList.remove('hidden');
+
+    // Attach card click handlers
+    $$('.kw-card').forEach((card) => {
+      const kw = decodeURIComponent(card.dataset.kw);
+      const item = currentKeywordItems.find((it) => it.keyword === kw);
+      if (!item) return;
+
+      card.addEventListener('click', (e) => {
+        // Handle action buttons inside card
+        const btn = e.target.closest('button');
+        if (btn) {
+          const action = btn.dataset.action;
+          if (action === 'copy') {
+            e.stopPropagation();
+            navigator.clipboard.writeText(item.keyword);
+            toast(`'${item.keyword}' 키워드가 클립보드에 복사되었습니다.`);
+            return;
+          }
+          if (action === 'engage') {
+            e.stopPropagation();
+            applyKeywordToEngagement(item.keyword);
+            return;
+          }
+        }
+
+        selectKeywordDetail(item);
+      });
+    });
+  }
+
+  // Select item & display in Right Sidebar
+  function selectKeywordDetail(item) {
+    selectedKeywordItem = item;
+
+    // Highlight selected card
+    $$('.kw-card').forEach((card) => {
+      const kw = decodeURIComponent(card.dataset.kw);
+      card.classList.toggle('selected', kw === item.keyword);
+    });
+
+    if ($('#detailKeywordTitle')) $('#detailKeywordTitle').textContent = item.keyword;
+
+    // Badge pill
+    const pill = $('#detailScorePill');
+    if (pill) {
+      pill.textContent = `${item.gradeBadge || item.grade} (${item.score}점)`;
+      pill.className = `pill ${item.score >= 70 ? 'pill-green' : item.score >= 50 ? 'pill-yellow' : 'pill-red'}`;
+    }
+
+    // Metrics
+    if ($('#detailDocCount')) $('#detailDocCount').textContent = item.docCountText || `${item.totalCount}건`;
+    if ($('#detailAvgAge')) $('#detailAvgAge').textContent = item.recencyText || '최근 글 보통';
+    if ($('#detailMatchRate')) $('#detailMatchRate').textContent = item.matchRateText || '-';
+    if ($('#detailBuyOwnMoney')) {
+      $('#detailBuyOwnMoney').textContent = item.hasBuyWithOwnMoney ? '🟢 노출 중' : '⚪ 미노출';
+    }
+
+    // Strategy Advice
+    if ($('#detailStrategyAdvice')) {
+      $('#detailStrategyAdvice').innerHTML = `
+        <strong>${item.opportunity}</strong><br>
+        <span style="display:inline-block; margin-top:4px;">🎯 <strong>공략 팁:</strong> ${item.actionAdvice || '키워드를 제목 앞부분에 배치하세요.'}</span>
+      `;
+    }
+
+    // Naver link
+    const searchLink = $('#detailNaverSearchLink');
+    if (searchLink) {
+      searchLink.href = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(item.keyword)}`;
+    }
+
+    // Top 5 Posts List
+    const topPostsContainer = $('#detailTopPostsList');
+    if (topPostsContainer) {
+      const posts = Array.isArray(item.topPosts) ? item.topPosts : [];
+      if (posts.length === 0) {
+        topPostsContainer.innerHTML = '<p class="empty-hint">상위 포스팅 정보가 없습니다.</p>';
+      } else {
+        topPostsContainer.innerHTML = posts.map((p, idx) => `
+          <div class="top-post-item">
+            <span class="post-rank-num">${idx + 1}</span>
+            <div class="post-meta-box">
+              <a href="${p.url || `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(item.keyword)}`}" target="_blank" rel="noopener noreferrer" class="post-title-link" title="${p.title}">
+                ${p.title}
+              </a>
+              <div class="post-sub-meta">
+                <span>${p.blogName || '네이버 블로그'}</span>
+                <span>•</span>
+                <span>${p.ageText || `${p.ageDays}일 전`}</span>
+                <span class="post-match-badge ${p.isExactMatch ? 'matched' : 'unmatched'}">
+                  ${p.isExactMatch ? '제목일치' : '제목미일치 (틈새)'}
+                </span>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    // Wire Detail Start Engagement Button
+    const engageBtn = $('#detailStartEngagementBtn');
+    if (engageBtn) {
+      engageBtn.onclick = () => applyKeywordToEngagement(item.keyword);
+    }
+  }
+
+  // Helper: Apply keyword into engagement workspace and switch tabs
+  function applyKeywordToEngagement(keyword) {
+    const engInput = $('#engKeyword');
+    if (engInput) {
+      engInput.value = keyword;
+    }
+    const topicProgress = $('#engTopicProgress');
+    if (topicProgress) {
+      topicProgress.textContent = `타겟: ${keyword} (황금 키워드 적용됨)`;
+    }
+    setActiveTab('engagement');
+    toast(`'${keyword}' 키워드로 소통 타겟이 설정되었습니다. [소통 시작]을 눌러주세요.`, 'success');
+  }
+
+  // Subtab 2: MyBlog AI Analysis
+  $('#kwStartMyBlogAnalysisBtn')?.addEventListener('click', async () => {
+    const banner = $('#kwStartMyBlogAnalysisBtn');
+    const loading = $('#kwMyBlogLoading');
+    const results = $('#kwMyBlogResults');
+    const grid = $('#kwMyBlogKeywordsGrid');
+
+    if (banner) banner.disabled = true;
+    loading?.classList.remove('hidden');
+    results?.classList.add('hidden');
+
+    try {
+      const data = await api('/api/blog/my-recommendations');
+      loading?.classList.add('hidden');
+      results?.classList.remove('hidden');
+
+      if ($('#kwMyBlogSummaryText')) $('#kwMyBlogSummaryText').textContent = data.summary || '내 블로그 분석 완료';
+      if ($('#kwMyBlogAudienceText')) $('#kwMyBlogAudienceText').textContent = data.audience || '관련 이웃층';
+
+      const targets = Array.isArray(data.targets) ? data.targets : [];
+      if (grid) {
+        if (targets.length === 0) {
+          grid.innerHTML = '<p class="empty-hint" style="grid-column: 1 / -1;">발행된 글이 적어 추천 키워드를 추출하지 못했습니다.</p>';
+        } else {
+          grid.innerHTML = targets.map((t) => `
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <div>
+                <strong style="color: #0f172a; font-size: 13.5px; display: block;">${t.keyword}</strong>
+                <small style="color: #64748b; font-size: 11.5px;">${t.reason || '내 글 주제 분석'}</small>
+              </div>
+              <button type="button" class="button primary small kw-apply-myblog-btn" data-kw="${t.keyword}" style="padding: 5px 10px; font-size: 11.5px; flex-shrink: 0;">
+                황금 분석 ⚡
+              </button>
+            </div>
+          `).join('');
+
+          $$('.kw-apply-myblog-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const kw = btn.dataset.kw;
+              if (searchInput) searchInput.value = kw;
+              runGoldenKeywordDiscovery(kw);
+            });
+          });
+        }
+      }
+    } catch (err) {
+      loading?.classList.add('hidden');
+      toast(`내 블로그 분석 실패: ${err.message}`, true);
+    } finally {
+      if (banner) banner.disabled = false;
+    }
+  });
+
+  // Subtab 3: Real-time Trends
+  let trendsLoaded = false;
+  async function loadKeywordTrends(forceRefresh = false) {
+    if (trendsLoaded && !forceRefresh) return;
+    const grid = $('#kwTrendsGrid');
+    if (!grid) return;
+
+    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #64748b;"><div class="finder-spinner" style="margin: 0 auto 10px;"></div>실시간 급상승 트렌드 불러오는 중...</div>';
+
+    try {
+      const endpoint = forceRefresh ? '/api/blog/trends?refresh=true' : '/api/blog/trends';
+      const data = await api(endpoint);
+      const trends = Array.isArray(data.items) ? data.items : (Array.isArray(data.trends) ? data.trends : []);
+      trendsLoaded = true;
+
+      if (trends.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #64748b;">현재 불러올 수 있는 실시간 트렌드가 없습니다. [↻ 트렌드 새로고침]을 눌러보세요.</div>';
+        return;
+      }
+
+      grid.innerHTML = trends.map((t, idx) => {
+        const trafficBadge = t.traffic ? `<span style="font-size: 10px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">조회 ${t.traffic}</span>` : '';
+        return `
+          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; transition: all 0.15s ease;" class="kw-trend-item-card" data-kw="${t.keyword || t.topic}">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+              <span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: ${idx < 3 ? '#ecfdf5' : '#f1f5f9'}; color: ${idx < 3 ? '#047857' : '#64748b'}; font-size: 11px; font-weight: 800; flex-shrink: 0;">${idx + 1}</span>
+              <div style="min-width: 0; flex: 1;">
+                <strong style="color: #0f172a; font-size: 13.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.keyword || t.topic}</strong>
+                ${trafficBadge}
+              </div>
+            </div>
+            <span style="font-size: 11px; color: #03c75a; font-weight: 700; flex-shrink: 0;">발굴 ⚡</span>
+          </div>
+        `;
+      }).join('');
+
+      $$('.kw-trend-item-card').forEach((card) => {
+        card.addEventListener('click', () => {
+          const kw = card.dataset.kw;
+          if (searchInput) searchInput.value = kw;
+          runGoldenKeywordDiscovery(kw);
+        });
+      });
+    } catch {
+      grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #ef4444;">트렌드를 불러오지 못했습니다. [↻ 트렌드 새로고침] 버튼을 눌러주세요.</div>';
+    }
+  }
+
+  $('#kwRefreshTrendsBtn')?.addEventListener('click', () => {
+    loadKeywordTrends(true);
+  });
+}
+
 // Initial health check and session restoration
 api('/api/health').then(async (data) => {
   initSettingsController();
@@ -4297,6 +4724,7 @@ api('/api/health').then(async (data) => {
   initNeighborCleaner();
   initCommentManagement();
   initTargetFinderModal();
+  initKeywordWorkspaceController();
   initLicenseManagement();
 
   if (data.connected) {
@@ -4324,5 +4752,7 @@ api('/api/health').then(async (data) => {
   initNeighborCleaner();
   initCommentManagement();
   initTargetFinderModal();
+  initKeywordWorkspaceController();
   initLicenseManagement();
 });
+

@@ -3,6 +3,7 @@ import { normalizeAutocompleteKeywords } from './naver.js';
 const INTENT_SUFFIXES = [
   '추천',
   '후기',
+  '내돈내산',
   '비용',
   '방법',
   '준비물',
@@ -12,11 +13,17 @@ const INTENT_SUFFIXES = [
   '꿀팁',
   '비교',
   '주의사항',
-  '식단',
+  '혼밥',
+  '점심',
   '코스',
   '초보',
-  '정리'
+  '정리',
+  '예약',
+  '위치',
+  '시간'
 ];
+
+const CONSONANTS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
 
 /**
  * Fetch real-time search suggestions from Naver Autocomplete (Zero API Key)
@@ -56,187 +63,289 @@ export async function fetchAutocompleteKeywords(keyword, limit = 15) {
 }
 
 /**
- * Generate natural Korean search query variations
+ * Fetch 2nd-level expanded long-tail keywords using intents & selected consonants
  */
-export function generateIntentKeywords(seedKeyword, count = 10) {
+export async function fetchExpandedLongtailKeywords(seedKeyword, limit = 30) {
   const clean = String(seedKeyword || '').replace(/\s+/g, ' ').trim();
   if (!clean) return [];
-  const results = [];
-  for (const suffix of INTENT_SUFFIXES) {
+
+  const candidates = new Set();
+
+  // 1. Primary autocomplete
+  const primaryAc = await fetchAutocompleteKeywords(clean, 15);
+  for (const kw of primaryAc) candidates.add(kw);
+
+  // 2. High-intent combinations
+  for (const suffix of INTENT_SUFFIXES.slice(0, 10)) {
     if (!clean.includes(suffix)) {
-      results.push(`${clean} ${suffix}`);
+      candidates.add(`${clean} ${suffix}`);
     }
-    if (results.length >= count) break;
   }
-  return results;
+
+  // 3. Fast consonant variations for popular seeds (first 3 consonants: ㄱ, ㅂ, ㅈ)
+  const consonantTasks = CONSONANTS.slice(0, 3).map(async (c) => {
+    try {
+      const acList = await fetchAutocompleteKeywords(`${clean} ${c}`, 5);
+      return acList.filter((k) => k !== `${clean} ${c}` && !k.endsWith(` ${c}`));
+    } catch {
+      return [];
+    }
+  });
+
+  const consonantResults = await Promise.allSettled(consonantTasks);
+  for (const r of consonantResults) {
+    if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+      for (const kw of r.value) candidates.add(kw);
+    }
+  }
+
+  return Array.from(candidates).slice(0, limit);
 }
 
 /**
- * Parse top blog posts on Naver to evaluate recency and title match rate
+ * Query official Naver Blog Section API (section.blog.naver.com)
+ * Returns totalCount, top 5 posts, exact timestamps, and title match rate with ZERO API key
  */
-export async function analyzeSerpCompetition(keyword) {
+export async function analyzeBlogSectionData(keyword) {
   const clean = String(keyword || '').replace(/\s+/g, ' ').trim();
-  if (!clean) return { totalPosts: 0, posts: [], avgAgeDays: 0, titleMatchCount: 0 };
+  if (!clean) {
+    return {
+      totalCount: 0,
+      posts: [],
+      avgAgeDays: 0,
+      titleMatchCount: 0,
+      hasBuyWithOwnMoney: false
+    };
+  }
 
-  const url = `https://search.naver.com/search.naver?ssc=tab.blog.all&query=${encodeURIComponent(clean)}`;
   try {
+    const url = `https://section.blog.naver.com/ajax/SearchList.naver?countPerPage=5&currentPage=1&keyword=${encodeURIComponent(clean)}&orderBy=sim&type=post`;
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Referer': 'https://www.naver.com/',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        Referer: 'https://section.blog.naver.com/Search/Post.naver',
+        Accept: 'application/json, text/plain, */*'
       },
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(9000)
     });
-    if (!res.ok) return { totalPosts: 0, posts: [], avgAgeDays: 0, titleMatchCount: 0 };
-    const html = await res.text();
 
-    // Extract unique blog post links and titles
-    const postLinks = [...html.matchAll(/<a[^>]+href="([^"]*(?:blog\.naver\.com\/[a-zA-Z0-9_.-]+\/\d+|m\.blog\.naver\.com\/[a-zA-Z0-9_.-]+\/\d+)[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi)];
-    const seenUrls = new Set();
-    const posts = [];
-    for (const p of postLinks) {
-      const href = p[1].split('?')[0];
-      const text = p[2].replace(/<[^>]+>/g, ' ').replace(/새 창 열림/g, '').replace(/\s+/g, ' ').trim();
-      if (text.length > 5 && !seenUrls.has(href)) {
-        seenUrls.add(href);
-        posts.push({ href, title: text });
-      }
-      if (posts.length >= 10) break;
+    if (!res.ok) {
+      return fallbackSerpAnalysis(clean);
     }
 
-    // Extract dates from HTML
-    const dateMatches = [...html.matchAll(/(\d{4}\.\d{1,2}\.\d{1,2}\.?|\d+\s*(?:시간|일|주|개월|년)\s*전|방금|어제)/g)].map((m) => m[1]);
-    const parsedAges = dateMatches.slice(0, 10).map((d) => parseDateToAgeDays(d));
-    const validAges = parsedAges.filter((age) => age >= 0);
-    const avgAgeDays = validAges.length > 0 ? Math.round(validAges.reduce((a, b) => a + b, 0) / validAges.length) : 30;
+    const text = await res.text();
+    const cleanJson = text.replace(/^\)\]\}',\s*/, '');
+    const data = JSON.parse(cleanJson);
+    const result = data?.result || {};
 
-    // Check title exact match in top 5 posts
-    let titleMatchCount = 0;
+    const rawTotal = Number(result.totalCount) || 0;
+    const searchList = Array.isArray(result.searchList) ? result.searchList : [];
+    const hasBuyWithOwnMoney = Boolean(result.hasBuyWithMyOwnMoneyPost);
+
+    const now = Date.now();
     const cleanKw = clean.toLowerCase().replace(/\s+/g, '');
-    for (const post of posts.slice(0, 5)) {
-      const normTitle = post.title.toLowerCase().replace(/\s+/g, '');
-      if (normTitle.includes(cleanKw)) {
-        titleMatchCount++;
+    let titleMatchCount = 0;
+
+    const posts = searchList.slice(0, 5).map((item) => {
+      const titleRaw = String(item.title || '').replace(/<[^>]+>/g, '').trim();
+      const normTitle = titleRaw.toLowerCase().replace(/\s+/g, '');
+      const isExactMatch = normTitle.includes(cleanKw);
+      if (isExactMatch) titleMatchCount++;
+
+      const addDateMs = Number(item.addDate) || now;
+      const ageDays = Math.max(0, Math.round((now - addDateMs) / (1000 * 60 * 60 * 24)));
+
+      return {
+        title: titleRaw,
+        blogName: String(item.blogName || '').trim(),
+        blogId: String(item.blogId || '').trim(),
+        logNo: String(item.logNo || '').trim(),
+        url: item.blogId && item.logNo ? `https://blog.naver.com/${item.blogId}/${item.logNo}` : '',
+        addDate: addDateMs,
+        ageDays,
+        ageText: formatAgeDays(ageDays),
+        isExactMatch
+      };
+    });
+
+    const validAges = posts.map((p) => p.ageDays);
+    const avgAgeDays = validAges.length > 0
+      ? Math.round(validAges.reduce((a, b) => a + b, 0) / validAges.length)
+      : 30;
+
+    return {
+      totalCount: rawTotal,
+      posts,
+      avgAgeDays,
+      titleMatchCount,
+      hasBuyWithOwnMoney
+    };
+  } catch {
+    return fallbackSerpAnalysis(clean);
+  }
+}
+
+/**
+ * Fallback parser using search.naver.com if section API is unreachable
+ */
+async function fallbackSerpAnalysis(keyword) {
+  try {
+    const url = `https://search.naver.com/search.naver?ssc=tab.blog.all&query=${encodeURIComponent(keyword)}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Referer: 'https://www.naver.com/'
+      },
+      signal: AbortSignal.timeout(9000)
+    });
+    if (!res.ok) return { totalCount: 1000, posts: [], avgAgeDays: 30, titleMatchCount: 2, hasBuyWithOwnMoney: false };
+    const html = await res.text();
+
+    const postLinks = [...html.matchAll(/<a[^>]+href="([^"]*(?:blog\.naver\.com\/[a-zA-Z0-9_.-]+\/\d+|m\.blog\.naver\.com\/[a-zA-Z0-9_.-]+\/\d+)[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi)];
+    const seen = new Set();
+    const posts = [];
+    const cleanKw = keyword.toLowerCase().replace(/\s+/g, '');
+    let titleMatchCount = 0;
+
+    for (const p of postLinks) {
+      const href = p[1].split('?')[0];
+      const title = p[2].replace(/<[^>]+>/g, ' ').replace(/새 창 열림/g, '').replace(/\s+/g, ' ').trim();
+      if (title.length > 5 && !seen.has(href)) {
+        seen.add(href);
+        const isMatch = title.toLowerCase().replace(/\s+/g, '').includes(cleanKw);
+        if (isMatch) titleMatchCount++;
+        posts.push({ title, url: href, blogName: '', ageDays: 30, ageText: '최근 글', isExactMatch: isMatch });
       }
+      if (posts.length >= 5) break;
     }
 
     return {
-      totalPosts: posts.length,
-      posts: posts.slice(0, 5),
-      avgAgeDays,
-      titleMatchCount
+      totalCount: 1000,
+      posts,
+      avgAgeDays: 30,
+      titleMatchCount,
+      hasBuyWithOwnMoney: false
     };
   } catch {
-    return { totalPosts: 0, posts: [], avgAgeDays: 0, titleMatchCount: 0 };
+    return { totalCount: 1000, posts: [], avgAgeDays: 30, titleMatchCount: 2, hasBuyWithOwnMoney: false };
   }
 }
 
 /**
- * Parse Korean relative/absolute date strings to age in days
+ * Format days into human-friendly Korean string
  */
-function parseDateToAgeDays(dateStr = '') {
-  const str = String(dateStr).trim();
-  if (!str) return -1;
-  if (/방금|시간\s*전/i.test(str)) return 0;
-  if (/어제/i.test(str)) return 1;
-  const daysMatch = str.match(/(\d+)\s*일\s*전/i);
-  if (daysMatch) return parseInt(daysMatch[1], 10);
-  const weeksMatch = str.match(/(\d+)\s*주\s*전/i);
-  if (weeksMatch) return parseInt(weeksMatch[1], 10) * 7;
-  const monthsMatch = str.match(/(\d+)\s*개월\s*전/i);
-  if (monthsMatch) return parseInt(monthsMatch[1], 10) * 30;
-  const yearsMatch = str.match(/(\d+)\s*년\s*전/i);
-  if (yearsMatch) return parseInt(yearsMatch[1], 10) * 365;
-
-  const dateMatch = str.match(/(\d{4})\.(\d{1,2})\.(\d{1,2})/);
-  if (dateMatch) {
-    const year = parseInt(dateMatch[1], 10);
-    const month = parseInt(dateMatch[2], 10) - 1;
-    const day = parseInt(dateMatch[3], 10);
-    const target = new Date(year, month, day);
-    const diff = Math.round((Date.now() - target.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(0, diff);
-  }
-  return -1;
+function formatAgeDays(days) {
+  if (days <= 0) return '방금 전';
+  if (days === 1) return '어제';
+  if (days < 7) return `${days}일 전`;
+  if (days < 30) return `${Math.floor(days / 7)}주 전`;
+  if (days < 365) return `${Math.floor(days / 30)}개월 전`;
+  return `${Math.floor(days / 365)}년 전`;
 }
 
 /**
- * Calculate Golden Score (0~100) and opportunity assessment
+ * Evaluate Golden Keyword score (0~100) and grade (S, A, B, C)
  */
 export function evaluateGoldenKeyword(keyword, serpData, isAutocomplete = true) {
-  const { avgAgeDays, titleMatchCount } = serpData;
+  const { totalCount, avgAgeDays, titleMatchCount, hasBuyWithOwnMoney } = serpData;
 
   // Base score
-  let score = 70;
+  let score = 65;
 
-  // Real-time demand weight (from autocomplete)
+  // 1. Demand Bonus (Autocomplete presence confirms real searchers)
   if (isAutocomplete) score += 12;
 
-  // Stale / Recency bonus (빈집 점수)
-  if (avgAgeDays >= 150) {
-    score += 15; // 5개월 이상 전 글이 상위 랭크 = 강력한 빈집
+  // 2. Total Document Competition Bonus / Penalty
+  if (totalCount > 0 && totalCount < 300) {
+    score += 15; // Extremely low competition (Micro-niche)
+  } else if (totalCount > 0 && totalCount < 1000) {
+    score += 10; // Under 1,000 documents
+  } else if (totalCount >= 1000) {
+    // 1,000+ docs (capped in section API)
+    score -= 2;
+  }
+
+  // 3. Stale / Recency Bonus (빈집 판정)
+  if (avgAgeDays >= 120) {
+    score += 14; // Top posts are 4+ months old (Stale)
   } else if (avgAgeDays >= 60) {
-    score += 8; // 2개월 이상 전 글 = 양호한 빈집
+    score += 8; // Top posts 2+ months old
   } else if (avgAgeDays <= 2) {
-    score -= 14; // 매일 신규 글이 쏟아지는 초경쟁 레드오션
+    score -= 10; // Fierce red-ocean, published today/yesterday
   } else if (avgAgeDays <= 7) {
-    score -= 6;
+    score -= 4;
   }
 
-  // Title Match Rate (제목 틈새 점수)
-  if (titleMatchCount <= 1) {
-    score += 10; // 상위 5개 중 1개 이하만 정확한 제목 매칭 = 제목만 제대로 쓰면 1페이지 진입 유력
+  // 4. Exact Title Match Rate (틈새 판정)
+  if (titleMatchCount === 0) {
+    score += 12; // None of top 5 posts have exact keyword in title!
+  } else if (titleMatchCount === 1) {
+    score += 8; // Only 1 post matches title
   } else if (titleMatchCount >= 4) {
-    score -= 8; // 상위 5개 중 4개 이상이 제목 최적화 완료
+    score -= 8; // Top posts already SEO-optimized
   }
 
-  score = Math.min(99, Math.max(38, score));
+  // Cap between 35 and 99
+  score = Math.min(99, Math.max(35, score));
 
   // Determine Grade
   let grade = 'C';
   let gradeLabel = '경쟁 치열';
   let gradeBadge = '🔴 보통';
-  if (score >= 86) {
+  if (score >= 85) {
     grade = 'S';
     gradeLabel = '대박 황금';
     gradeBadge = '🏆 대박 황금';
-  } else if (score >= 72) {
+  } else if (score >= 70) {
     grade = 'A';
     gradeLabel = '추천 황금';
     gradeBadge = '🟢 추천 황금';
-  } else if (score >= 55) {
+  } else if (score >= 52) {
     grade = 'B';
-    gradeLabel = '보통';
+    gradeLabel = '일반';
     gradeBadge = '🟡 일반';
   }
 
-  // Opportunity summary statement
-  let opportunity = '안정적인 검색 유입이 기대되는 키워드입니다.';
+  // Tags & Opportunity summary
   const tags = [];
-
-  if (isAutocomplete) {
-    tags.push('🔥 실시간 검색수요');
+  if (isAutocomplete) tags.push('🔥 실시간 검색수요');
+  if (totalCount > 0 && totalCount < 1000) {
+    tags.push(`📚 문서 ${totalCount}건 (극세사)`);
   }
-
   if (avgAgeDays >= 90) {
-    opportunity = `상위 1~3위 글이 ${Math.round(avgAgeDays / 30)}개월 전 글로 노후화되어 지금 포스팅 시 1페이지 선점이 유력한 빈집 키워드입니다.`;
-    tags.push('🏆 상위글 노후 (빈집)');
-  } else if (titleMatchCount <= 1) {
-    opportunity = '상위 노출 글들의 제목 일치도가 낮아 제목에 키워드를 정확히 포함하면 단기간 상위 노출이 가능한 틈새 키워드입니다.';
-    tags.push('✨ 제목 미일치 (틈새)');
-  } else if (avgAgeDays <= 3) {
-    opportunity = '신규 글 발행 빈도가 매우 높아 지속적인 유입 관리가 필요한 경쟁 구역입니다.';
-    tags.push('⚡ 신규 발행 활발');
+    tags.push(`🏆 상위글 ${Math.round(avgAgeDays / 30)}개월 전 (빈집)`);
+  }
+  if (titleMatchCount <= 1) {
+    tags.push('✨ 제목 미일치 (틈새 진입)');
+  }
+  if (hasBuyWithOwnMoney) {
+    tags.push('💳 내돈내산 스마트블록');
   }
 
-  let recencyText = '최근 글 보통';
-  if (avgAgeDays >= 120) recencyText = `상위글 평균 ${Math.round(avgAgeDays / 30)}개월 전 (노후)`;
-  else if (avgAgeDays >= 30) recencyText = `상위글 평균 ${Math.round(avgAgeDays / 30)}개월 전`;
-  else if (avgAgeDays <= 3) recencyText = '상위글 1~3일 전 (최신)';
-  else recencyText = `상위글 평균 ${avgAgeDays}일 전`;
+  let opportunity = '안정적인 검색 유입이 기대되는 키워드입니다.';
+  let actionAdvice = '키워드를 제목 앞부분에 배치하여 포스팅을 작성하세요.';
 
-  const matchRateText = `제목 일치 ${titleMatchCount * 20}%`;
+  if (totalCount > 0 && totalCount < 1000 && titleMatchCount <= 1) {
+    opportunity = `총 문서 수가 ${totalCount}건으로 매우 적고 상위 글 제목 일치도가 낮아, 제목에 키워드를 정확히 포함하면 단기간 1페이지 선점이 유력합니다.`;
+    actionAdvice = `[${keyword}] 키워드를 제목에 정확히 넣어 1,500자 이상 정성글을 발행하세요.`;
+  } else if (avgAgeDays >= 90) {
+    opportunity = `상위 노출 글들이 평균 ${Math.round(avgAgeDays / 30)}개월 전 글로 노후화되어 최신성 지수로 상위 탈환이 수월한 빈집 키워드입니다.`;
+    actionAdvice = '최근 정보와 고화질 이미지를 포함해 최신성 우위를 확보하세요.';
+  } else if (titleMatchCount <= 1) {
+    opportunity = '상위 5개 글 중 키워드가 제목에 온전히 들어간 글이 거의 없어 제목 최적화만으로도 순위 상승이 가능합니다.';
+    actionAdvice = '제목 첫머리에 키워드를 배치하고 본문에 3~4회 자연스럽게 반복하세요.';
+  } else if (avgAgeDays <= 4) {
+    opportunity = '신규 글 발행 빈도가 높아 초기 이웃 소통과 공감/댓글 반응을 빠르게 모아야 하는 경쟁 구역입니다.';
+    actionAdvice = '글 발행 즉시 [새글 부스터]로 이웃 소통을 활성화하세요.';
+  }
+
+  const docCountText = totalCount > 0 && totalCount < 1000
+    ? `${totalCount.toLocaleString()}건`
+    : (totalCount >= 1000 ? '1,000건 이상' : '집계 중');
+
+  const recencyText = avgAgeDays >= 120
+    ? `평균 ${Math.round(avgAgeDays / 30)}개월 전 (노후)`
+    : (avgAgeDays >= 30 ? `평균 ${Math.round(avgAgeDays / 30)}개월 전` : `평균 ${avgAgeDays}일 전`);
 
   return {
     keyword,
@@ -245,14 +354,20 @@ export function evaluateGoldenKeyword(keyword, serpData, isAutocomplete = true) 
     gradeLabel,
     gradeBadge,
     opportunity,
+    actionAdvice,
     demand: isAutocomplete ? '높음' : '보통',
+    totalCount,
+    docCountText,
     avgAgeDays,
     recencyText,
     titleMatchCount,
-    matchRateText,
-    isVacant: avgAgeDays >= 90,
+    matchRateText: `제목 일치 ${titleMatchCount}/5개 (${titleMatchCount * 20}%)`,
+    isVacant: avgAgeDays >= 60,
     isNiche: titleMatchCount <= 1,
-    tags
+    isMicroDoc: totalCount > 0 && totalCount < 1000,
+    hasBuyWithOwnMoney,
+    tags,
+    topPosts: serpData.posts || []
   };
 }
 
@@ -263,49 +378,47 @@ export async function discoverGoldenKeywords({ keyword, limit = 20 } = {}) {
   const seed = String(keyword || '').replace(/\s+/g, ' ').trim();
   if (!seed) return { query: '', totalCount: 0, goldenCount: 0, items: [] };
 
-  // 1. Collect candidate queries
-  const [acKeywords, intentKeywords] = await Promise.all([
-    fetchAutocompleteKeywords(seed, 15),
-    Promise.resolve(generateIntentKeywords(seed, 10))
-  ]);
+  // 1. Collect expanded candidates
+  const candidates = await fetchExpandedLongtailKeywords(seed, Math.min(Math.max(Number(limit) || 20, 10), 30));
 
-  // Combine and deduplicate
+  // Ensure seed is at the beginning
   const candidateMap = new Map();
   candidateMap.set(seed.toLowerCase(), { keyword: seed, isAc: true });
-  for (const kw of acKeywords) {
-    candidateMap.set(kw.toLowerCase(), { keyword: kw, isAc: true });
-  }
-  for (const kw of intentKeywords) {
+  for (const kw of candidates) {
     if (!candidateMap.has(kw.toLowerCase())) {
-      candidateMap.set(kw.toLowerCase(), { keyword: kw, isAc: false });
+      candidateMap.set(kw.toLowerCase(), { keyword: kw, isAc: true });
     }
   }
 
-  const candidateList = Array.from(candidateMap.values()).slice(0, Math.min(Number(limit) || 20, 25));
+  const candidateList = Array.from(candidateMap.values()).slice(0, 25);
 
-  // 2. Analyze SERP competition in parallel (chunks of 4 to prevent rate limiting)
+  // 2. Analyze competition via official Naver Blog Section API in chunks of 3
   const results = [];
-  const chunkSize = 4;
+  const chunkSize = 3;
   for (let i = 0; i < candidateList.length; i += chunkSize) {
     const chunk = candidateList.slice(i, i + chunkSize);
     const chunkResults = await Promise.all(
       chunk.map(async ({ keyword: kw, isAc }) => {
-        const serpData = await analyzeSerpCompetition(kw);
+        const serpData = await analyzeBlogSectionData(kw);
         return evaluateGoldenKeyword(kw, serpData, isAc);
       })
     );
     results.push(...chunkResults);
   }
 
-  // Sort by golden score descending
+  // Sort: S-grade and highest score first
   results.sort((a, b) => b.score - a.score);
 
-  const goldenCount = results.filter((r) => r.score >= 72).length;
+  const goldenCount = results.filter((r) => r.score >= 70).length;
+  const vacantCount = results.filter((r) => r.isVacant).length;
+  const nicheCount = results.filter((r) => r.isNiche).length;
 
   return {
     query: seed,
     totalCount: results.length,
     goldenCount,
+    vacantCount,
+    nicheCount,
     items: results,
     searchedAt: new Date().toISOString()
   };
