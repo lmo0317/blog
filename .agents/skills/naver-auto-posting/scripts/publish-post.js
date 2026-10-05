@@ -55,18 +55,44 @@ async function main() {
   const content = fs.readFileSync(path.resolve(options.contentFile), 'utf8');
   let images = [];
   if (options.imagesFile && fs.existsSync(options.imagesFile)) {
-    images = JSON.parse(fs.readFileSync(path.resolve(options.imagesFile), 'utf8'));
+    images = JSON.parse(fs.readFileSync(path.resolve(options.imagesFile), 'utf8')).map((img) => ({
+      ...img,
+      filePath: img.filePath || img.path
+    }));
   }
+
+  const sessionPaths = [
+    'D:/work/dev/blog/apps/engagement/.playwright/naver-session.json',
+    'D:/work/dev/blog/apps/posting/.playwright/naver-session.json',
+    'D:/work/dev/blog/windows/.playwright/naver-session.json'
+  ];
+  const existingSession = sessionPaths.find((p) => fs.existsSync(p));
+  const activeSessionPath = existingSession || sessionPaths[0];
 
   const browserSession = new NaverBrowserSession({
     headless: false,
     profileDir: 'D:/work/dev/blog/apps/engagement/.playwright/naver-profile',
-    sessionStatePath: 'D:/work/dev/blog/apps/engagement/.playwright/naver-session.json'
+    sessionStatePath: activeSessionPath
   });
 
   const restored = await browserSession.restoreSession();
   if (!browserSession.connected) {
-    throw new Error('네이버 로그인 세션이 만료되었거나 연결되지 않았습니다.');
+    console.log('[publish-post] 저장된 세션이 없거나 만료되었습니다. 네이버 로그인 창을 엽니다...');
+    const loginResult = await browserSession.openLoginWindow();
+    if (!loginResult?.success) {
+      throw new Error(loginResult?.message || '네이버 로그인에 실패했거나 대기 시간이 초과되었습니다.');
+    }
+    console.log(`[publish-post] ${loginResult.message}`);
+
+    // Sync saved session state to both session paths
+    for (const sp of sessionPaths) {
+      try {
+        if (fs.existsSync(browserSession.sessionStatePath) && sp !== browserSession.sessionStatePath) {
+          fs.mkdirSync(path.dirname(sp), { recursive: true });
+          fs.copyFileSync(browserSession.sessionStatePath, sp);
+        }
+      } catch {}
+    }
   }
 
   if (options.update && options.logNo) {
@@ -93,6 +119,26 @@ async function main() {
       categoryName: options.category
     });
     console.log(JSON.stringify(result, null, 2));
+
+    if (result?.status === 'published' && result?.url) {
+      console.log(`\n🎉 성공적으로 발행되었습니다: ${result.url}`);
+
+      // Record to INDEX.md
+      const indexPath = 'D:/work/dev/blog/.agents/skills/naver-auto-posting/references/published-posts/INDEX.md';
+      try {
+        if (fs.existsSync(indexPath)) {
+          const now = new Date();
+          const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          const logNoMatch = result.url.match(/logNo=(\d+)|\/(\d{10,})/);
+          const logNo = logNoMatch ? (logNoMatch[1] || logNoMatch[2]) : 'link';
+          const indexEntry = `| ${dateStr} | ${options.title} | ${options.tags.join(', ') || '-'} | ${options.category || '-'} | [${logNo}](${result.url}) |\n`;
+          fs.appendFileSync(indexPath, indexEntry, 'utf8');
+          console.log('📝 INDEX.md에 발행 이력이 기록되었습니다.');
+        }
+      } catch (err) {
+        console.warn('INDEX.md 기록 중 경미한 오류:', err.message);
+      }
+    }
   }
   await browserSession.close().catch(() => {});
 }
