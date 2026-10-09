@@ -5525,6 +5525,16 @@ function renderNeighborHealth(status) {
   const running = status.state === 'running';
   const progress = status.progress || {};
 
+  // Results appear only for a 조회 the user started on this screen.
+  const result = status.result;
+  if (result && nhAwaitingQuery && !running) {
+    nhAwaitingQuery = false;
+    if (result.queryId !== nhShownQueryId) {
+      nhShownQueryId = result.queryId;
+      nhSelected.clear();
+    }
+  }
+
   const badge = $('#nhStatusBadge');
   if (badge) {
     const label = running ? (progress.phase === 'prune' ? '정리 중' : '조회 중') : nhShownQueryId ? '조회 완료' : '조회 전';
@@ -5541,15 +5551,6 @@ function renderNeighborHealth(status) {
     : (hasList ? '조건을 바꿔 다시 조회하면 바로 결과가 나옵니다.' : '처음 조회할 때 내 이웃 목록을 읽습니다. 이웃이 1,000명이면 1분쯤 걸립니다.');
   $('#nhLimitBadge').textContent = `오늘 정리 ${status.prunedToday || 0} / ${status.dailyLimit || 30}명`;
 
-  // Results appear only for a 조회 the user started on this screen.
-  const result = status.result;
-  if (result && nhAwaitingQuery && !running) {
-    nhAwaitingQuery = false;
-    if (result.queryId !== nhShownQueryId) {
-      nhShownQueryId = result.queryId;
-      nhSelected.clear();
-    }
-  }
   if (result && nhShownQueryId === result.queryId) {
     const valid = new Set(result.matches.map((n) => n.buddyBlogNo));
     [...nhSelected].forEach((no) => { if (!valid.has(no)) nhSelected.delete(no); });

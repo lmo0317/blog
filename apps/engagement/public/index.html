@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=38">
-  <link rel="stylesheet" href="app-mode.css?v=46">
+  <link rel="stylesheet" href="app-mode.css?v=47">
 </head>
 <body>
   <main class="shell">
@@ -2049,22 +2049,16 @@
                   </label>
                   <span class="field-hint" id="nhProgressText">처음 조회할 때 내 이웃 목록을 읽습니다. 이웃이 1,000명이면 1분쯤 걸립니다.</span>
                 </div>
+
+                <details class="nh-log-details">
+                  <summary>처리 로그</summary>
+                  <div class="cleaner-terminal-box" id="nhTerminalLogs">
+                    <div class="terminal-line info">[대기 중] 조건을 고르고 '조건으로 조회'를 누르세요.</div>
+                  </div>
+                </details>
               </div>
             </div>
 
-            <div class="desktop-card" style="margin-top:14px;">
-              <div class="desktop-card-header">
-                <div class="card-title-group">
-                  <span class="card-badge terminal-badge">LOG</span>
-                  <h3>처리 로그</h3>
-                </div>
-              </div>
-              <div class="desktop-card-body">
-                <div class="cleaner-terminal-box" id="nhTerminalLogs">
-                  <div class="terminal-line info">[대기 중] 조건을 고르고 '조건으로 조회'를 누르세요.</div>
-                </div>
-              </div>
-            </div>
           </div>
 
           <div class="desktop-col desktop-col-right">
@@ -2535,6 +2529,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=51"></script>
+  <script type="module" src="app.js?v=52"></script>
 </body>
 </html>

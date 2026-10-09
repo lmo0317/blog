@@ -6826,3 +6826,49 @@ textarea.phrase-textarea:focus {
 .nh-candidate-list {
   margin-top: 10px;
 }
+
+/* 이웃 정리: conditions on the left, results on the right, in one row */
+#commentManagementWorkspace #subtabNeighborHealth .desktop-workspace-grid {
+  grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+}
+
+#commentManagementWorkspace #subtabNeighborHealth .desktop-col-left {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+#commentManagementWorkspace #subtabNeighborHealth .desktop-col-right {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+#subtabNeighborHealth .nh-candidate-list {
+  max-height: calc(100vh - 320px);
+  min-height: 240px;
+}
+
+.nh-log-details {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+}
+
+.nh-log-details summary {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nh-log-details .cleaner-terminal-box {
+  margin-top: 8px;
+  height: 160px !important;
+}
+
+@media (max-width: 1024px) {
+  #commentManagementWorkspace #subtabNeighborHealth .desktop-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+  #commentManagementWorkspace #subtabNeighborHealth .desktop-col-left { grid-column: 1; grid-row: 1; }
+  #commentManagementWorkspace #subtabNeighborHealth .desktop-col-right { grid-column: 1; grid-row: 2; }
+}
