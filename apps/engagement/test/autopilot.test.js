@@ -52,6 +52,7 @@ function makeManager(overrides = {}) {
   const steps = {
     acceptNeighbors: async () => { calls.push('acceptNeighbors'); return { summary: '수락 1건' }; },
     replies: async () => { calls.push('replies'); return { skipped: true, summary: '새 댓글 없음' }; },
+    returnVisit: async () => { calls.push('returnVisit'); return { summary: '답방 2건' }; },
     findKeywords: async (seed) => { calls.push(`find:${seed}`); return { items: [{ keyword: `${seed} 추천`, grade: 'S' }] }; },
     engage: async ({ keyword }) => { calls.push(`engage:${keyword}`); return { summary: '공감 3' }; },
     feed: async () => { calls.push('feed'); return { summary: '공감 2' }; },
@@ -78,8 +79,8 @@ test('a cycle runs every enabled step in order, rotates topics and then rests fo
   await manager.loopPromise;
 
   assert.deepEqual(calls, [
-    'acceptNeighbors', 'replies', 'find:캠핑', 'engage:캠핑 추천', 'feed',
-    'acceptNeighbors', 'replies', 'find:여행', 'engage:여행 추천', 'feed'
+    'acceptNeighbors', 'replies', 'returnVisit', 'find:캠핑', 'engage:캠핑 추천', 'feed',
+    'acceptNeighbors', 'replies', 'returnVisit', 'find:여행', 'engage:여행 추천', 'feed'
   ]);
   assert.equal(manager.cycle, 2);
   assert.equal(waits[0], 60 * 60 * 1000);
@@ -127,7 +128,7 @@ test('autopilot waits outside active hours, while disconnected, and while a manu
 
   // Validation catches a missing topic and an empty step list.
   assert.throws(() => manager.start({ seedTopics: '', steps: { engage: true } }), /주제/);
-  assert.throws(() => manager.start({ seedTopics: '캠핑', steps: { acceptNeighbors: false, replies: false, engage: false, feed: false } }), /하나 이상/);
+  assert.throws(() => manager.start({ seedTopics: '캠핑', steps: { acceptNeighbors: false, replies: false, returnVisit: false, engage: false, feed: false } }), /하나 이상/);
   connected = true;
   busy = '';
   await rm(statePath, { force: true });
@@ -171,4 +172,13 @@ test('neighbor management settings default to AI screening and a 14-day sent-req
   assert.equal(custom.acceptMode, 'all');
   assert.equal(custom.cancelSentDays, 0);
   assert.equal(normalizeAutopilotSettings({ cancelSentDays: 99 }).cancelSentDays, 14);
+});
+
+test('return visits are their own step: they run with replies switched off', async () => {
+  const { manager, calls, statePath } = makeManager();
+  manager.start({ seedTopics: '캠핑', returnVisitPerCycle: 5, steps: { acceptNeighbors: false, replies: false, engage: false, feed: false, returnVisit: true } });
+  await manager.loopPromise;
+  assert.deepEqual(calls, ['returnVisit']);
+  assert.equal(manager.settings.returnVisitPerCycle, 5);
+  await rm(statePath, { force: true });
 });

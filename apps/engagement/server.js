@@ -1293,6 +1293,14 @@ async function waitForJob(getState) {
 }
 
 let lastSentCleanupDate = '';
+// Replies and return visits both read my posts' comments; one scan serves a whole cycle.
+let myCommentsScan = { at: 0, data: null };
+async function scanMyCommentsCached() {
+  if (myCommentsScan.data && Date.now() - myCommentsScan.at < 15 * 60 * 1000) return myCommentsScan.data;
+  const data = await browserSession.scanMyBlogComments({ postLimit: 10, commentLimit: 40 });
+  myCommentsScan = { at: Date.now(), data };
+  return data;
+}
 const autopilot = new AutopilotManager({
   statePath: path.join(__dirname, '.data', 'autopilot.json'),
   isConnected: () => browserSession.connected,
@@ -1335,18 +1343,55 @@ const autopilot = new AutopilotManager({
       return { skipped: !didWork, summary: parts.join(' · ') };
     },
     replies: async (settings) => {
-      const scan = await browserSession.scanMyBlogComments({ postLimit: 10, commentLimit: 40 });
+      const scan = await scanMyCommentsCached();
       const fresh = [];
       for (const comment of scan.comments || []) {
         if (!await commentReplyStore.has(comment.postUrl, comment.commentId)) fresh.push(comment);
         if (fresh.length >= 10) break;
       }
       if (!fresh.length) return { skipped: true, summary: '답할 새 댓글이 없습니다.' };
-      const output = await processMyBlogComments(fresh, { requestNeighbor: settings.doNeighbor, returnVisit: settings.returnVisit });
-      return {
-        summary: `대댓글 ${output.completed}건${settings.returnVisit ? ` · 답방 ${output.visited}건` : ''}`,
-        protectionTriggered: output.protectionTriggered
-      };
+      const output = await processMyBlogComments(fresh, { requestNeighbor: settings.doNeighbor });
+      return { summary: `대댓글 ${output.completed}건`, protectionTriggered: output.protectionTriggered };
+    },
+    // Independent of replies: visits the newest post of people who commented on my posts.
+    returnVisit: async (settings) => {
+      if (!settings.doLike && !settings.doComment) return { skipped: true, summary: '공감·댓글이 모두 꺼져 있습니다.' };
+      const scan = await scanMyCommentsCached();
+      const seen = new Set();
+      const commenters = [];
+      for (const comment of scan.comments || []) {
+        const id = String(comment.authorId || '').trim();
+        if (!id || id.toLowerCase() === String(scan.myBlogId || '').toLowerCase() || seen.has(id.toLowerCase())) continue;
+        seen.add(id.toLowerCase());
+        commenters.push({ blogId: id, name: comment.authorName || id });
+      }
+      if (!commenters.length) return { skipped: true, summary: '답방할 댓글 이웃이 없습니다.' };
+
+      let visited = 0;
+      let protectionTriggered = false;
+      let limitMessage = '';
+      for (const person of commenters) {
+        if (!autopilot.enabled || visited >= settings.returnVisitPerCycle) break;
+        const result = await returnVisitCommenter({
+          blogId: person.blogId,
+          bloggerName: person.name,
+          browserSession,
+          embeddedLlama,
+          historyStore: engagementHistoryStore,
+          getTodayUsage: getCombinedTodayUsage,
+          doLike: settings.doLike,
+          doComment: settings.doComment
+        }).catch((error) => ({ status: 'failed', message: error.message }));
+        if (result.protectionTriggered) { protectionTriggered = true; break; }
+        if (/일일 한도/.test(result.message || '')) { limitMessage = result.message; break; }
+        if (result.status === 'visited') {
+          visited += 1;
+          autopilot.log(`🏃 @${person.blogId} 님 최신 글에 답방했습니다.`, 'success');
+          await pause(20000 + Math.floor(Math.random() * 20000));
+        }
+      }
+      if (!visited) return { skipped: true, summary: limitMessage || '새 글이 올라온 댓글 이웃이 없어 답방할 곳이 없습니다.', protectionTriggered };
+      return { summary: `답방 ${visited}건${limitMessage ? ' (일일 한도 도달)' : ''}`, protectionTriggered };
     },
     findKeywords: (seed) => discoverGoldenKeywords({ keyword: seed, limit: 15 }),
     engage: async ({ keyword, settings }) => {

@@ -5243,6 +5243,7 @@ initGrowthOptions();
 const AP_STEP_INPUTS = {
   acceptNeighbors: '#apStepAcceptNeighbors',
   replies: '#apStepReplies',
+  returnVisit: '#apStepReturnVisit',
   engage: '#apStepEngage',
   feed: '#apStepFeed'
 };
@@ -5271,7 +5272,7 @@ function readAutopilotSettings() {
     doComment: $('#apDoComment')?.checked !== false,
     doNeighbor: $('#apDoNeighbor')?.checked !== false,
     allowGradeB: $('#apAllowGradeB')?.checked === true,
-    returnVisit: $('#apReturnVisit')?.checked === true,
+    returnVisitPerCycle: Number($('#apReturnVisitPerCycle')?.value) || 10,
     acceptMode: $('#apAcceptMode')?.value || 'screen',
     cancelSentDays: Number($('#apCancelSentDays')?.value ?? 14),
     steps: Object.fromEntries(Object.entries(AP_STEP_INPUTS).map(([id, selector]) => [id, $(selector)?.checked !== false]))
@@ -5294,7 +5295,7 @@ function applyAutopilotSettings(settings) {
   setChecked('#apDoComment', settings.doComment);
   setChecked('#apDoNeighbor', settings.doNeighbor);
   setChecked('#apAllowGradeB', settings.allowGradeB);
-  setChecked('#apReturnVisit', settings.returnVisit);
+  setOptionChipValue('apReturnVisitChips', String(settings.returnVisitPerCycle ?? 10));
   Object.entries(AP_STEP_INPUTS).forEach(([id, selector]) => setChecked(selector, settings.steps?.[id] !== false));
   syncAutopilotSubPanels();
   apApplyingSettings = false;
@@ -5304,7 +5305,7 @@ function syncAutopilotSubPanels() {
   $('#apNeighborPanel')?.classList.toggle('hidden', !$('#apStepAcceptNeighbors')?.checked);
   $('#apEngagePanel')?.classList.toggle('hidden', !$('#apStepEngage')?.checked);
   $('#apFeedPanel')?.classList.toggle('hidden', !$('#apStepFeed')?.checked);
-  $('#apReturnVisitCard')?.classList.toggle('hidden', !$('#apStepReplies')?.checked);
+  $('#apReturnVisitPanel')?.classList.toggle('hidden', !$('#apStepReturnVisit')?.checked);
 }
 
 function scheduleAutopilotSave() {

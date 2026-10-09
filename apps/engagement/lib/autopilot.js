@@ -11,8 +11,9 @@ import path from 'node:path';
 export const AUTOPILOT_STEPS = Object.freeze([
   { id: 'acceptNeighbors', label: '이웃 관리 (신청 수락·회수)', icon: '🤝' },
   { id: 'replies', label: '내 글 새 댓글에 대댓글', icon: '💬' },
+  { id: 'returnVisit', label: '댓글 단 이웃 답방', icon: '🏃' },
   { id: 'engage', label: '황금 키워드 찾아 소통', icon: '🔥' },
-  { id: 'feed', label: '이웃 새글 소통', icon: '📰' }
+  { id: 'feed', label: '이웃 새글 댓글', icon: '📰' }
 ]);
 
 export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
@@ -26,10 +27,10 @@ export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
   doComment: true,
   doNeighbor: true,
   allowGradeB: false,
-  returnVisit: false,
+  returnVisitPerCycle: 10,
   acceptMode: 'screen',
   cancelSentDays: 14,
-  steps: { acceptNeighbors: true, replies: true, engage: true, feed: true }
+  steps: { acceptNeighbors: true, replies: true, returnVisit: true, engage: true, feed: true }
 });
 
 const KEYWORD_REUSE_DAYS = 7;
@@ -56,7 +57,7 @@ export function normalizeAutopilotSettings(input = {}, base = DEFAULT_AUTOPILOT_
     doComment: merged.doComment !== false,
     doNeighbor: merged.doNeighbor !== false,
     allowGradeB: merged.allowGradeB === true,
-    returnVisit: merged.returnVisit === true,
+    returnVisitPerCycle: clampInt(merged.returnVisitPerCycle, 1, 30, 10),
     // 'screen': accept genuine bloggers and reject ads/macros; 'all': accept every request.
     acceptMode: merged.acceptMode === 'all' ? 'all' : 'screen',
     // Withdraw sent requests still pending after this many days (0 = off), once a day.

@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=38">
-  <link rel="stylesheet" href="app-mode.css?v=43">
+  <link rel="stylesheet" href="app-mode.css?v=44">
 </head>
 <body>
   <main class="shell">
@@ -127,13 +127,26 @@
                   <span class="switch-desc">최근 글 10개에서 아직 답하지 않은 댓글에 AI 대댓글을 답니다. (회차당 최대 10건)</span>
                 </div>
               </label>
-              <label class="comment-neighbor-switch-card ap-sub-option" id="apReturnVisitCard">
-                <input type="checkbox" id="apReturnVisit">
+
+              <label class="comment-neighbor-switch-card ap-step-card">
+                <input type="checkbox" id="apStepReturnVisit" checked>
                 <div class="switch-card-text">
-                  <span class="switch-title">🏃 댓글 단 이웃에게 답방도 하기</span>
-                  <span class="switch-desc">그 이웃의 최신 글에 공감과 AI 댓글을 남깁니다.</span>
+                  <span class="switch-title">🏃 댓글 단 이웃 답방</span>
+                  <span class="switch-desc">내 글에 댓글을 남긴 이웃의 최신 글에 찾아가 공감과 AI 댓글을 남깁니다. 대댓글과 따로 켜고 끌 수 있고, 이미 답방한 글은 다시 가지 않습니다.</span>
                 </div>
               </label>
+              <div class="ap-sub-panel" id="apReturnVisitPanel">
+                <div class="form-group">
+                  <label><strong>회차당 답방할 이웃</strong></label>
+                  <div class="option-chip-row" id="apReturnVisitChips" data-target-input="apReturnVisitPerCycle">
+                    <button type="button" class="chip-btn" data-value="5">5명</button>
+                    <button type="button" class="chip-btn active" data-value="10">10명</button>
+                    <button type="button" class="chip-btn" data-value="20">20명</button>
+                  </div>
+                  <input type="hidden" id="apReturnVisitPerCycle" value="10">
+                  <span class="field-hint">한 명당 20~40초씩 쉬어가며, 공감·댓글 일일 한도를 함께 지킵니다.</span>
+                </div>
+              </div>
 
               <label class="comment-neighbor-switch-card ap-step-card">
                 <input type="checkbox" id="apStepEngage" checked>
@@ -171,8 +184,8 @@
               <label class="comment-neighbor-switch-card ap-step-card">
                 <input type="checkbox" id="apStepFeed" checked>
                 <div class="switch-card-text">
-                  <span class="switch-title">📰 이웃 새글 소통</span>
-                  <span class="switch-desc">이웃이 새로 올린 글에 공감과 AI 댓글을 남깁니다.</span>
+                  <span class="switch-title">📰 이웃 새글 댓글</span>
+                  <span class="switch-desc">내 이웃이 새로 올린 글에 공감과 AI 댓글을 남깁니다.</span>
                 </div>
               </label>
               <div class="ap-sub-panel" id="apFeedPanel">
@@ -2368,6 +2381,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=47"></script>
+  <script type="module" src="app.js?v=48"></script>
 </body>
 </html>
