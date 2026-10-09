@@ -9,7 +9,7 @@ import path from 'node:path';
 // order, timing and safety stops.
 
 export const AUTOPILOT_STEPS = Object.freeze([
-  { id: 'acceptNeighbors', label: '받은 서로이웃 신청 정리', icon: '🤝' },
+  { id: 'acceptNeighbors', label: '이웃 관리 (신청 수락·회수)', icon: '🤝' },
   { id: 'replies', label: '내 글 새 댓글에 대댓글', icon: '💬' },
   { id: 'engage', label: '황금 키워드 찾아 소통', icon: '🔥' },
   { id: 'feed', label: '이웃 새글 소통', icon: '📰' }
@@ -27,6 +27,8 @@ export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
   doNeighbor: true,
   allowGradeB: false,
   returnVisit: false,
+  acceptMode: 'screen',
+  cancelSentDays: 14,
   steps: { acceptNeighbors: true, replies: true, engage: true, feed: true }
 });
 
@@ -55,6 +57,10 @@ export function normalizeAutopilotSettings(input = {}, base = DEFAULT_AUTOPILOT_
     doNeighbor: merged.doNeighbor !== false,
     allowGradeB: merged.allowGradeB === true,
     returnVisit: merged.returnVisit === true,
+    // 'screen': accept genuine bloggers and reject ads/macros; 'all': accept every request.
+    acceptMode: merged.acceptMode === 'all' ? 'all' : 'screen',
+    // Withdraw sent requests still pending after this many days (0 = off), once a day.
+    cancelSentDays: [0, 7, 14, 30].includes(Number(merged.cancelSentDays)) ? Number(merged.cancelSentDays) : 14,
     steps: Object.fromEntries(AUTOPILOT_STEPS.map(({ id }) => [id, merged.steps[id] !== false]))
   };
 }

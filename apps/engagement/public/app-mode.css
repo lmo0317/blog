@@ -6574,3 +6574,8 @@ textarea.phrase-textarea:focus {
     align-items: stretch;
   }
 }
+
+.ap-sub-panel .field-hint {
+  display: block;
+  margin-top: 6px;
+}

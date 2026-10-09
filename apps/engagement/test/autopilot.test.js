@@ -162,3 +162,13 @@ test('a stop reason such as an expired subscription ends autopilot', async () =>
   assert.match(manager.message, /이용권/);
   await rm(statePath, { force: true });
 });
+
+test('neighbor management settings default to AI screening and a 14-day sent-request cleanup', () => {
+  const defaults = normalizeAutopilotSettings({});
+  assert.equal(defaults.acceptMode, 'screen');
+  assert.equal(defaults.cancelSentDays, 14);
+  const custom = normalizeAutopilotSettings({ acceptMode: 'all', cancelSentDays: 0 });
+  assert.equal(custom.acceptMode, 'all');
+  assert.equal(custom.cancelSentDays, 0);
+  assert.equal(normalizeAutopilotSettings({ cancelSentDays: 99 }).cancelSentDays, 14);
+});

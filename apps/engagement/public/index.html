@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=38">
-  <link rel="stylesheet" href="app-mode.css?v=42">
+  <link rel="stylesheet" href="app-mode.css?v=43">
 </head>
 <body>
   <main class="shell">
@@ -94,10 +94,31 @@
               <label class="comment-neighbor-switch-card ap-step-card">
                 <input type="checkbox" id="apStepAcceptNeighbors" checked>
                 <div class="switch-card-text">
-                  <span class="switch-title">🤝 받은 서로이웃 신청 정리</span>
-                  <span class="switch-desc">진성 블로거는 수락하고, 광고·매크로 신청은 거절합니다.</span>
+                  <span class="switch-title">🤝 이웃 관리</span>
+                  <span class="switch-desc">받은 서로이웃 신청을 처리하고, 오래 수락되지 않은 보낸 신청을 회수합니다.</span>
                 </div>
               </label>
+              <div class="ap-sub-panel" id="apNeighborPanel">
+                <div class="form-group">
+                  <label><strong>받은 신청 처리</strong></label>
+                  <div class="option-chip-row" id="apAcceptModeChips" data-target-input="apAcceptMode">
+                    <button type="button" class="chip-btn active" data-value="screen">🛡️ AI 선별 (진성 수락·광고 거절)</button>
+                    <button type="button" class="chip-btn" data-value="all">✅ 전부 수락</button>
+                  </div>
+                  <input type="hidden" id="apAcceptMode" value="screen">
+                </div>
+                <div class="form-group">
+                  <label><strong>오래된 보낸 신청 회수</strong></label>
+                  <div class="option-chip-row" id="apCancelSentChips" data-target-input="apCancelSentDays">
+                    <button type="button" class="chip-btn" data-value="0">끔</button>
+                    <button type="button" class="chip-btn" data-value="7">7일 지나면</button>
+                    <button type="button" class="chip-btn active" data-value="14">14일 지나면</button>
+                    <button type="button" class="chip-btn" data-value="30">30일 지나면</button>
+                  </div>
+                  <input type="hidden" id="apCancelSentDays" value="14">
+                  <span class="field-hint">하루 한 번, 이 기간이 지나도 수락되지 않은 신청을 최대 30건 취소합니다.</span>
+                </div>
+              </div>
 
               <label class="comment-neighbor-switch-card ap-step-card">
                 <input type="checkbox" id="apStepReplies" checked>
@@ -2347,6 +2368,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=46"></script>
+  <script type="module" src="app.js?v=47"></script>
 </body>
 </html>

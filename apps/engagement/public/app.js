@@ -5272,6 +5272,8 @@ function readAutopilotSettings() {
     doNeighbor: $('#apDoNeighbor')?.checked !== false,
     allowGradeB: $('#apAllowGradeB')?.checked === true,
     returnVisit: $('#apReturnVisit')?.checked === true,
+    acceptMode: $('#apAcceptMode')?.value || 'screen',
+    cancelSentDays: Number($('#apCancelSentDays')?.value ?? 14),
     steps: Object.fromEntries(Object.entries(AP_STEP_INPUTS).map(([id, selector]) => [id, $(selector)?.checked !== false]))
   };
 }
@@ -5284,6 +5286,8 @@ function applyAutopilotSettings(settings) {
   setOptionChipValue('apPostsChips', String(settings.postsPerCycle));
   setOptionChipValue('apFeedChips', String(settings.feedPerCycle));
   setOptionChipValue('apIntervalChips', String(settings.intervalMinutes));
+  setOptionChipValue('apAcceptModeChips', settings.acceptMode || 'screen');
+  setOptionChipValue('apCancelSentChips', String(settings.cancelSentDays ?? 14));
   if ($('#apActiveStart')) $('#apActiveStart').value = String(settings.activeStartHour);
   if ($('#apActiveEnd')) $('#apActiveEnd').value = String(settings.activeEndHour);
   setChecked('#apDoLike', settings.doLike);
@@ -5297,6 +5301,7 @@ function applyAutopilotSettings(settings) {
 }
 
 function syncAutopilotSubPanels() {
+  $('#apNeighborPanel')?.classList.toggle('hidden', !$('#apStepAcceptNeighbors')?.checked);
   $('#apEngagePanel')?.classList.toggle('hidden', !$('#apStepEngage')?.checked);
   $('#apFeedPanel')?.classList.toggle('hidden', !$('#apStepFeed')?.checked);
   $('#apReturnVisitCard')?.classList.toggle('hidden', !$('#apStepReplies')?.checked);

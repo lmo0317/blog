@@ -1292,6 +1292,7 @@ async function waitForJob(getState) {
   while (isActiveJob(getState())) await pause(2000);
 }
 
+let lastSentCleanupDate = '';
 const autopilot = new AutopilotManager({
   statePath: path.join(__dirname, '.data', 'autopilot.json'),
   isConnected: () => browserSession.connected,
@@ -1313,11 +1314,25 @@ const autopilot = new AutopilotManager({
     if (isActiveJob(neighborCleanerManager.state)) neighborCleanerManager.stop();
   },
   steps: {
-    acceptNeighbors: async () => {
-      const result = await neighborCleanerManager.startCleanReceived({ acceptGenuine: true, rejectSpam: true });
-      const stats = result?.stats || {};
-      if (!stats.total) return { skipped: true, summary: '새로 받은 신청이 없습니다.' };
-      return { summary: `수락 ${stats.accepted || 0}건 · 거절 ${stats.rejected || 0}건` };
+    acceptNeighbors: async (settings) => {
+      const parts = [];
+      const received = await neighborCleanerManager.startCleanReceived(settings.acceptMode === 'all'
+        ? { acceptGenuine: false, rejectSpam: false }
+        : { acceptGenuine: true, rejectSpam: true });
+      const receivedStats = received?.stats || {};
+      parts.push(receivedStats.total
+        ? `받은 신청 수락 ${receivedStats.accepted || 0}건 · 거절 ${receivedStats.rejected || 0}건`
+        : '새로 받은 신청 없음');
+
+      // Withdrawing stale sent requests walks every page of the sent list, so once a day is enough.
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+      if (settings.cancelSentDays > 0 && lastSentCleanupDate !== today) {
+        const sent = await neighborCleanerManager.startCancelSent({ olderThanDays: settings.cancelSentDays, maxCancelCount: 30 });
+        lastSentCleanupDate = today;
+        parts.push(`${settings.cancelSentDays}일 넘은 보낸 신청 회수 ${sent?.stats?.canceled || 0}건`);
+      }
+      const didWork = receivedStats.total || parts.length > 1;
+      return { skipped: !didWork, summary: parts.join(' · ') };
     },
     replies: async (settings) => {
       const scan = await browserSession.scanMyBlogComments({ postLimit: 10, commentLimit: 40 });
