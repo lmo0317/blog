@@ -157,7 +157,13 @@ export function isPostActiveWithinDays(dateStr = '', days = 0) {
 export function classifyNeighborResult(text = '', pageClosed = false) {
   if (pageClosed) return { status: 'added', message: '이웃 추가가 완료되었습니다.' };
   const normalized = String(text).replace(/\s+/g, ' ').trim();
-  if (/하루에 신청할 수 있는|1일.*(초과|제한|한도)|신청 가능 횟수.*초과|더 이상.*신청할 수 없.*(하루|일일)|오늘.*신청/i.test(normalized)) {
+  // Naver's success dialog repeats the other blogger's nickname ("오늘보다 나은 내일님에게 서로이웃을
+  // 신청하였습니다"), so success is checked first and the limit only matches limit wording, never a bare
+  // "오늘 … 신청" (that once ended a whole run after 8 requests).
+  if (/서로이웃을 신청하였습니다|서로이웃을 신청했습니다|신청내역은.*서로이웃 신청 관리/i.test(normalized)) {
+    return withRaw('requested', '서로이웃 신청이 완료되었습니다.');
+  }
+  if (/하루에 신청할 수 있는|1일.*(초과|제한|한도)|신청 가능 횟수.*초과|더 이상.*신청할 수 없.*(하루|일일)|오늘(?:은)?\s*더 이상.*신청|오늘.*신청.*(?:초과|한도|제한|할 수 없)/i.test(normalized)) {
     return { status: 'limit_reached', message: '네이버 일일 서로이웃 신청 한도(100명)에 도달했습니다.' };
   }
   if (/현재 서로이웃입니다|이미 서로이웃/i.test(normalized)) {
@@ -759,7 +765,7 @@ export class NaverBrowserSession {
         } else {
           await this.context.addCookies(state.cookies);
         }
-        this.connected = true;
+        // `connected` is derived from connectedId and the open context.
         this.connectedId = 'browser-login';
         return { success: true, message: '네이버 로그인이 완료되어 세션이 영구 저장되었습니다.' };
       }
@@ -1677,7 +1683,7 @@ export class NaverBrowserSession {
       const selectedImages = (Array.isArray(images) && images.length
         ? images
         : (Array.isArray(imagePaths) ? imagePaths : []).map((filePath) => ({ filePath })))
-        .slice(0, 5);
+        .slice(0, 10);
       await insertEditorContentWithImages(page, editorFrame, finalContent, selectedImages, isDeals);
       await applyInlineLinks(page, editorFrame, finalContent);
       if (isDeals) {
@@ -1780,7 +1786,7 @@ export class NaverBrowserSession {
     const finalContent = normalizedTags.length
       ? `${cleanContent}\n\n${normalizedTags.map((tag) => `#${tag.replace(/\s+/g, '')}`).join(' ')}`
       : cleanContent;
-    const selectedImages = (Array.isArray(images) ? images : []).slice(0, 5);
+    const selectedImages = (Array.isArray(images) ? images : []).slice(0, 10);
 
     if (this.pendingPostUpdate?.page && !this.pendingPostUpdate.page.isClosed()) {
       await this.pendingPostUpdate.page.close().catch(() => {});
