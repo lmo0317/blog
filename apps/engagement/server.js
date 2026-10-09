@@ -1947,8 +1947,10 @@ process.on('unhandledRejection', (reason) => {
   console.error(`[${new Date().toISOString()}] Unhandled Rejection:`, reason);
 });
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+// Timers (session keep-alive, license heartbeat, autopilot) keep Node alive, so exit once cleanup ends.
+const exitAfterShutdown = () => shutdown().finally(() => process.exit(0));
+process.on('SIGINT', exitAfterShutdown);
+process.on('SIGTERM', exitAfterShutdown);
 
 export { app, autopilot, browserSession, modelManager, embeddedLlama, engagementManager, feedManager, feedHistoryStore, neighborCleanerManager, licenseClient };
 
