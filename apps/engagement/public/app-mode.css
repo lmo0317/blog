@@ -6770,3 +6770,59 @@ textarea.phrase-textarea:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.nh-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nh-form .form-group {
+  margin: 0;
+}
+
+.nh-query-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nh-refresh-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.nh-refresh-option input[type="checkbox"] {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.nh-result-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.nh-result-summary strong {
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.nh-result-summary span {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.nh-candidate-list {
+  margin-top: 10px;
+}

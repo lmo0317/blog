@@ -142,51 +142,63 @@ export function parseBuddyListHtml(html) {
   return rows;
 }
 
-/** Grades my neighbors and picks prune candidates, keeping anyone who talks with me. */
-export function gradeNeighbors(rows, {
-  now = new Date(),
-  activeDays = HEALTH_DEFAULTS.activeDays,
-  dormantDays = HEALTH_DEFAULTS.dormantDays,
-  includeOneway = false,
-  onewayMinDays = 30,
-  protectedIds = new Set(),
-  newNeighborGraceDays = 14
-} = {}) {
-  return rows.map((row) => {
-    const lastPost = parseNaverDate(row.lastPostText, now);
-    const added = parseNaverDate(row.addedText, now);
-    const grade = gradeByLastPost(lastPost, { now, activeDays, dormantDays });
-    const addedDays = daysSince(added, now);
-    const isProtected = protectedIds.has(String(row.blogId).toLowerCase());
-    let pruneReason = '';
-    if (row.relation !== 'rss' && !isProtected && addedDays >= newNeighborGraceDays) {
-      if (grade === 'dormant') pruneReason = lastPost ? `${daysSince(lastPost, now)}일 동안 새 글 없음` : '최근 글 없음';
-      else if (includeOneway && row.relation === 'oneway' && addedDays >= onewayMinDays) pruneReason = `서로이웃 아님 (${addedDays}일 경과)`;
-    }
-    return {
-      ...row,
-      grade,
-      lastPostDays: Number.isFinite(daysSince(lastPost, now)) ? daysSince(lastPost, now) : null,
-      addedDays: Number.isFinite(addedDays) ? addedDays : null,
-      protected: isProtected,
-      pruneCandidate: Boolean(pruneReason),
-      pruneReason
-    };
-  });
+export const RELATION_LABELS = Object.freeze({ all: '전체', mutual: '서로이웃', oneway: '일방 이웃' });
+
+/** Cleans the user's 정리 조건; returns { criteria } or { error }. */
+export function normalizeCriteria(input = {}) {
+  const inactiveDays = Math.max(0, Math.min(Math.round(Number(input.inactiveDays) || 0), 3650));
+  const relation = ['mutual', 'oneway'].includes(input.relation) ? input.relation : 'all';
+  const minAddedDays = Math.max(0, Math.min(Math.round(Number(input.minAddedDays ?? 14) || 0), 3650));
+  const keyword = String(input.keyword || '').trim().slice(0, 40);
+  const criteria = { inactiveDays, relation, minAddedDays, keyword, excludeCommenters: input.excludeCommenters !== false };
+  if (!inactiveDays && relation === 'all' && !keyword) {
+    return { error: '정리할 이웃 조건을 하나 이상 넣어주세요. (새 글 없는 기간, 이웃 관계, 닉네임·ID)' };
+  }
+  return { criteria };
 }
 
-export function summarizeNeighbors(graded) {
-  const count = (fn) => graded.filter(fn).length;
-  return {
-    total: graded.length,
-    active: count((n) => n.grade === 'active'),
-    slow: count((n) => n.grade === 'slow'),
-    dormant: count((n) => n.grade === 'dormant'),
-    mutual: count((n) => n.relation === 'mutual'),
-    oneway: count((n) => n.relation === 'oneway'),
-    protected: count((n) => n.protected),
-    candidates: count((n) => n.pruneCandidate)
-  };
+export function describeCriteria(criteria) {
+  return [
+    criteria.inactiveDays ? `${criteria.inactiveDays}일 이상 새 글 없음` : '',
+    criteria.relation !== 'all' ? RELATION_LABELS[criteria.relation] : '',
+    criteria.keyword ? `'${criteria.keyword}' 포함` : '',
+    criteria.minAddedDays ? `추가한 지 ${criteria.minAddedDays}일 이상` : ''
+  ].filter(Boolean).join(' · ');
+}
+
+/** Neighbors matching every condition, each with the reason it matched. */
+export function filterNeighbors(rows, criteria, { now = new Date(), protectedIds = new Set() } = {}) {
+  const keyword = criteria.keyword.toLowerCase();
+  const matches = [];
+  let excludedCommenters = 0;
+  for (const row of rows) {
+    if (row.relation === 'rss') continue;
+    const lastPost = parseNaverDate(row.lastPostText, now);
+    const lastPostDays = daysSince(lastPost, now);
+    const addedDays = daysSince(parseNaverDate(row.addedText, now), now);
+    if (criteria.inactiveDays && lastPostDays < criteria.inactiveDays) continue;
+    if (criteria.relation !== 'all' && row.relation !== criteria.relation) continue;
+    if (keyword && !`${row.nickname} ${row.blogId}`.toLowerCase().includes(keyword)) continue;
+    if (criteria.minAddedDays && addedDays < criteria.minAddedDays) continue;
+    if (criteria.excludeCommenters && protectedIds.has(String(row.blogId).toLowerCase())) {
+      excludedCommenters += 1;
+      continue;
+    }
+    const reasons = [];
+    if (criteria.inactiveDays) reasons.push(lastPost ? `${lastPostDays}일 동안 새 글 없음` : '최근 글 없음');
+    if (criteria.relation === 'oneway') reasons.push('서로이웃 아님');
+    if (criteria.relation === 'mutual') reasons.push('서로이웃');
+    if (keyword) reasons.push(`'${criteria.keyword}' 일치`);
+    matches.push({
+      ...row,
+      lastPostDays: Number.isFinite(lastPostDays) ? lastPostDays : null,
+      addedDays: Number.isFinite(addedDays) ? addedDays : null,
+      reason: reasons.join(' · ')
+    });
+  }
+  // Longest silence first.
+  matches.sort((a, b) => (b.lastPostDays ?? 99999) - (a.lastPostDays ?? 99999));
+  return { matches, excludedCommenters };
 }
 
 export async function fetchBuddyListPage(page, blogId, pageNo = 1) {
@@ -265,8 +277,10 @@ export async function deleteBuddiesOnPage(page, blogId, pageNo, buddyBlogNos) {
 }
 
 // ---------------------------------------------------------------------------
-// Manager: scan (read-only) and prune (only the IDs the user confirmed, capped per day)
+// Manager: query my neighbors by the user's conditions, then delete only the ones they pick
 // ---------------------------------------------------------------------------
+const LIST_CACHE_MS = 30 * 60 * 1000;
+
 export class NeighborHealthManager {
   constructor({ browserSession, statePath = '', getProtectedIds = async () => new Set() }) {
     this.browserSession = browserSession;
@@ -276,25 +290,23 @@ export class NeighborHealthManager {
     this.shouldStop = false;
     this.logs = [];
     this.progress = { phase: '', done: 0, total: 0 };
-    this.scan = null; // { scannedAt, options, summary, neighbors }
+    this.list = null; // { fetchedAt, rows } — my neighbor list, read on demand
+    this.result = null; // { queryId, criteria, description, matches, total, excludedCommenters, queriedAt }
+    this.queryCount = 0;
     this.pruneLog = {}; // { 'YYYY-MM-DD': count }
     this.load();
   }
 
   load() {
     if (!this.statePath || !existsSync(this.statePath)) return;
-    try {
-      const saved = JSON.parse(readFileSync(this.statePath, 'utf8'));
-      this.scan = saved.scan || null;
-      this.pruneLog = saved.pruneLog || {};
-    } catch {}
+    try { this.pruneLog = JSON.parse(readFileSync(this.statePath, 'utf8')).pruneLog || {}; } catch {}
   }
 
   save() {
     if (!this.statePath) return;
     try {
       mkdirSync(path.dirname(this.statePath), { recursive: true });
-      writeFileSync(this.statePath, JSON.stringify({ scan: this.scan, pruneLog: this.pruneLog }), 'utf8');
+      writeFileSync(this.statePath, JSON.stringify({ pruneLog: this.pruneLog }), 'utf8');
     } catch {}
   }
 
@@ -312,74 +324,97 @@ export class NeighborHealthManager {
     return Number(this.pruneLog[this.todayKey()]) || 0;
   }
 
-  getStatus({ includeNeighbors = false } = {}) {
-    const neighbors = this.scan?.neighbors || [];
+  listAgeMinutes() {
+    return this.list ? Math.floor((Date.now() - this.list.fetchedAt) / 60000) : null;
+  }
+
+  getStatus() {
     return {
       state: this.state,
       progress: this.progress,
       logs: this.logs.slice(0, 60),
-      scannedAt: this.scan?.scannedAt || null,
-      options: this.scan?.options || null,
-      summary: this.scan?.summary || null,
+      listAgeMinutes: this.listAgeMinutes(),
+      listSize: this.list?.rows.length ?? null,
+      result: this.result,
       prunedToday: this.prunedToday(),
-      dailyLimit: PRUNE_DAILY_LIMIT,
-      candidates: neighbors.filter((n) => n.pruneCandidate).slice(0, 500),
-      neighbors: includeNeighbors ? neighbors : undefined
+      dailyLimit: PRUNE_DAILY_LIMIT
     };
   }
 
   stop() {
     if (this.state === 'running') {
       this.shouldStop = true;
-      this.log('⏹️ 이웃 건강도 작업을 멈춥니다.', 'warn');
+      this.log('⏹️ 작업을 멈춥니다.', 'warn');
     }
   }
 
-  async runScan(options = {}) {
-    if (this.state === 'running') throw new Error('이웃 건강도 작업이 이미 진행 중입니다.');
-    if (!this.browserSession?.connected) throw new Error('네이버 계정이 연결되어 있지 않습니다.');
+  async readList(page) {
+    const blogId = await this.browserSession.resolveMyBlogId(page);
+    this.log('📖 내 이웃 목록을 읽고 있습니다...', 'info');
+    const rows = await fetchAllBuddies(page, blogId, {
+      shouldStop: () => this.shouldStop,
+      onPage: (done, total, count) => { this.progress = { phase: 'read', done, total, count }; }
+    });
+    this.list = { fetchedAt: Date.now(), rows };
+    this.log(`📖 이웃 ${rows.length}명의 목록을 읽었습니다.`, 'info');
+    return rows;
+  }
+
+  /**
+   * Finds neighbors that match `input` conditions. Re-reads my neighbor list only when it is older
+   * than 30 minutes or `refresh` is set, so changing conditions and searching again is instant.
+   */
+  async query(input = {}, { refresh = false } = {}) {
+    if (this.state === 'running') throw new Error('이웃 조회·정리 작업이 이미 진행 중입니다.');
+    const { criteria, error } = normalizeCriteria(input);
+    if (error) throw new Error(error);
+    const needsRead = refresh || !this.list || Date.now() - this.list.fetchedAt > LIST_CACHE_MS;
+    if (needsRead && !this.browserSession?.connected) throw new Error('네이버 계정이 연결되어 있지 않습니다.');
+
     this.state = 'running';
     this.shouldStop = false;
-    this.progress = { phase: 'scan', done: 0, total: 0 };
-    const cleanOptions = {
-      activeDays: Math.min(Math.max(Number(options.activeDays) || HEALTH_DEFAULTS.activeDays, 3), 60),
-      dormantDays: Math.min(Math.max(Number(options.dormantDays) || HEALTH_DEFAULTS.dormantDays, 30), 365),
-      includeOneway: options.includeOneway === true
-    };
-    this.log(`🔍 내 이웃 목록을 읽고 활동 상태를 분석합니다. (활성 ${cleanOptions.activeDays}일 · 휴면 ${cleanOptions.dormantDays}일 기준)`, 'info');
-    const page = await this.browserSession.context.newPage();
+    this.progress = { phase: needsRead ? 'read' : 'filter', done: 0, total: 0 };
+    let page = null;
     try {
-      const blogId = await this.browserSession.resolveMyBlogId(page);
-      const rows = await fetchAllBuddies(page, blogId, {
-        shouldStop: () => this.shouldStop,
-        onPage: (done, total, count) => { this.progress = { phase: 'scan', done, total, count }; }
-      });
-      const protectedIds = await this.getProtectedIds().catch(() => new Set());
-      const neighbors = gradeNeighbors(rows, { ...cleanOptions, protectedIds });
-      const summary = summarizeNeighbors(neighbors);
-      this.scan = { scannedAt: new Date().toISOString(), options: cleanOptions, summary, neighbors };
-      this.save();
-      this.log(`✅ 이웃 ${summary.total}명 분석 완료 · 활성 ${summary.active} · 뜸 ${summary.slow} · 휴면 ${summary.dormant} · 정리 후보 ${summary.candidates}명 (소통 이웃 ${summary.protected}명 보호)`, 'success');
+      if (needsRead) {
+        page = await this.browserSession.context.newPage();
+        await this.readList(page);
+      }
+      const protectedIds = criteria.excludeCommenters ? await this.getProtectedIds().catch(() => new Set()) : new Set();
+      const { matches, excludedCommenters } = filterNeighbors(this.list.rows, criteria, { protectedIds });
+      this.queryCount += 1;
+      this.result = {
+        queryId: this.queryCount,
+        criteria,
+        description: describeCriteria(criteria),
+        matches: matches.slice(0, 1000),
+        matchCount: matches.length,
+        total: this.list.rows.length,
+        excludedCommenters,
+        queriedAt: new Date().toISOString()
+      };
+      this.log(`🔎 조건(${this.result.description})에 맞는 이웃 ${matches.length}명을 찾았습니다.${excludedCommenters ? ` 내 글 댓글 이웃 ${excludedCommenters}명은 제외했습니다.` : ''}`, 'success');
       this.state = this.shouldStop ? 'stopped' : 'completed';
       return this.getStatus();
-    } catch (error) {
+    } catch (err) {
       this.state = 'error';
-      this.log(`❌ 이웃 분석 실패: ${error.message}`, 'error');
-      throw error;
+      this.log(`❌ 이웃 조회 실패: ${err.message}`, 'error');
+      throw err;
     } finally {
-      await page.close().catch(() => {});
+      if (page) await page.close().catch(() => {});
     }
   }
 
-  /** Deletes only scanned prune candidates among `buddyBlogNos`, at most the daily remainder. */
-  async prune(buddyBlogNos = [], { maxCount = PRUNE_DAILY_LIMIT } = {}) {
-    if (this.state === 'running') throw new Error('이웃 건강도 작업이 이미 진행 중입니다.');
+  /** Deletes the picked neighbors from the latest query result, at most the daily remainder. */
+  async prune(buddyBlogNos = [], { queryId = null, maxCount = PRUNE_DAILY_LIMIT } = {}) {
+    if (this.state === 'running') throw new Error('이웃 조회·정리 작업이 이미 진행 중입니다.');
     if (!this.browserSession?.connected) throw new Error('네이버 계정이 연결되어 있지 않습니다.');
-    if (!this.scan?.neighbors?.length) throw new Error('먼저 이웃 상태 분석을 실행해주세요.');
+    if (!this.result) throw new Error('먼저 조건을 넣고 조회해주세요.');
+    if (queryId !== null && Number(queryId) !== this.result.queryId) throw new Error('조회 결과가 바뀌었습니다. 다시 조회한 뒤 정리해주세요.');
     const remaining = Math.max(0, Math.min(PRUNE_DAILY_LIMIT, maxCount) - this.prunedToday());
     if (!remaining) throw new Error(`오늘 정리 한도(${PRUNE_DAILY_LIMIT}명)를 모두 사용했습니다. 내일 다시 진행해주세요.`);
     const wanted = new Set(buddyBlogNos.map(String));
-    const targets = this.scan.neighbors.filter((n) => n.pruneCandidate && !n.protected && wanted.has(String(n.buddyBlogNo))).slice(0, remaining);
+    const targets = this.result.matches.filter((n) => wanted.has(String(n.buddyBlogNo))).slice(0, remaining);
     if (!targets.length) throw new Error('정리할 이웃을 선택해주세요.');
 
     this.state = 'running';
@@ -397,14 +432,14 @@ export class NeighborHealthManager {
         if (this.shouldStop) break;
         const group = byPage.get(pageNo);
         const result = await deleteBuddiesOnPage(page, blogId, pageNo, group.map((n) => n.buddyBlogNo));
-        // Neighbors added since the scan push rows to later pages; look one page further once.
+        // Neighbors added since the list was read push rows to later pages; look one page further once.
         if (result.missing.length) {
           const retry = await deleteBuddiesOnPage(page, blogId, pageNo + 1, result.missing);
           result.deleted.push(...retry.deleted);
         }
         result.deleted.forEach((no) => deletedNos.add(no));
         for (const n of group) {
-          if (result.deleted.includes(n.buddyBlogNo)) this.log(`🧹 @${n.blogId} (${n.nickname}) 정리 · ${n.pruneReason}`, 'success');
+          if (result.deleted.includes(n.buddyBlogNo)) this.log(`🧹 @${n.blogId} (${n.nickname}) 정리 · ${n.reason}`, 'success');
           else this.log(`⚠️ @${n.blogId} 정리를 확인하지 못했습니다.`, 'warn');
         }
         this.progress = { phase: 'prune', done: deletedNos.size, total: targets.length };
@@ -412,9 +447,10 @@ export class NeighborHealthManager {
         this.save();
         await page.waitForTimeout(2500 + Math.floor(Math.random() * 2500));
       }
-      this.scan.neighbors = this.scan.neighbors.filter((n) => !deletedNos.has(n.buddyBlogNo));
-      this.scan.summary = summarizeNeighbors(this.scan.neighbors);
-      this.save();
+      // Deleting changes pages, so the cached list is no longer trustworthy.
+      this.list = null;
+      this.result = { ...this.result, matches: this.result.matches.filter((n) => !deletedNos.has(n.buddyBlogNo)) };
+      this.result.matchCount = this.result.matches.length;
       this.log(`✅ 이웃 ${deletedNos.size}명을 정리했습니다.`, 'success');
       this.state = this.shouldStop ? 'stopped' : 'completed';
       return { ...this.getStatus(), deleted: deletedNos.size };

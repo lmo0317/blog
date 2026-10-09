@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import {
   assessPosts,
   BlogActivityCache,
+  filterNeighbors,
   gradeByLastPost,
-  gradeNeighbors,
+  NeighborHealthManager,
+  normalizeCriteria,
   parseBuddyListHtml,
-  parseNaverDate,
-  summarizeNeighbors
+  parseNaverDate
 } from '../lib/neighbor-health.js';
 import { returnVisitCommenter } from '../lib/return-visit.js';
 import { NeighborCleanerManager } from '../lib/naver-neighbor-cleaner.js';
@@ -41,29 +42,68 @@ test('dates and activity grades', () => {
   assert.equal(gradeByLastPost(null, { now: NOW }), 'dormant');
 });
 
-test('gradeNeighbors picks dormant prune candidates but protects commenters and new neighbors', () => {
-  const rows = [
-    { buddyBlogNo: '1', relation: 'mutual', blogId: 'fresh', lastPostText: '26.10.08.', addedText: '26.01.01.' },
-    { buddyBlogNo: '2', relation: 'mutual', blogId: 'sleepy', lastPostText: '26.05.01.', addedText: '26.01.01.' },
-    { buddyBlogNo: '3', relation: 'mutual', blogId: 'friend', lastPostText: '26.03.01.', addedText: '26.01.01.' },
-    { buddyBlogNo: '4', relation: 'oneway', blogId: 'oneway_old', lastPostText: '26.10.01.', addedText: '26.08.01.' },
-    { buddyBlogNo: '5', relation: 'mutual', blogId: 'just_added', lastPostText: '', addedText: '26.10.05.' }
-  ];
-  const graded = gradeNeighbors(rows, { now: NOW, protectedIds: new Set(['friend']) });
-  const byId = Object.fromEntries(graded.map((n) => [n.blogId, n]));
-  assert.equal(byId.fresh.pruneCandidate, false);
-  assert.equal(byId.sleepy.pruneCandidate, true);
-  assert.match(byId.sleepy.pruneReason, /새 글 없음/);
-  assert.equal(byId.friend.pruneCandidate, false);
-  assert.equal(byId.friend.protected, true);
-  assert.equal(byId.oneway_old.pruneCandidate, false);
-  assert.equal(byId.just_added.pruneCandidate, false);
+const rows = [
+  { buddyBlogNo: '1', relation: 'mutual', blogId: 'fresh', nickname: '활발이', lastPostText: '26.10.08.', addedText: '26.01.01.' },
+  { buddyBlogNo: '2', relation: 'mutual', blogId: 'sleepy', nickname: '잠꾸러기', lastPostText: '26.05.01.', addedText: '26.01.01.' },
+  { buddyBlogNo: '3', relation: 'mutual', blogId: 'friend', nickname: '단골', lastPostText: '26.03.01.', addedText: '26.01.01.' },
+  { buddyBlogNo: '4', relation: 'oneway', blogId: 'oneway_old', nickname: '일방', lastPostText: '26.10.01.', addedText: '26.08.01.' },
+  { buddyBlogNo: '5', relation: 'mutual', blogId: 'just_added', nickname: '새친구', lastPostText: '', addedText: '26.10.05.' },
+  { buddyBlogNo: '6', relation: 'oneway', blogId: 'ancient', nickname: '옛날', lastPostText: '19.01.01.', addedText: '25.01.01.' }
+];
 
-  const withOneway = gradeNeighbors(rows, { now: NOW, includeOneway: true });
-  assert.equal(withOneway.find((n) => n.blogId === 'oneway_old').pruneCandidate, true);
+test('normalizeCriteria requires at least one narrowing condition', () => {
+  assert.match(normalizeCriteria({}).error, /조건/);
+  assert.equal(normalizeCriteria({ inactiveDays: 60 }).criteria.inactiveDays, 60);
+  assert.equal(normalizeCriteria({ relation: 'oneway' }).criteria.minAddedDays, 14);
+  assert.equal(normalizeCriteria({ keyword: '잠' }).criteria.excludeCommenters, true);
+});
 
-  const summary = summarizeNeighbors(graded);
-  assert.deepEqual({ total: summary.total, active: summary.active, dormant: summary.dormant, candidates: summary.candidates }, { total: 5, active: 2, dormant: 3, candidates: 1 });
+test('filterNeighbors applies every condition and protects commenters and new neighbors', () => {
+  const protectedIds = new Set(['friend']);
+  const dormant = filterNeighbors(rows, normalizeCriteria({ inactiveDays: 60 }).criteria, { now: NOW, protectedIds });
+  assert.deepEqual(dormant.matches.map((n) => n.blogId), ['ancient', 'sleepy']);
+  assert.equal(dormant.excludedCommenters, 1);
+  assert.match(dormant.matches[1].reason, /새 글 없음/);
+
+  const onewayDormant = filterNeighbors(rows, normalizeCriteria({ inactiveDays: 60, relation: 'oneway' }).criteria, { now: NOW, protectedIds });
+  assert.deepEqual(onewayDormant.matches.map((n) => n.blogId), ['ancient']);
+
+  const oneway = filterNeighbors(rows, normalizeCriteria({ relation: 'oneway' }).criteria, { now: NOW });
+  assert.deepEqual(oneway.matches.map((n) => n.blogId).sort(), ['ancient', 'oneway_old']);
+
+  const byName = filterNeighbors(rows, normalizeCriteria({ keyword: '꾸러기' }).criteria, { now: NOW });
+  assert.deepEqual(byName.matches.map((n) => n.blogId), ['sleepy']);
+
+  const includeNew = filterNeighbors(rows, normalizeCriteria({ inactiveDays: 60, minAddedDays: 0, excludeCommenters: false }).criteria, { now: NOW, protectedIds });
+  assert.deepEqual(includeNew.matches.map((n) => n.blogId).sort(), ['ancient', 'friend', 'just_added', 'sleepy']);
+});
+
+test('NeighborHealthManager reads the list once, re-filters instantly, and prunes only from the latest result', async () => {
+  let reads = 0;
+  const html = `<table><tbody>${row('2', 'mutual', 'sleepy', '26.05.01.', '26.01.01.')}${row('1', 'mutual', 'fresh', '26.10.08.', '26.01.01.')}</tbody></table>`;
+  const fakePage = {
+    goto: async () => { reads += 1; },
+    waitForTimeout: async () => {},
+    url: () => 'https://admin.blog.naver.com/BuddyListManage.naver',
+    content: async () => html,
+    evaluate: async () => 1,
+    close: async () => {}
+  };
+  const manager = new NeighborHealthManager({
+    browserSession: { connected: true, context: { newPage: async () => fakePage }, resolveMyBlogId: async () => 'me' }
+  });
+  await assert.rejects(() => manager.query({}), /조건/);
+  await assert.rejects(() => manager.prune(['2']), /조회/);
+
+  const first = await manager.query({ inactiveDays: 60 });
+  assert.equal(first.result.matchCount >= 1, true);
+  assert.ok(first.result.matches.every((n) => n.blogId !== 'fresh'));
+  const readsAfterFirst = reads;
+  const second = await manager.query({ keyword: 'fresh' });
+  assert.equal(reads, readsAfterFirst);
+  assert.deepEqual(second.result.matches.map((n) => n.blogId), ['fresh']);
+  assert.equal(second.result.queryId, first.result.queryId + 1);
+  await assert.rejects(() => manager.prune(['1'], { queryId: first.result.queryId }), /다시 조회/);
 });
 
 test('assessPosts separates active, dormant and ad/bot blogs from RSS posts', () => {

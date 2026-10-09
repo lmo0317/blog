@@ -3470,7 +3470,6 @@ function initNeighborCleaner() {
       $('#subtabReceivedCleaner')?.classList.toggle('hidden', targetSubtab !== 'received-cleaner');
       $('#subtabSentCleaner')?.classList.toggle('hidden', targetSubtab !== 'sent-cleaner');
       $('#subtabNeighborHealth')?.classList.toggle('hidden', targetSubtab !== 'neighbor-health');
-      if (targetSubtab === 'neighbor-health') refreshNeighborHealth();
 
     });
   });
@@ -5474,85 +5473,100 @@ function initAutopilot() {
 initAutopilot();
 
 // ---------------------------------------------------------------------------
-// 이웃 건강도: grade my neighbors by recent posts and prune the dormant ones I pick
+// 이웃 정리: the user sets conditions → 조회 → picks neighbors → 정리. Nothing runs on tab open.
 // ---------------------------------------------------------------------------
 let nhStatus = null;
 let nhPollTimer = null;
+let nhAwaitingQuery = false;
+let nhShownQueryId = null;
 const nhSelected = new Set();
-let nhKnownCandidates = '';
 
 function nhRelationLabel(relation) {
-  return relation === 'mutual' ? '서로이웃' : relation === 'oneway' ? '이웃(일방)' : '열린이웃';
+  return relation === 'mutual' ? '서로이웃' : relation === 'oneway' ? '일방 이웃' : '열린이웃';
+}
+
+function readNeighborCriteria() {
+  return {
+    inactiveDays: Number($('#nhInactiveDays')?.value) || 0,
+    relation: $('#nhRelation')?.value || 'all',
+    keyword: $('#nhKeyword')?.value?.trim() || '',
+    minAddedDays: Number($('#nhMinAddedDays')?.value) || 0,
+    excludeCommenters: $('#nhExcludeCommenters')?.checked !== false
+  };
+}
+
+function renderNeighborResult(result, running) {
+  const list = $('#nhCandidateList');
+  $('#nhResultSummary')?.classList.remove('hidden');
+  $('#nhResultToolbar')?.classList.toggle('hidden', !result.matches.length);
+  $('#nhResultCount').textContent = `조건에 맞는 이웃 ${result.matchCount.toLocaleString()}명`;
+  $('#nhResultCriteria').textContent = `전체 ${result.total.toLocaleString()}명 중 · ${result.description}${result.excludedCommenters ? ` · 댓글 이웃 ${result.excludedCommenters}명 제외` : ''}`;
+  if (!list) return;
+  if (!result.matches.length) {
+    list.innerHTML = '<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>조건에 맞는 이웃이 없습니다</strong><p>조건을 바꿔 다시 조회해 보세요.</p></div>';
+    return;
+  }
+  list.innerHTML = result.matches.map((n) => `
+    <label class="nh-candidate${nhSelected.has(n.buddyBlogNo) ? ' selected' : ''}">
+      <input type="checkbox" class="nh-candidate-check" value="${escapeHtml(n.buddyBlogNo)}"${nhSelected.has(n.buddyBlogNo) ? ' checked' : ''}${running ? ' disabled' : ''}>
+      <div class="nh-candidate-main">
+        <div class="nh-candidate-title"><strong>${escapeHtml(n.nickname || n.blogId)}</strong><a href="https://blog.naver.com/${encodeURIComponent(n.blogId)}" target="_blank" rel="noopener">@${escapeHtml(n.blogId)}</a></div>
+        <div class="nh-candidate-meta">
+          <span class="nh-badge ${n.relation}">${nhRelationLabel(n.relation)}</span>
+          ${n.reason ? `<span class="nh-badge dormant">${escapeHtml(n.reason)}</span>` : ''}
+          <span>최근 글 ${escapeHtml(n.lastPostText || '없음')} · 추가 ${escapeHtml(n.addedText || '-')}${n.group ? ` · ${escapeHtml(n.group)}` : ''}</span>
+        </div>
+      </div>
+    </label>`).join('');
 }
 
 function renderNeighborHealth(status) {
   nhStatus = status;
   const running = status.state === 'running';
-  const summary = status.summary;
+  const progress = status.progress || {};
 
   const badge = $('#nhStatusBadge');
   if (badge) {
-    badge.className = `status ${running ? 'running' : summary ? 'online' : 'ready'}`;
-    badge.innerHTML = `<i></i> ${running ? (status.progress?.phase === 'prune' ? '정리 중' : '분석 중') : summary ? '분석 완료' : '분석 전'}`;
+    const label = running ? (progress.phase === 'prune' ? '정리 중' : '조회 중') : nhShownQueryId ? '조회 완료' : '조회 전';
+    badge.className = `status ${running ? 'running' : nhShownQueryId ? 'online' : 'ready'}`;
+    badge.innerHTML = `<i></i> ${label}`;
   }
-  $('#nhScanBtn').disabled = running;
+  $('#nhQueryBtn').disabled = running;
   $('#nhStopBtn')?.classList.toggle('hidden', !running);
-  const progress = status.progress || {};
+  const hasList = status.listAgeMinutes !== null && status.listAgeMinutes !== undefined;
+  $('#nhRefreshOption')?.classList.toggle('hidden', !hasList || running);
+  if (hasList) $('#nhRefreshText').textContent = `이웃 목록 새로 읽기 (지금 목록은 ${status.listAgeMinutes}분 전에 읽은 ${Number(status.listSize || 0).toLocaleString()}명)`;
   $('#nhProgressText').textContent = running
-    ? (progress.phase === 'prune' ? `이웃 정리 중… ${progress.done || 0} / ${progress.total || 0}명` : `이웃 목록 읽는 중… ${progress.done || 0} / ${progress.total || '?'}페이지 (${progress.count || 0}명)`)
-    : '';
+    ? (progress.phase === 'prune' ? `이웃 정리 중… ${progress.done || 0} / ${progress.total || 0}명` : `이웃 목록 읽는 중… ${progress.done || 0} / ${progress.total || '?'}페이지 (${(progress.count || 0).toLocaleString()}명)`)
+    : (hasList ? '조건을 바꿔 다시 조회하면 바로 결과가 나옵니다.' : '처음 조회할 때 내 이웃 목록을 읽습니다. 이웃이 1,000명이면 1분쯤 걸립니다.');
+  $('#nhLimitBadge').textContent = `오늘 정리 ${status.prunedToday || 0} / ${status.dailyLimit || 30}명`;
 
-  $('#nhStatTotal').textContent = summary ? summary.total.toLocaleString() : '-';
-  $('#nhStatActive').textContent = summary ? summary.active.toLocaleString() : '-';
-  $('#nhStatSlow').textContent = summary ? summary.slow.toLocaleString() : '-';
-  $('#nhStatDormant').textContent = summary ? summary.dormant.toLocaleString() : '-';
-  $('#nhMetaText').textContent = summary
-    ? `${new Date(status.scannedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 분석 · 서로이웃 ${summary.mutual.toLocaleString()}명 · 일방 이웃 ${summary.oneway.toLocaleString()}명 · 소통 이웃 ${summary.protected.toLocaleString()}명 보호`
-    : '아직 분석하지 않았습니다.';
-  $('#nhLimitBadge').textContent = `오늘 ${status.prunedToday || 0} / ${status.dailyLimit || 30}명`;
-
-  const candidates = status.candidates || [];
-  const signature = candidates.map((n) => n.buddyBlogNo).join(',');
-  if (signature !== nhKnownCandidates) {
-    // New scan result: everything is selected by default.
-    nhKnownCandidates = signature;
-    nhSelected.clear();
-    candidates.forEach((n) => nhSelected.add(n.buddyBlogNo));
-  }
-  const list = $('#nhCandidateList');
-  if (list) {
-    if (!summary) {
-      list.innerHTML = `<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>이웃 상태를 먼저 분석하세요</strong><p>분석이 끝나면 오래 활동이 없는 이웃이 여기에 나타납니다.</p></div>`;
-    } else if (!candidates.length) {
-      list.innerHTML = `<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>정리할 이웃이 없습니다 🎉</strong><p>지금 기준으로 휴면 이웃이 없습니다.</p></div>`;
-    } else {
-      list.innerHTML = candidates.map((n) => `
-        <label class="nh-candidate${nhSelected.has(n.buddyBlogNo) ? ' selected' : ''}">
-          <input type="checkbox" class="nh-candidate-check" value="${escapeHtml(n.buddyBlogNo)}"${nhSelected.has(n.buddyBlogNo) ? ' checked' : ''}${running ? ' disabled' : ''}>
-          <div class="nh-candidate-main">
-            <div class="nh-candidate-title"><strong>${escapeHtml(n.nickname || n.blogId)}</strong><a href="https://blog.naver.com/${encodeURIComponent(n.blogId)}" target="_blank" rel="noopener">@${escapeHtml(n.blogId)}</a></div>
-            <div class="nh-candidate-meta">
-              <span class="nh-badge ${n.relation}">${nhRelationLabel(n.relation)}</span>
-              <span class="nh-badge dormant">${escapeHtml(n.pruneReason)}</span>
-              <span>최근 글 ${escapeHtml(n.lastPostText || '없음')} · 추가 ${escapeHtml(n.addedText || '-')}</span>
-            </div>
-          </div>
-        </label>`).join('');
+  // Results appear only for a 조회 the user started on this screen.
+  const result = status.result;
+  if (result && nhAwaitingQuery && !running) {
+    nhAwaitingQuery = false;
+    if (result.queryId !== nhShownQueryId) {
+      nhShownQueryId = result.queryId;
+      nhSelected.clear();
     }
   }
-  const selectedCount = candidates.filter((n) => nhSelected.has(n.buddyBlogNo)).length;
-  const remaining = Math.max(0, (status.dailyLimit || 30) - (status.prunedToday || 0));
-  $('#nhSelectedCount').textContent = `${selectedCount}명 선택${selectedCount > remaining ? ` (오늘은 ${remaining}명까지)` : ''}`;
-  $('#nhSelectAll').checked = candidates.length > 0 && selectedCount === candidates.length;
-  const pruneBtn = $('#nhPruneBtn');
-  if (pruneBtn) pruneBtn.disabled = running || !selectedCount || !remaining;
+  if (result && nhShownQueryId === result.queryId) {
+    const valid = new Set(result.matches.map((n) => n.buddyBlogNo));
+    [...nhSelected].forEach((no) => { if (!valid.has(no)) nhSelected.delete(no); });
+    renderNeighborResult(result, running);
+    const selectedCount = nhSelected.size;
+    const remaining = Math.max(0, (status.dailyLimit || 30) - (status.prunedToday || 0));
+    $('#nhSelectedCount').textContent = `${selectedCount}명 선택${selectedCount > remaining ? ` (오늘은 ${remaining}명까지 정리)` : ''}`;
+    $('#nhSelectAll').checked = result.matches.length > 0 && selectedCount === result.matches.length;
+    $('#nhPruneBtn').disabled = running || !selectedCount || !remaining;
+  }
 
   const terminal = $('#nhTerminalLogs');
   if (terminal && status.logs?.length) {
     terminal.innerHTML = status.logs.slice(0, 60).map((entry) => `<div class="terminal-line ${entry.type || 'info'}">[${escapeHtml(entry.time)}] ${escapeHtml(entry.message)}</div>`).join('');
   }
 
-  if (running && !nhPollTimer) nhPollTimer = setInterval(refreshNeighborHealth, 2000);
+  if (running && !nhPollTimer) nhPollTimer = setInterval(refreshNeighborHealth, 1500);
   if (!running && nhPollTimer) { clearInterval(nhPollTimer); nhPollTimer = null; }
 }
 
@@ -5561,16 +5575,28 @@ async function refreshNeighborHealth() {
 }
 
 function initNeighborHealth() {
-  $('#nhScanBtn')?.addEventListener('click', async () => {
-    if (!state.connected) return toast('⚠️ 네이버 계정을 먼저 연결해주세요.', true);
+  const runQuery = async () => {
+    const criteria = readNeighborCriteria();
+    if (!criteria.inactiveDays && criteria.relation === 'all' && !criteria.keyword) {
+      return toast('새 글이 없는 기간, 이웃 관계, 닉네임·ID 중 하나 이상을 정해주세요.', true);
+    }
+    $('#nhConfirmBar')?.classList.add('hidden');
     try {
-      renderNeighborHealth(await api('api/neighbor-health/scan', {
-        method: 'POST',
-        body: JSON.stringify({ dormantDays: Number($('#nhDormantDays')?.value) || 60, includeOneway: $('#nhIncludeOneway')?.checked === true })
-      }));
-      toast('🔍 내 이웃 목록을 읽고 있습니다. 이웃이 많으면 몇 분 걸립니다.');
-    } catch (error) { toast(error.message, true); }
+      nhAwaitingQuery = true;
+      const refresh = $('#nhRefresh')?.checked === true;
+      renderNeighborHealth(await api('api/neighbor-health/query', { method: 'POST', body: JSON.stringify({ criteria, refresh }) }));
+      if ($('#nhRefresh')) $('#nhRefresh').checked = false;
+      if (!nhPollTimer) nhPollTimer = setInterval(refreshNeighborHealth, 1500);
+    } catch (error) {
+      nhAwaitingQuery = false;
+      toast(error.message, true);
+    }
+  };
+  $('#nhQueryBtn')?.addEventListener('click', () => {
+    if (!state.connected && nhStatus?.listAgeMinutes == null) return toast('⚠️ 네이버 계정을 먼저 연결해주세요.', true);
+    runQuery();
   });
+  $('#nhKeyword')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); runQuery(); } });
   $('#nhStopBtn')?.addEventListener('click', async () => {
     try { renderNeighborHealth(await api('api/neighbor-health/stop', { method: 'POST' })); } catch (error) { toast(error.message, true); }
   });
@@ -5578,12 +5604,11 @@ function initNeighborHealth() {
     const box = event.target.closest('.nh-candidate-check');
     if (!box) return;
     if (box.checked) nhSelected.add(box.value); else nhSelected.delete(box.value);
-    box.closest('.nh-candidate')?.classList.toggle('selected', box.checked);
     if (nhStatus) renderNeighborHealth(nhStatus);
   });
   $('#nhSelectAll')?.addEventListener('change', (event) => {
     nhSelected.clear();
-    if (event.target.checked) (nhStatus?.candidates || []).forEach((n) => nhSelected.add(n.buddyBlogNo));
+    if (event.target.checked) (nhStatus?.result?.matches || []).forEach((n) => nhSelected.add(n.buddyBlogNo));
     if (nhStatus) renderNeighborHealth(nhStatus);
   });
   $('#nhPruneBtn')?.addEventListener('click', () => {
@@ -5596,11 +5621,18 @@ function initNeighborHealth() {
   $('#nhConfirmOk')?.addEventListener('click', async () => {
     $('#nhConfirmBar')?.classList.add('hidden');
     try {
-      renderNeighborHealth(await api('api/neighbor-health/prune', { method: 'POST', body: JSON.stringify({ buddyBlogNos: [...nhSelected] }) }));
+      renderNeighborHealth(await api('api/neighbor-health/prune', {
+        method: 'POST',
+        body: JSON.stringify({ buddyBlogNos: [...nhSelected], queryId: nhShownQueryId })
+      }));
+      nhSelected.clear();
+      if (!nhPollTimer) nhPollTimer = setInterval(refreshNeighborHealth, 1500);
       toast('🧹 선택한 이웃 정리를 시작했습니다.');
     } catch (error) { toast(error.message, true); }
   });
+  // Only today's prune count and list age; earlier results stay hidden until the user searches.
   refreshNeighborHealth();
 }
 
 initNeighborHealth();
+

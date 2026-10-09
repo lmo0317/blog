@@ -23,7 +23,7 @@ import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from '.
 import { CommentReplyStore } from './lib/comment-replies.js';
 import { returnVisitCommenter } from './lib/return-visit.js';
 import { AutopilotManager } from './lib/autopilot.js';
-import { BlogActivityCache, NeighborHealthManager } from './lib/neighbor-health.js';
+import { BlogActivityCache, NeighborHealthManager, normalizeCriteria } from './lib/neighbor-health.js';
 import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManager } from './lib/naver-feed-engage.js';
 import { acceptReceivedBuddyRequest, fetchReceivedBuddyRequests, fetchAllSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
 import { LicenseClientManager, createLicenseGuard } from './lib/license-client.js';
@@ -1317,10 +1317,16 @@ app.get('/api/neighbor-health/status', (_req, res) => {
   res.json(neighborHealthManager.getStatus());
 });
 
-app.post('/api/neighbor-health/scan', (req, res) => {
-  if (!browserSession.connected) return res.status(400).json({ error: '먼저 네이버 계정을 연결해주세요.' });
-  if (neighborHealthManager.state === 'running') return res.status(409).json({ error: '이웃 건강도 작업이 이미 진행 중입니다.' });
-  neighborHealthManager.runScan(req.body || {}).catch(() => {});
+app.post('/api/neighbor-health/query', (req, res) => {
+  if (neighborHealthManager.state === 'running') return res.status(409).json({ error: '이웃 조회·정리 작업이 이미 진행 중입니다.' });
+  const { criteria = {}, refresh = false } = req.body || {};
+  const { error } = normalizeCriteria(criteria);
+  if (error) return res.status(400).json({ error });
+  if (!browserSession.connected && (refresh || neighborHealthManager.listAgeMinutes() === null)) {
+    return res.status(400).json({ error: '먼저 네이버 계정을 연결해주세요.' });
+  }
+  // Runs in the background when the list has to be read; the UI polls status.
+  neighborHealthManager.query(criteria, { refresh: refresh === true }).catch(() => {});
   res.json(neighborHealthManager.getStatus());
 });
 
@@ -1329,7 +1335,10 @@ app.post('/api/neighbor-health/prune', (req, res) => {
   if (neighborHealthManager.state === 'running') return res.status(409).json({ error: '이웃 건강도 작업이 이미 진행 중입니다.' });
   const ids = Array.isArray(req.body?.buddyBlogNos) ? req.body.buddyBlogNos.map(String) : [];
   if (!ids.length) return res.status(400).json({ error: '정리할 이웃을 선택해주세요.' });
-  neighborHealthManager.prune(ids).catch(() => {});
+  if (!neighborHealthManager.result || Number(req.body?.queryId) !== neighborHealthManager.result.queryId) {
+    return res.status(409).json({ error: '조회 결과가 바뀌었습니다. 다시 조회한 뒤 정리해주세요.' });
+  }
+  neighborHealthManager.prune(ids, { queryId: Number(req.body.queryId) }).catch(() => {});
   res.json(neighborHealthManager.getStatus());
 });
 
@@ -1387,8 +1396,8 @@ const autopilot = new AutopilotManager({
       }
       if (settings.pruneDormant && lastPruneDate !== today) {
         lastPruneDate = today;
-        await neighborHealthManager.runScan({ dormantDays: settings.pruneDormantDays });
-        const candidates = neighborHealthManager.getStatus().candidates.map((n) => n.buddyBlogNo);
+        await neighborHealthManager.query({ inactiveDays: settings.pruneDormantDays, minAddedDays: 14, excludeCommenters: true }, { refresh: true });
+        const candidates = (neighborHealthManager.result?.matches || []).map((n) => n.buddyBlogNo);
         if (candidates.length && neighborHealthManager.prunedToday() < 30) {
           const pruned = await neighborHealthManager.prune(candidates);
           parts.push(`휴면 이웃 정리 ${pruned.deleted}명`);
