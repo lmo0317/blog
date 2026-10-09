@@ -1539,3 +1539,250 @@ body {
 }
 
 
+
+/* AI engine choice: local model or the user's own Claude / Gemini subscription */
+.ai-engine-lead {
+  margin: -4px 0 16px;
+  font-size: 13px;
+  color: #64748b;
+}
+.ai-engine-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.ai-engine-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.ai-engine-card:hover {
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+.ai-engine-card:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+.ai-engine-card.selected {
+  background: #ecfdf5;
+  border-color: #03c75a;
+  box-shadow: 0 0 0 1px #03c75a;
+}
+.ai-engine-card.disabled {
+  cursor: default;
+}
+.ai-engine-card.disabled:hover {
+  transform: none;
+}
+.ai-engine-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ai-engine-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+}
+.ai-engine-icon.local { background: linear-gradient(135deg, #03c75a 0%, #00a94f 100%); }
+.ai-engine-icon.claude { background: linear-gradient(135deg, #d97757 0%, #c2410c 100%); }
+.ai-engine-icon.gemini { background: linear-gradient(135deg, #4f46e5 0%, #2563eb 100%); }
+.ai-engine-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.ai-engine-title strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+.ai-engine-title span {
+  font-size: 11.5px;
+  color: #64748b;
+}
+.ai-engine-state {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+.ai-engine-state.ok { color: #15803d; background: #dcfce7; border-color: #bbf7d0; }
+.ai-engine-state.warn { color: #d97706; background: #fef3c7; border-color: #fde68a; }
+.ai-engine-state.off { color: #64748b; background: #f1f5f9; border-color: #e2e8f0; }
+.ai-engine-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #334155;
+  flex: 1;
+}
+.ai-engine-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-engine-model {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 12.5px;
+  color: #334155;
+}
+.ai-engine-model:disabled {
+  color: #94a3b8;
+}
+.ai-engine-connect {
+  flex-shrink: 0;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+@media (max-width: 1024px) {
+  .ai-engine-grid { grid-template-columns: 1fr; }
+}
+
+/* Naver QR login: works where the login page cannot be shown (the web build's headless browser) */
+.qr-login-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+.qr-login-row span {
+  font-size: 12.5px;
+  color: #64748b;
+}
+.qr-login-open,
+.qr-login-actions .button {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.qr-login-box {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-top: 12px;
+  padding: 16px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 14px;
+}
+.qr-login-image {
+  width: 168px;
+  height: 168px;
+  flex-shrink: 0;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  image-rendering: pixelated;
+}
+.qr-login-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.qr-login-text strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+.qr-login-text span {
+  font-size: 12.5px;
+  color: #334155;
+}
+.qr-login-status {
+  font-weight: 700;
+  color: #15803d !important;
+}
+.qr-login-status.error {
+  color: #dc2626 !important;
+}
+.qr-login-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+@media (max-width: 720px) {
+  .qr-login-row,
+  .qr-login-box { flex-direction: column; align-items: stretch; text-align: center; }
+  .qr-login-image { align-self: center; }
+  .qr-login-actions { justify-content: center; }
+}
+
+/* In a regular browser (the web build) the desktop-sized 11-13px text reads too small; scale the whole UI up. */
+/* Tab labels used line-height 1, which clips Korean descenders with Pretendard. */
+html .workspace-tabs .workspace-tab .tab-copy { gap: 2px !important; }
+html .workspace-tabs .workspace-tab .tab-copy strong,
+html .workspace-tabs .workspace-tab .tab-copy small { line-height: 1.35 !important; padding-bottom: 1px; }
+
+/* Web build: crisper text in regular browsers (no zoom: it breaks the window-height layout). */
+html.web-mode body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Browsers give form controls their own default font; use the page font everywhere. */
+button, input, select, textarea, option {
+  font-family: inherit;
+}
+
+/* QR-only login (112 web build): hide the ID/password forms, keep the QR box. */
+html.qr-only-login #accountForm,
+html.qr-only-login #settingsAccountForm,
+html.qr-only-login #publishLoginForm {
+  display: none !important;
+}
+html.qr-only-login .qr-login-row {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+html.qr-only-login .qr-login-row span {
+  color: #15803d;
+  font-weight: 600;
+}
+
+/* QR login: number Naver asks for after the scan */
+.qr-login-check { margin-top: 10px; padding: 12px; background: #fff; border: 1px solid #a7f3d0; border-radius: 12px; }
+.qr-login-code { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: 1px; }
+.qr-login-code:empty { display: none; }
+.qr-login-check-text { margin-top: 4px; font-size: 12.5px; color: #334155; }
+.qr-login-screen { display: block; width: 100%; max-width: 420px; margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.qr-login-screen:not([src]) { display: none; }

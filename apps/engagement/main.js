@@ -16,11 +16,11 @@ let serverPort = null;
 async function createWindow() {
   // Start backend server on safe internal port
   try {
-    const { port } = await startServer(4313);
+    const { port } = await startServer(4313, { enforceLicense: app.isPackaged });
     serverPort = port;
   } catch (err) {
     // If port 4310 is busy, use an open port
-    const { port } = await startServer(0);
+    const { port } = await startServer(0, { enforceLicense: app.isPackaged });
     serverPort = port;
   }
 

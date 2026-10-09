@@ -91,3 +91,29 @@ test('LicenseClientManager login and offline grace period handling', async () =>
   assert.strictEqual(client.state.status, 'unregistered');
   assert.strictEqual(fs.existsSync(tempCache), false);
 });
+
+test('createLicenseGuard blocks actions without an active license but keeps reads and license routes open', async () => {
+  const { createLicenseGuard } = await import('../lib/license-client.js');
+  let status = 'expired';
+  const fakeClient = { getStatus: () => ({ status, message: '구독 기간이 만료되었습니다.' }) };
+  let enforced = true;
+  const guard = createLicenseGuard(fakeClient, () => enforced);
+  const run = (method, path) => {
+    const result = { next: false, code: 200, body: null };
+    const res = { status(code) { result.code = code; return this; }, json(body) { result.body = body; } };
+    guard({ method, path }, res, () => { result.next = true; });
+    return result;
+  };
+
+  assert.strictEqual(run('POST', '/api/engagement/start').code, 402);
+  assert.strictEqual(run('POST', '/api/engagement/start').body.licenseRequired, true);
+  assert.strictEqual(run('GET', '/api/engagement/status').next, true);
+  assert.strictEqual(run('POST', '/api/license/login').next, true);
+
+  status = 'offline_grace';
+  assert.strictEqual(run('POST', '/api/engagement/start').next, true);
+
+  status = 'unregistered';
+  enforced = false;
+  assert.strictEqual(run('POST', '/api/engagement/start').next, true);
+});

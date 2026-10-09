@@ -1,10 +1,11 @@
 import express from 'express';
+import { createWebAuth } from './lib/web-auth.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
 import { NaverBrowserSession, normalizeAutocompleteKeywords } from './lib/naver.js';
-import { discoverGoldenKeywords, analyzeBlogSectionData, evaluateGoldenKeyword } from './lib/golden-keyword.js';
+import { discoverGoldenKeywords, analyzeSingleKeyword } from './lib/golden-keyword.js';
 import { LocalLlmClient } from './lib/llm.js';
 import { fetchKoreanTrends } from './lib/trends.js';
 import { fetchAlgumonRankDeals, isDirectProductUrl, unwrapKnownRedirectUrl } from './lib/algumon.js';
@@ -20,9 +21,12 @@ import { EngagementAutomationManager } from './lib/engagement-automation.js';
 import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { CommentReplyStore } from './lib/comment-replies.js';
+import { returnVisitCommenter } from './lib/return-visit.js';
+import { AutopilotManager } from './lib/autopilot.js';
 import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManager } from './lib/naver-feed-engage.js';
 import { acceptReceivedBuddyRequest, fetchReceivedBuddyRequests, fetchAllSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
-import { LicenseClientManager } from './lib/license-client.js';
+import { LicenseClientManager, createLicenseGuard } from './lib/license-client.js';
+import { CloudLlmManager, CLOUD_PROVIDERS } from './lib/cloud-llm.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
@@ -37,8 +41,13 @@ const embeddedLlama = new EmbeddedLlamaServer({
   modelManager, 
   binDir: path.join(__dirname, '..', '..', 'windows', 'bin'),
   port: 8089,
-  host: '127.0.0.1'
+  host: '127.0.0.1',
+  remoteUrl: process.env.NEIGHBORMATE_LLM_URL || ''
 });
+
+const cloudLlm = new CloudLlmManager({ settingsPath: path.join(__dirname, '.data', 'ai-engine.json') });
+embeddedLlama.attachCloud(cloudLlm);
+const cloudReady = cloudLlm.load().then(() => Promise.all(CLOUD_PROVIDERS.map((p) => cloudLlm.refreshStatus(p).catch(() => null))));
 
 const llmClient = new LocalLlmClient({ 
   baseUrl: `http://${embeddedLlama.host}:${embeddedLlama.port}`, 
@@ -55,10 +64,27 @@ const historyStore = new NeighborHistoryStore(path.join(__dirname, '.data', 'nei
 const automationManager = new NeighborAutomationManager({ browserSession, historyStore });
 
 const engagementHistoryStore = new EngagementHistoryStore(path.join(__dirname, '.data', 'engagement-history.json'));
-const engagementManager = new EngagementAutomationManager({ browserSession, embeddedLlama, historyStore: engagementHistoryStore });
+const engagementManager = new EngagementAutomationManager({
+  browserSession,
+  embeddedLlama,
+  historyStore: engagementHistoryStore,
+  statePath: path.join(__dirname, '.data', 'engagement-last-job.json'),
+  getSharedTodayCounts: async () => {
+    const summary = await feedHistoryStore.getSummary();
+    return { likes: summary.todayLikes, comments: summary.todayComments };
+  }
+});
 const commentReplyStore = new CommentReplyStore(path.join(__dirname, '.data', 'comment-replies.json'));
 const feedHistoryStore = new FeedEngagementHistoryStore(path.join(__dirname, '.data', 'feed-engagement-history.json'));
-const feedManager = new FeedEngagementManager({ browserSession, embeddedLlama, historyStore: feedHistoryStore });
+const feedManager = new FeedEngagementManager({
+  browserSession,
+  embeddedLlama,
+  historyStore: feedHistoryStore,
+  getSharedTodayCounts: async () => {
+    const summary = await engagementHistoryStore.getSummary();
+    return { likes: summary.todayLikes, comments: summary.todayComments };
+  }
+});
 const neighborCleanerManager = new NeighborCleanerManager({
   browserSession,
   embeddedLlama,
@@ -69,6 +95,11 @@ const licenseClient = new LicenseClientManager({
 });
 
 async function startActiveEmbeddedModel() {
+  if (embeddedLlama.remoteUrl) {
+    const result = await embeddedLlama.start();
+    if (result.status !== 'running') throw new Error(result.message || '원격 AI 서버에 연결하지 못했습니다.');
+    return result;
+  }
   const activeModel = await modelManager.getActiveModel();
   if (!activeModel) return { status: 'no_model', message: '다운로드된 로컬 AI 모델이 없습니다.' };
   const result = await embeddedLlama.restartWithModel(activeModel.id);
@@ -87,6 +118,10 @@ modelManager.on('download_complete', async ({ modelId }) => {
 licenseClient.startHeartbeat();
 
 async function resolveActiveLlmEndpoint() {
+  if (embeddedLlama.remoteUrl) {
+    if (embeddedLlama.status !== 'running') await embeddedLlama.start();
+    return { type: 'remote', label: `원격 AI 서버 (${embeddedLlama.currentModelId || 'LLM'})`, baseUrl: embeddedLlama.remoteUrl, model: embeddedLlama.currentModelId || '' };
+  }
   const activeModel = await modelManager.getActiveModel();
   if (activeModel && activeModel.actualPath) {
     if (embeddedLlama.status !== 'running') {
@@ -106,7 +141,10 @@ async function resolveActiveLlmEndpoint() {
 
 browserSession.restoreSession().then((res) => {
   if (res?.connected) console.log('Naver session automatically restored on server startup.');
-}).catch(() => {});
+}).catch(() => {}).finally(() => {
+  // Left switched on last time: keep managing the blog without another click.
+  setTimeout(() => autopilot.resumeIfEnabled(), 5000);
+});
 setInterval(() => {
   browserSession.keepAlive().catch(() => {});
 }, 20 * 60 * 1000);
@@ -114,6 +152,12 @@ let publishing = false;
 let trendCache = { loadedAt: 0, items: [] };
 
 app.disable('x-powered-by');
+// Web build only (APP_PASSWORD set): every page and API call needs the password first.
+const webAuth = createWebAuth({ cookieName: 'nm_engage_auth', title: '이웃메이트' });
+if (webAuth) app.use(webAuth);
+// SSE through the hub's nginx would otherwise be buffered until the stream ends.
+app.use((_req, res, next) => { res.setHeader('X-Accel-Buffering', 'no'); next(); });
+
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   next();
@@ -127,10 +171,22 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 }));
+// Packaged builds (or NEIGHBORMATE_ENFORCE_LICENSE=1) refuse automation actions without an active subscription.
+let licenseEnforced = process.env.NEIGHBORMATE_ENFORCE_LICENSE === '1';
+app.use(createLicenseGuard(licenseClient, () => licenseEnforced));
 app.use('/generated-images', express.static(path.join(__dirname, '.images'), { etag: false, maxAge: 0 }));
 
+// NAVER_LOGIN_MODE=qr (the 112 web build): only Naver QR login is allowed. A program typing the ID and password
+// on a server browser looks like credential stuffing to Naver and gets the account locked (보호조치).
+const qrOnlyLogin = String(process.env.NAVER_LOGIN_MODE || '').toLowerCase() === 'qr';
+
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, connected: browserSession.connected });
+  res.json({ ok: true, connected: browserSession.connected, loginMode: qrOnlyLogin ? 'qr' : 'all' });
+});
+
+app.post(['/api/naver/login', '/api/naver/open-login', '/api/naver/open-login-window'], (_req, res, next) => {
+  if (!qrOnlyLogin) return next();
+  res.status(403).json({ error: '이 서버에서는 계정 보호를 위해 QR 로그인만 사용합니다. [QR로 로그인]을 눌러 휴대폰 네이버 앱으로 로그인해 주세요.' });
 });
 
 app.post('/api/naver/login', async (req, res, next) => {
@@ -399,6 +455,57 @@ app.get('/api/models/list', async (_req, res, next) => {
   }
 });
 
+// AI engine: the local model, or the user's own Claude / Gemini subscription.
+app.get('/api/ai-engine', async (req, res, next) => {
+  try {
+    await cloudReady;
+    if (req.query.refresh) await Promise.all(CLOUD_PROVIDERS.map((p) => cloudLlm.refreshStatus(p, { force: true })));
+    const info = await cloudLlm.describe();
+    res.json({ ...info, local: embeddedLlama.getRuntimeStatus(), activeLabel: await activeEngineLabel() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/ai-engine', async (req, res, next) => {
+  try {
+    await cloudReady;
+    const { engine, claudeModel, geminiModel } = req.body || {};
+    const patch = {};
+    if (engine) patch.engine = engine;
+    if (claudeModel) patch.claudeModel = claudeModel;
+    if (geminiModel) patch.geminiModel = geminiModel;
+    if (patch.engine && patch.engine !== 'local' && !cloudLlm.isConnected(patch.engine)) {
+      return res.status(400).json({ error: '먼저 계정을 연결해 주세요.' });
+    }
+    const before = cloudLlm.settings.engine;
+    await cloudLlm.saveSettings(patch);
+    // A subscription engine needs no local model in memory; switching back loads it again.
+    if (before === 'local' && cloudLlm.settings.engine !== 'local') await embeddedLlama.stop();
+    if (before !== 'local' && cloudLlm.settings.engine === 'local') startActiveEmbeddedModel().catch(() => {});
+    res.json({ ok: true, settings: cloudLlm.settings, activeLabel: await activeEngineLabel() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/ai-engine/:provider/login', async (req, res, next) => {
+  try {
+    const provider = req.params.provider;
+    if (!CLOUD_PROVIDERS.includes(provider)) return res.status(404).json({ error: '알 수 없는 AI 엔진입니다.' });
+    res.json(cloudLlm.openLogin(provider));
+  } catch (error) {
+    next(error);
+  }
+});
+
+async function activeEngineLabel() {
+  const engine = cloudLlm.settings.engine;
+  if (engine !== 'local' && cloudLlm.isConnected(engine)) return cloudLlm.labelFor(engine);
+  const active = await modelManager.getActiveModel().catch(() => null);
+  return active?.name || '로컬 AI';
+}
+
 app.get('/api/models/runtime', (_req, res) => {
   res.json(embeddedLlama.getRuntimeStatus());
 });
@@ -430,6 +537,8 @@ app.post('/api/models/select', async (req, res, next) => {
     const { modelId } = req.body || {};
     if (!modelId) return res.status(400).json({ error: '선택할 모델 ID를 지정해주세요.' });
     const selected = await modelManager.setActiveModel(modelId);
+    // Picking a local model means using it, even if a subscription engine was chosen before.
+    if (cloudLlm.settings.engine !== 'local') await cloudLlm.saveSettings({ engine: 'local' });
     const engineMode = 'local_gpu';
     llmClient.model = modelId;
     llmClient.baseUrl = `http://${embeddedLlama.host}:${embeddedLlama.port}`;
@@ -834,7 +943,7 @@ app.get('/api/cleaner/received/preview', async (_req, res, next) => {
     if (!browserSession.connected) {
       return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않습니다.' });
     }
-    const blogId = browserSession.accountLabel || 'lmo0317';
+    const blogId = await browserSession.resolveMyBlogId();
     const page = await browserSession.context.newPage();
     try {
       const requests = await fetchReceivedBuddyRequests(page, blogId);
@@ -875,7 +984,7 @@ app.post('/api/cleaner/received/accept', async (req, res, next) => {
       return res.status(400).json({ error: '수락할 블로그 ID가 올바르지 않습니다.' });
     }
 
-    const blogId = browserSession.accountLabel || 'lmo0317';
+    const blogId = await browserSession.resolveMyBlogId();
     const page = await browserSession.context.newPage();
     try {
       const requests = await fetchReceivedBuddyRequests(page, blogId);
@@ -902,7 +1011,7 @@ app.get('/api/cleaner/sent/preview', async (req, res, next) => {
     if (!browserSession.connected) {
       return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않습니다.' });
     }
-    const blogId = browserSession.accountLabel || 'lmo0317';
+    const blogId = await browserSession.resolveMyBlogId();
     const olderThanDays = Number(req.query.olderThanDays) || 7;
     const page = await browserSession.context.newPage();
     try {
@@ -1037,13 +1146,23 @@ app.get('/api/comment-management/history', async (_req, res, next) => {
   try { res.json({ records: await commentReplyStore.list() }); } catch (error) { next(error); }
 });
 
-app.post('/api/comment-management/process', async (req, res, next) => {
+// Today's likes/comments across keyword engagement and the neighbor feed (one Naver account).
+async function getCombinedTodayUsage() {
+  const [engagement, feed] = await Promise.all([engagementHistoryStore.getSummary(), feedHistoryStore.getSummary()]);
+  return {
+    likes: (Number(engagement.todayLikes) || 0) + (Number(feed.todayLikes) || 0),
+    comments: (Number(engagement.todayComments) || 0) + (Number(feed.todayComments) || 0)
+  };
+}
+
+// Replies to comments on my posts (and optionally sends 서이추 / return visits). Shared by the
+// 댓글 tab and autopilot.
+let commentProcessingActive = false;
+async function processMyBlogComments(comments, { requestNeighbor = true, returnVisit = false, secretComment = false } = {}) {
+  commentProcessingActive = true;
   try {
-    const rawList = Array.isArray(req.body?.comments) ? req.body.comments : (req.body?.comment ? [req.body.comment] : []);
-    const comments = rawList.slice(0, 20);
-    if (!comments.length) return res.status(400).json({ error: '처리할 댓글을 선택해주세요.' });
-    const requestNeighbor = req.body?.requestNeighbor !== false;
     const results = [];
+    let protectionTriggered = false;
 
     for (let i = 0; i < comments.length; i++) {
       const comment = comments[i];
@@ -1094,12 +1213,35 @@ app.post('/api/comment-management/process', async (req, res, next) => {
           }
         }
 
+        let visitResult = null;
+        if (returnVisit && !protectionTriggered && comment.authorId && comment.authorId !== comment.myBlogId) {
+          console.log(`[CommentManagement] @${comment.authorId} 님 최신 글로 답방 중...`);
+          try {
+            visitResult = await returnVisitCommenter({
+              blogId: comment.authorId,
+              bloggerName: comment.authorName,
+              browserSession,
+              embeddedLlama,
+              historyStore: engagementHistoryStore,
+              getTodayUsage: getCombinedTodayUsage,
+              secret: secretComment
+            });
+            protectionTriggered = Boolean(visitResult.protectionTriggered);
+            console.log(`[CommentManagement] 답방 결과: ${visitResult.status} (${visitResult.message || ''})`);
+          } catch (vErr) {
+            visitResult = { status: 'failed', message: vErr.message };
+          }
+        }
+
         const saved = await commentReplyStore.add({
           ...comment,
           replyText,
           replied: true,
           neighborStatus: neighborResult.status,
           neighborMessage: neighborResult.message,
+          visitStatus: visitResult?.status || '',
+          visitMessage: visitResult?.message || '',
+          visitPostUrl: visitResult?.postUrl || '',
           status: 'completed'
         });
         results.push(saved);
@@ -1118,12 +1260,144 @@ app.post('/api/comment-management/process', async (req, res, next) => {
         results.push(saved);
       }
 
+      if (protectionTriggered) {
+        console.warn('[CommentManagement] 네이버 보호조치 신호를 감지해 남은 댓글 처리를 중단합니다.');
+        break;
+      }
       if (i < comments.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1200));
+        // A return visit is a full like+comment on someone else's blog: pace it like engagement runs.
+        const pauseMs = returnVisit ? 20000 + Math.floor(Math.random() * 20000) : 1200;
+        await new Promise((resolve) => setTimeout(resolve, pauseMs));
       }
     }
 
-    res.json({ results, completed: results.filter((item) => item.status === 'completed').length });
+    return {
+      results,
+      completed: results.filter((item) => item.status === 'completed').length,
+      visited: results.filter((item) => item.visitStatus === 'visited').length,
+      protectionTriggered
+    };
+  } finally {
+    commentProcessingActive = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Autopilot (자율 주행): repeats neighbor screening, replies, golden-keyword engagement and the feed.
+// ---------------------------------------------------------------------------
+const isActiveJob = (state) => state === 'running' || state === 'paused';
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function waitForJob(getState) {
+  await pause(1500);
+  while (isActiveJob(getState())) await pause(2000);
+}
+
+const autopilot = new AutopilotManager({
+  statePath: path.join(__dirname, '.data', 'autopilot.json'),
+  isConnected: () => browserSession.connected,
+  getBusyLabel: () => {
+    if (isActiveJob(engagementManager.state)) return '주제 소통';
+    if (isActiveJob(feedManager.state)) return '이웃 새글 소통';
+    if (isActiveJob(neighborCleanerManager.state)) return '이웃 관리';
+    if (commentProcessingActive) return '내 글 대댓글';
+    return '';
+  },
+  getStopReason: () => {
+    if (!licenseEnforced) return '';
+    const status = licenseClient.getStatus().status;
+    return status === 'valid' || status === 'offline_grace' ? '' : '이용권이 없거나 만료되어 자율 주행을 멈췄습니다.';
+  },
+  stopActive: () => {
+    if (isActiveJob(engagementManager.state)) engagementManager.stop();
+    if (isActiveJob(feedManager.state)) feedManager.stop();
+    if (isActiveJob(neighborCleanerManager.state)) neighborCleanerManager.stop();
+  },
+  steps: {
+    acceptNeighbors: async () => {
+      const result = await neighborCleanerManager.startCleanReceived({ acceptGenuine: true, rejectSpam: true });
+      const stats = result?.stats || {};
+      if (!stats.total) return { skipped: true, summary: '새로 받은 신청이 없습니다.' };
+      return { summary: `수락 ${stats.accepted || 0}건 · 거절 ${stats.rejected || 0}건` };
+    },
+    replies: async (settings) => {
+      const scan = await browserSession.scanMyBlogComments({ postLimit: 10, commentLimit: 40 });
+      const fresh = [];
+      for (const comment of scan.comments || []) {
+        if (!await commentReplyStore.has(comment.postUrl, comment.commentId)) fresh.push(comment);
+        if (fresh.length >= 10) break;
+      }
+      if (!fresh.length) return { skipped: true, summary: '답할 새 댓글이 없습니다.' };
+      const output = await processMyBlogComments(fresh, { requestNeighbor: settings.doNeighbor, returnVisit: settings.returnVisit });
+      return {
+        summary: `대댓글 ${output.completed}건${settings.returnVisit ? ` · 답방 ${output.visited}건` : ''}`,
+        protectionTriggered: output.protectionTriggered
+      };
+    },
+    findKeywords: (seed) => discoverGoldenKeywords({ keyword: seed, limit: 15 }),
+    engage: async ({ keyword, settings }) => {
+      engagementManager.start({
+        keyword,
+        targetCount: settings.postsPerCycle,
+        doLike: settings.doLike,
+        doComment: settings.doComment,
+        doNeighbor: settings.doNeighbor
+      });
+      await waitForJob(() => engagementManager.state);
+      const stats = engagementManager.getStatus().stats || {};
+      return {
+        summary: `공감 ${stats.likeSuccessCount || 0} · 댓글 ${stats.commentSuccessCount || 0} · 서이추 ${stats.neighborSuccessCount || 0}`,
+        protectionTriggered: Boolean(stats.protectionTriggered)
+      };
+    },
+    feed: async (settings) => {
+      if (!settings.feedPerCycle || (!settings.doLike && !settings.doComment)) return { skipped: true, summary: '이웃 새글 소통 건수가 0건입니다.' };
+      await feedManager.start({ targetCount: settings.feedPerCycle, doLike: settings.doLike, doComment: settings.doComment, minDelaySec: 25, maxDelaySec: 45 });
+      await waitForJob(() => feedManager.state);
+      const stats = feedManager.getState().stats || {};
+      if (stats.dailyLimitReached && !stats.successCount) return { skipped: true, summary: '오늘 공감·댓글 한도에 도달했습니다.' };
+      return {
+        summary: `공감 ${stats.likedCount || 0} · 댓글 ${stats.commentedCount || 0}`,
+        protectionTriggered: Boolean(stats.protectionTriggered)
+      };
+    }
+  }
+});
+
+app.get('/api/autopilot/status', async (_req, res) => {
+  const [usage, engagement] = await Promise.all([
+    getCombinedTodayUsage().catch(() => ({ likes: 0, comments: 0 })),
+    engagementHistoryStore.getSummary().catch(() => ({}))
+  ]);
+  res.json({ ...autopilot.getStatus(), today: { ...usage, neighbors: Number(engagement.todayNeighbors) || 0 } });
+});
+
+app.post('/api/autopilot/settings', (req, res) => {
+  res.json({ ok: true, settings: autopilot.updateSettings(req.body || {}) });
+});
+
+app.post('/api/autopilot/start', (req, res, next) => {
+  try {
+    if (!browserSession.connected) return res.status(400).json({ error: '먼저 네이버 계정을 연결해주세요.' });
+    res.json(autopilot.start(req.body?.settings || null));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/autopilot/stop', (_req, res) => {
+  res.json(autopilot.stop());
+});
+
+app.post('/api/comment-management/process', async (req, res, next) => {
+  try {
+    const rawList = Array.isArray(req.body?.comments) ? req.body.comments : (req.body?.comment ? [req.body.comment] : []);
+    const comments = rawList.slice(0, 20);
+    if (!comments.length) return res.status(400).json({ error: '처리할 댓글을 선택해주세요.' });
+    res.json(await processMyBlogComments(comments, {
+      requestNeighbor: req.body?.requestNeighbor !== false,
+      returnVisit: req.body?.returnVisit === true,
+      secretComment: req.body?.secretComment === true
+    }));
   } catch (error) { next(error); }
 });
 
@@ -1220,7 +1494,7 @@ app.get('/api/blog/golden-keywords', async (req, res, next) => {
     if (keyword.length < 1 || keyword.length > 50) {
       return res.status(400).json({ error: '황금 키워드 검색어는 1~50자로 입력해주세요.' });
     }
-    const limit = Math.min(Math.max(Number(req.query?.limit) || 20, 5), 30);
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 20, 5), 25);
     const result = await discoverGoldenKeywords({ keyword, limit });
     res.json(result);
   } catch (error) {
@@ -1234,9 +1508,7 @@ app.get('/api/blog/keyword-detail', async (req, res, next) => {
     if (!keyword) {
       return res.status(400).json({ error: '키워드를 입력해주세요.' });
     }
-    const serpData = await analyzeBlogSectionData(keyword);
-    const evaluation = evaluateGoldenKeyword(keyword, serpData, true);
-    res.json(evaluation);
+    res.json(await analyzeSingleKeyword(keyword));
   } catch (error) {
     next(error);
   }
@@ -1611,11 +1883,13 @@ function normalizePublishableDeal(deal) {
 
 let serverInstance = null;
 
-export function startServer(customPort = port) {
+export function startServer(customPort = port, { enforceLicense = false } = {}) {
+  if (enforceLicense) licenseEnforced = true;
   return new Promise((resolve, reject) => {
     let isSettled = false;
     try {
-      const server = app.listen(customPort, '127.0.0.1', () => {
+      // HOST=0.0.0.0 serves the app to other machines (web development on the 112 server); the desktop app keeps loopback.
+      const server = app.listen(customPort, process.env.HOST || '127.0.0.1', () => {
         if (isSettled) return;
         isSettled = true;
         serverInstance = server;
@@ -1624,7 +1898,11 @@ export function startServer(customPort = port) {
         console.log(`NeighborMate Desktop Backend: http://127.0.0.1:${actualPort}`);
         // An installed model is a ready-to-use feature: prepare its runtime
         // in the background as soon as the desktop app opens.
-        startActiveEmbeddedModel().catch((error) => console.warn(`Local AI startup deferred: ${error.message}`));
+        // With a Claude/Gemini subscription chosen, the local model stays unloaded.
+        cloudReady.finally(() => {
+          if (cloudLlm.settings.engine !== 'local') return;
+          startActiveEmbeddedModel().catch((error) => console.warn(`Local AI startup deferred: ${error.message}`));
+        });
         resolve({ server, port: actualPort });
       });
 
@@ -1645,6 +1923,7 @@ export function startServer(customPort = port) {
 export async function shutdown() {
   try {
     licenseClient.stopHeartbeat();
+    autopilot.wakeUp?.();
     await browserSession.close();
     await embeddedLlama.stop();
   } catch {}
@@ -1671,7 +1950,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-export { app, browserSession, modelManager, embeddedLlama, engagementManager, feedManager, feedHistoryStore, neighborCleanerManager, licenseClient };
+export { app, autopilot, browserSession, modelManager, embeddedLlama, engagementManager, feedManager, feedHistoryStore, neighborCleanerManager, licenseClient };
 
 function normalizeHttpUrl(value) {
   try {

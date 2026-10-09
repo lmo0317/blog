@@ -321,6 +321,7 @@ test('sent request cleanup cancels targets across multiple pages and reports eve
     browserSession: {
       connected: true,
       accountLabel: 'owner',
+      resolveMyBlogId: async () => 'owner',
       context: { async newPage() { return page; } }
     }
   });
@@ -393,6 +394,7 @@ test('NeighborCleanerManager accepts every received request when both AI filters
     browserSession: {
       connected: true,
       accountLabel: 'owner',
+      resolveMyBlogId: async () => 'owner',
       context: { async newPage() { return page; } }
     },
     embeddedLlama: {

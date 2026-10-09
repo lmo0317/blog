@@ -2,50 +2,65 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   evaluateGoldenKeyword,
-  fetchAutocompleteKeywords,
-  fetchExpandedLongtailKeywords,
-  discoverGoldenKeywords
+  estimateDemand,
+  fetchExpandedLongtailKeywords
 } from '../lib/golden-keyword.js';
 
-test('evaluateGoldenKeyword assigns high score to micro-doc and stale posts', () => {
-  const serpData = {
-    totalCount: 150,
-    avgAgeDays: 130,
-    titleMatchCount: 1,
-    hasBuyWithOwnMoney: false,
-    posts: [
-      { title: '성수 맛집 탐방', ageDays: 130, isExactMatch: false },
-      { title: '성수동 카페거리', ageDays: 120, isExactMatch: true }
-    ]
-  };
-
-  const evalResult = evaluateGoldenKeyword('성수동 혼밥 맛집', serpData, true);
-  assert.equal(evalResult.grade, 'S');
-  assert.ok(evalResult.score >= 85, `Score should be >= 85, got ${evalResult.score}`);
-  assert.equal(evalResult.isVacant, true);
-  assert.equal(evalResult.isNiche, true);
-  assert.equal(evalResult.isMicroDoc, true);
-  assert.ok(evalResult.tags.some(t => t.includes('문서 150건')));
+const serp = (overrides) => ({
+  checked: true,
+  totalCount: 150,
+  totalCapped: false,
+  avgAgeDays: 200,
+  titleMatchCount: 1,
+  freshCount: 0,
+  hasBuyWithOwnMoney: false,
+  posts: [],
+  ...overrides
 });
 
-test('evaluateGoldenKeyword penalizes red-ocean high-competition keywords', () => {
-  const serpData = {
-    totalCount: 1000,
-    avgAgeDays: 1,
-    titleMatchCount: 5,
-    hasBuyWithOwnMoney: true,
-    posts: []
-  };
-
-  const evalResult = evaluateGoldenKeyword('성수동 맛집', serpData, false);
-  assert.ok(evalResult.score < 70, `Score should be < 70, got ${evalResult.score}`);
-  assert.equal(evalResult.isVacant, false);
-  assert.equal(evalResult.isNiche, false);
+test('searched keyword with few, stale, untargeted posts is golden (S)', () => {
+  const result = evaluateGoldenKeyword('성수동 혼밥 맛집', serp(), { rank: 1, hits: 3 });
+  assert.equal(result.grade, 'S');
+  assert.equal(result.gradeLabel, '황금');
+  assert.equal(result.isMicroDoc, true);
+  assert.equal(result.isVacant, true);
+  assert.equal(result.docCountText, '150건');
+  assert.ok(result.reasons.some((reason) => reason.text.includes('150건')));
+  assert.ok(result.reasons[0].text.startsWith('검색 수요 높음'));
 });
 
-test('fetchExpandedLongtailKeywords returns expanded list for seed', async () => {
+test('easy competition alone is not golden when nobody searches for it', () => {
+  const result = evaluateGoldenKeyword('성수동 혼밥 맛집 후기 정리', serp(), { rank: Infinity, hits: 0 });
+  assert.notEqual(result.grade, 'S');
+  assert.notEqual(result.grade, 'A');
+  assert.equal(result.demand.level, '낮음');
+});
+
+test('red-ocean keyword is graded hard to rank (C)', () => {
+  const result = evaluateGoldenKeyword('성수동 맛집', serp({ totalCount: 1000, totalCapped: true, avgAgeDays: 2, titleMatchCount: 9, freshCount: 6 }), { rank: 1, hits: 4 });
+  assert.equal(result.grade, 'C');
+  assert.equal(result.docCountText, '1,000건 이상');
+  assert.ok(result.reasons.some((reason) => !reason.good && reason.text.includes('최근 7일')));
+});
+
+test('unreadable search results are marked failed, never scored with guesses', () => {
+  const result = evaluateGoldenKeyword('아무 키워드', { checked: false, totalCount: 0, posts: [] }, { rank: 1, hits: 1 });
+  assert.equal(result.grade, 'X');
+  assert.equal(result.score, 0);
+  assert.equal(result.docCountText, '확인 실패');
+});
+
+test('demand estimate follows autocomplete placement', () => {
+  assert.equal(estimateDemand({ rank: 1, hits: 1 }).level, '높음');
+  assert.equal(estimateDemand({ rank: 8, hits: 1 }).level, '보통');
+  assert.equal(estimateDemand({ rank: Infinity, hits: 0 }).level, '낮음');
+  assert.ok(estimateDemand({ rank: 8, hits: 3 }).score > estimateDemand({ rank: 8, hits: 1 }).score);
+});
+
+test('fetchExpandedLongtailKeywords returns real searched keywords for a seed', async () => {
   const result = await fetchExpandedLongtailKeywords('다이어트', 15);
   assert.ok(Array.isArray(result));
   assert.ok(result.length > 0);
-  assert.ok(result.some(kw => kw.includes('다이어트')));
+  assert.ok(result.some((keyword) => keyword.includes('다이어트')));
+  assert.ok(result.every((keyword) => !/\s[ㄱ-ㅎ]$/.test(keyword)));
 });

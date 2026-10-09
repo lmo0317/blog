@@ -84,3 +84,44 @@ ${recentComments.slice(0, 8).map((comment) => `- ${normalizeCommentText(comment)
 ${tones[tone] || tones.friendly}`;
   return [{ role: 'system', content: system }, { role: 'user', content: user }];
 }
+
+// Neighbor-request (서로이웃 신청) messages: short, personal, grounded in the post that was just read.
+const NEIGHBOR_MESSAGE_BANNED = /(광고|협찬|체험단|홍보|수익|부업|재테크 비법|대출|보험|맞팔|선팔|이웃\s*늘리|방문\s*부탁|링크|카톡|오픈채팅)/;
+
+export function validateNeighborMessage(message, context = {}) {
+  const raw = String(message || '');
+  const text = normalizeCommentText(message);
+  const reasons = [];
+  if (text.length < 15 || text.length > 100) reasons.push('length');
+  if (/[<>\[\]{}#]|https?:\/\/|www\.|```|\b(?:system|assistant|user)\b/i.test(raw)) reasons.push('artifact');
+  if (NEIGHBOR_MESSAGE_BANNED.test(text)) reasons.push('promotional');
+  if (/(?:다녀왔|먹어봤|써봤|구매했|사용해봤)/.test(text)) reasons.push('unsupported_experience');
+  const keywords = contentKeywords(context);
+  if (keywords.length && !keywords.slice(0, 30).some((word) => text.toLowerCase().includes(word.toLowerCase()))) reasons.push('irrelevant');
+  return { ok: reasons.length === 0, text, reasons };
+}
+
+export function buildNeighborMessagePrompt({ bloggerName = '', title = '', contentSnippet = '', baseMessage = '' } = {}) {
+  const system = `당신은 네이버 블로거로서, 방금 읽은 글의 작성자에게 서로이웃 신청 메시지를 씁니다.
+
+규칙:
+1. 글에 실제로 나온 주제나 대상을 하나 언급해 진짜로 읽었음이 드러나게 합니다.
+2. 정중한 해요체 1~2문장, 30~90자로 씁니다. 이모지는 최대 1개입니다.
+3. 방문·구매·사용 경험을 지어내지 않습니다.
+4. 홍보, 링크, 해시태그, 맞팔·선팔 같은 표현을 쓰지 않습니다.
+5. 사용자가 적은 기본 인사말의 분위기를 따르되 문장은 새로 씁니다.
+
+메시지 본문만 출력합니다.`;
+  const user = `[상대 닉네임]
+${normalizeCommentText(bloggerName) || '없음'}
+
+[글 제목]
+${normalizeCommentText(title) || '없음'}
+
+[글 요약]
+${normalizeCommentText(contentSnippet).slice(0, 400) || '없음'}
+
+[기본 인사말]
+${normalizeCommentText(baseMessage) || '안녕하세요! 좋은 이웃으로 소통하고 지내요.'}`;
+  return [{ role: 'system', content: system }, { role: 'user', content: user }];
+}

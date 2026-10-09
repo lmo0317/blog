@@ -600,7 +600,6 @@ class NeighborCleanerManager {
       errors: 0
     };
 
-    const blogId = this.browserSession.accountLabel || 'lmo0317';
     this.log(
       acceptAll
         ? `🚀 AI 조건 없이 받은 서로이웃 신청 전체 수락을 시작합니다.${dryRun ? ' (미리보기)' : ''}`
@@ -610,6 +609,7 @@ class NeighborCleanerManager {
 
     const page = await this.browserSession.context.newPage();
     try {
+      const blogId = await this.browserSession.resolveMyBlogId(page);
       this.log('🔍 네이버 관리자 페이지에서 받은 신청 목록을 조회합니다...', 'info');
       const requests = await fetchReceivedBuddyRequests(page, blogId);
       this.stats.total = requests.length;
@@ -735,11 +735,11 @@ class NeighborCleanerManager {
       errors: 0
     };
 
-    const blogId = this.browserSession.accountLabel || 'lmo0317';
     this.log(`🚀 보낸 서로이웃 신청 회수 (${olderThanDays}일 이상 경과) 작업을 시작합니다.`, 'info');
 
     const page = await this.browserSession.context.newPage();
     try {
+      const blogId = await this.browserSession.resolveMyBlogId(page);
       this.log('🔍 보낸 신청 목록을 조회하고 경과일을 분석합니다...', 'info');
       
       const collected = await fetchAllSentBuddyRequests(page, blogId, {

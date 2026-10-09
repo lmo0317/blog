@@ -147,7 +147,7 @@ export async function downloadCommonsImages(images, directory, { fetchImpl = fet
 
       // 2. Relative generated image path (/generated-images/ai-art-xxx.jpg)
       const urlStr = String(rawImage?.downloadUrl || rawImage?.previewUrl || '');
-      if (urlStr.startsWith('/generated-images/')) {
+      if (/^\/?generated-images\//.test(urlStr)) {
         const filename = path.basename(urlStr);
         const searchDirs = [
           localImagesDir,

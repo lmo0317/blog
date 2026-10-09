@@ -306,3 +306,51 @@ test('FeedEngagementManager start with selectedPosts engages only specified post
   await rm(testDbPath, { force: true }).catch(() => {});
 });
 
+
+test('FeedEngagementManager respects the shared daily caps and takes batch breaks', async () => {
+  const testDbPath = path.join(process.cwd(), '.data', 'test-feed-limits.json');
+  await rm(testDbPath, { force: true }).catch(() => {});
+  const store = new FeedEngagementHistoryStore(testDbPath);
+
+  const calls = [];
+  const mockSession = {
+    connected: true,
+    async inspectPostForEngagement() {
+      return { title: '글', snippet: '본문', images: [], alreadyCommented: false, canComment: true };
+    },
+    async likeAndCommentPost({ postUrl, doLike, doComment }) {
+      calls.push({ postUrl, doLike, doComment });
+      return { postUrl, liked: doLike, commented: doComment, status: 'success', message: '완료' };
+    }
+  };
+  const posts = [1, 2, 3].map((n) => ({ blogId: `b${n}`, logNo: `880${n}`, author: `이웃${n}`, title: `제목${n}`, url: `https://m.blog.naver.com/b${n}/880${n}` }));
+
+  // Comments are used up by keyword engagement: feed runs likes only.
+  let shared = { likes: 0, comments: 100 };
+  const manager = new FeedEngagementManager({
+    browserSession: mockSession,
+    embeddedLlama: { async generateBlogComment() { return '댓글'; } },
+    historyStore: store,
+    getSharedTodayCounts: async () => shared,
+    batchBreak: { every: 1, minSec: 0, maxSec: 0 }
+  });
+  await manager.start({ targetCount: 3, minDelaySec: 0, maxDelaySec: 0, selectedPosts: posts });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every((call) => call.doLike === true && call.doComment === false));
+  assert.ok(manager.logs.some((entry) => entry.message.includes('계정 보호 휴식')));
+
+  // Both caps used up: nothing runs and the single-post action is refused.
+  shared = { likes: 200, comments: 100 };
+  calls.length = 0;
+  await rm(testDbPath, { force: true }).catch(() => {});
+  store.data = { records: [], dailyCounts: {} };
+  await manager.start({ targetCount: 3, minDelaySec: 0, maxDelaySec: 0, selectedPosts: posts });
+  while (manager.state === 'running') await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(calls.length, 0);
+  assert.equal(manager.stats.dailyLimitReached, true);
+  await assert.rejects(() => manager.engageSinglePost({ postUrl: posts[0].url, blogId: 'b1', logNo: '8801' }), /일일 한도/);
+
+  await rm(testDbPath, { force: true }).catch(() => {});
+});

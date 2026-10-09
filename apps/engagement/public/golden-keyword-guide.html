@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>황금 키워드 설명서 · 이웃메이트</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+  <style>
+    :root {
+      --green: #03c75a;
+      --green-dark: #047857;
+      --green-soft: #ecfdf5;
+      --green-border: #a7f3d0;
+      --indigo: #4f46e5;
+      --indigo-soft: #e0e7ff;
+      --title: #0f172a;
+      --body: #334155;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --surface: #f8fafc;
+      --card: #ffffff;
+      --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--body);
+      font-family: Pretendard, "Segoe UI", "Malgun Gothic", sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--indigo); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      color: var(--title);
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #03c75a, #00a94f);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #03c75a 0%, #00a94f 100%);
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .back-btn:hover {
+      text-decoration: none;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(3, 199, 90, 0.25);
+    }
+
+    .layout {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 28px 20px 64px;
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .toc {
+      position: sticky;
+      top: 76px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .toc strong {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0 0 6px 6px;
+    }
+
+    .toc a {
+      display: block;
+      padding: 6px 8px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--body);
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .toc a:hover {
+      background: var(--green-soft);
+      color: var(--green-dark);
+      text-decoration: none;
+    }
+
+    main { min-width: 0; display: grid; gap: 18px; }
+
+    .hero {
+      background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 60%);
+      border: 1px solid var(--green-border);
+      border-radius: 18px;
+      padding: 28px;
+    }
+
+    .eyebrow {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--green-dark);
+    }
+
+    h1 {
+      margin: 6px 0 10px;
+      font-size: 28px;
+      line-height: 1.3;
+      color: var(--title);
+    }
+
+    .hero p { margin: 0; font-size: 16px; }
+
+    .definition {
+      margin-top: 18px;
+      padding: 14px 18px;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px dashed var(--green-border);
+      font-weight: 700;
+      color: var(--title);
+    }
+
+    section.card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 26px;
+      box-shadow: var(--shadow);
+      scroll-margin-top: 76px;
+      min-width: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      color: var(--title);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+      color: var(--title);
+    }
+
+    p { margin: 0 0 10px; }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      background: var(--green);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .step strong { display: block; color: var(--title); margin-bottom: 4px; }
+    .step span { font-size: 13.5px; color: var(--muted); line-height: 1.6; display: block; }
+
+    .grades {
+      display: grid;
+      gap: 10px;
+    }
+
+    .grade-row {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .badge.s { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .badge.a { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .badge.b { background: #fefce8; color: #854d0e; border: 1px solid #fef08a; }
+    .badge.c { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .badge.x { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+
+    .grade-row strong { color: var(--title); }
+    .grade-row small { display: block; color: var(--muted); font-size: 13px; }
+
+    .formula {
+      margin: 6px 0 14px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: var(--indigo-soft);
+      color: #3730a3;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 420px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    td.pt { font-weight: 800; color: var(--green-dark); white-space: nowrap; }
+
+    .chips {
+      display: grid;
+      gap: 10px;
+    }
+
+    .chip-row {
+      display: grid;
+      grid-template-columns: 170px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .chip {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      background: #f1f5f9;
+      color: #475569;
+      white-space: nowrap;
+    }
+
+    .chip.good { background: #ecfdf5; color: #047857; }
+    .chip.bad { background: #fef2f2; color: #b91c1c; }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .action {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 18px;
+      background: var(--surface);
+    }
+
+    .action strong { display: block; font-size: 15.5px; color: var(--title); margin-bottom: 6px; }
+    .action ol { margin: 0; padding-left: 18px; font-size: 14px; }
+
+    .callout {
+      margin-top: 12px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+    }
+
+    .callout.info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .callout.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+
+    ul.plain { margin: 0; padding-left: 20px; }
+    ul.plain li { margin-bottom: 6px; }
+
+    details.faq {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      background: var(--surface);
+    }
+
+    details.faq summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--title);
+    }
+
+    details.faq p { margin: 8px 0 0; font-size: 14px; }
+
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; padding-top: 18px; }
+      .toc { display: none; }
+      .steps, .actions { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .hero, section.card { padding: 20px 18px; }
+      h1 { font-size: 23px; }
+      .grade-row, .chip-row { grid-template-columns: 1fr; gap: 6px; }
+      .grade-row .badge { justify-self: start; }
+      table { min-width: 0; font-size: 13px; }
+      th, td { padding: 8px; }
+      .back-btn { padding: 7px 10px; font-size: 12.5px; }
+      .topbar-inner { padding: 10px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-mark">N</span> 황금 키워드 설명서</div>
+      <a class="back-btn" href="./">🏆 황금 키워드 찾으러 가기</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="목차">
+      <strong>목차</strong>
+      <a href="#what">황금 키워드란?</a>
+      <a href="#howto">3단계 사용법</a>
+      <a href="#find">후보는 어떻게 모으나요</a>
+      <a href="#grade">등급 기준</a>
+      <a href="#score">점수 계산 자세히</a>
+      <a href="#card">카드 읽는 법</a>
+      <a href="#actions">소통에 넣기</a>
+      <a href="#tips">잘 쓰는 요령</a>
+      <a href="#limits">알아 둘 점</a>
+      <a href="#faq">자주 묻는 질문</a>
+    </nav>
+
+    <main>
+      <div class="hero" id="what">
+        <span class="eyebrow">🏆 이웃메이트 · 황금 키워드</span>
+        <h1>황금 키워드란?</h1>
+        <p>네이버에서 <strong>사람들이 실제로 검색하는데</strong>, 그 검색어를 노리고 쓴 블로그 글은 <strong>아직 적거나 오래된</strong> 키워드입니다. 이런 키워드로 글을 쓰면 새 글도 검색 첫 화면에 오를 가능성이 큽니다.</p>
+        <div class="definition">💡 황금 키워드 = 찾는 사람은 있고 + 제대로 노린 글은 적고 + 상위 글은 오래된 검색어</div>
+      </div>
+
+      <section class="card" id="howto">
+        <h2>🧭 3단계 사용법</h2>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <strong>관심 주제 입력</strong>
+            <span>[키워드] 탭 검색창에 '캠핑', '다이어트 도시락'처럼 주제를 넣고 <b>황금 키워드 찾기</b>를 누릅니다. 10~20초 걸립니다.</span>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <strong>등급 확인</strong>
+            <span>S·A 등급이 위에 정렬됩니다. 카드를 누르면 오른쪽에 등급의 근거와 지금 상위 1~5위 글이 나옵니다.</span>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <strong>체크해서 소통에 넣기</strong>
+            <span>마음에 드는 키워드를 <b>☑️ 체크</b>하고 <b>🤝 소통에 넣기</b>를 누르면 [소통] 탭 주제 칸에 한 번에 들어갑니다. 글 수를 확인하고 직접 시작하세요.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="find">
+        <h2>🔎 후보 키워드는 어떻게 모으나요</h2>
+        <p>지어낸 단어 조합은 쓰지 않습니다. <strong>네이버 자동완성에 실제로 뜨는 검색어만</strong> 후보가 됩니다. 자동완성은 많이 검색된 말일수록 위에 뜨기 때문입니다.</p>
+        <ul class="plain">
+          <li><strong>주제 그대로:</strong> '캠핑'을 넣었을 때 뜨는 자동완성 (예: 캠핑장, 캠핑 음식)</li>
+          <li><strong>ㄱ~ㅎ 확장:</strong> '캠핑 ㄱ', '캠핑 ㄴ' … 처럼 한 글자씩 붙여 더 많은 검색어를 모읍니다.</li>
+          <li><strong>한 단계 더 구체적으로:</strong> 수요가 높은 후보 8개를 다시 자동완성에 넣어 '캠핑 냉장고 받침대' 같은 세부 검색어를 모읍니다. 넓은 검색어는 대부분 경쟁이 치열해서, 빈틈은 주로 이런 세부 검색어에 있습니다.</li>
+        </ul>
+        <p style="margin-top:10px;">이렇게 모은 검색어 중 최대 24개(넓은 검색어 절반, 세부 검색어 절반)를 골라 하나씩 진단합니다.</p>
+      </section>
+
+      <section class="card" id="grade">
+        <h2>🏅 등급 기준</h2>
+        <div class="grades">
+          <div class="grade-row">
+            <span class="badge s">🏆 S 황금</span>
+            <div><strong>지금 바로 쓰면 좋은 검색어</strong><small>점수 70점 이상 + 검색 수요 '보통' 이상 + 경쟁 점수 60점 이상. 세 가지를 모두 넘어야 합니다.</small></div>
+          </div>
+          <div class="grade-row">
+            <span class="badge a">👍 A 추천</span>
+            <div><strong>충분히 노려볼 만한 검색어</strong><small>점수 58점 이상 + 검색 수요 '보통' 이상</small></div>
+          </div>
+          <div class="grade-row">
+            <span class="badge b">🙂 B 보통</span>
+            <div><strong>수요나 경쟁 중 하나가 아쉬운 검색어</strong><small>점수 45점 이상 + 경쟁 점수 35점 이상</small></div>
+          </div>
+          <div class="grade-row">
+            <span class="badge c">⚠️ C 경쟁 심함</span>
+            <div><strong>이미 잘 쓴 글이 많은 검색어</strong><small>위 조건을 하나도 못 넘은 경우. 더 구체적인 하위 검색어를 노리세요.</small></div>
+          </div>
+          <div class="grade-row">
+            <span class="badge x">❔ 확인 실패</span>
+            <div><strong>상위 글을 읽지 못한 검색어</strong><small>네이버 응답이 없을 때입니다. 추측한 숫자로 채우지 않고 그대로 실패로 표시합니다.</small></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="score">
+        <h2>🧮 점수 계산 자세히</h2>
+        <div class="formula">황금 점수 = 검색 수요 × 40% + 경쟁 점수 × 60%</div>
+        <p>경쟁이 약한 것을 조금 더 중요하게 봅니다. 아무리 찾는 사람이 많아도 첫 화면에 못 오르면 소용없기 때문입니다.</p>
+
+        <h3>① 검색 수요 (0~100점, 추정치)</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>자동완성 위치</th><th>점수</th></tr></thead>
+            <tbody>
+              <tr><td>1~2번째</td><td class="pt">80</td></tr>
+              <tr><td>3~5번째</td><td class="pt">65</td></tr>
+              <tr><td>6~10번째</td><td class="pt">45</td></tr>
+              <tr><td>그 아래</td><td class="pt">30</td></tr>
+              <tr><td>여러 자동완성 목록에 반복 등장</td><td class="pt">한 번 더 뜰 때마다 +8 (최대 +20)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:10px;">70점 이상은 <b>높음</b>, 45점 이상은 <b>보통</b>, 그 아래는 <b>낮음</b>입니다. 주제 그대로 넣은 자동완성의 순위를 가장 강하게 보고, ㄱ~ㅎ 확장이나 세부 검색어 목록의 순위는 몇 칸 아래로 쳐서 계산합니다.</p>
+
+        <h3>② 경쟁 점수 (0~100점, 높을수록 쉬움)</h3>
+        <p>검색어마다 네이버 블로그 검색 상위 10개 글을 직접 확인합니다.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>살펴보는 것</th><th>기준</th><th>점수</th></tr></thead>
+            <tbody>
+              <tr><td rowspan="4">제목에 그 검색어 단어를 모두 넣은 글 (노린 글)</td><td>0~1개</td><td class="pt">40</td></tr>
+              <tr><td>2~3개</td><td class="pt">28</td></tr>
+              <tr><td>4~6개</td><td class="pt">14</td></tr>
+              <tr><td>7개 이상</td><td class="pt">3</td></tr>
+              <tr><td rowspan="4">상위 글 평균 나이</td><td>6개월 이상</td><td class="pt">35</td></tr>
+              <tr><td>3개월 이상</td><td class="pt">26</td></tr>
+              <tr><td>1개월 이상</td><td class="pt">14</td></tr>
+              <tr><td>1개월 미만</td><td class="pt">4</td></tr>
+              <tr><td rowspan="2">최근 7일 안에 쓴 상위 글</td><td>0개</td><td class="pt">15</td></tr>
+              <tr><td>1~2개</td><td class="pt">8</td></tr>
+              <tr><td rowspan="2">블로그 문서 수 (보너스)</td><td>300건 미만</td><td class="pt">+15</td></tr>
+              <tr><td>1,000건 미만</td><td class="pt">+10</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout info">📚 네이버 블로그 검색은 문서 수를 최대 1,000건까지만 알려 줍니다. 그래서 대부분의 검색어가 '1,000건 이상'으로 나오고, 문서 수는 1,000건 미만일 때만 보너스로 반영합니다. 실제 경쟁은 상위 10개 글로 판단합니다.</div>
+      </section>
+
+      <section class="card" id="card">
+        <h2>🃏 카드 읽는 법</h2>
+        <div class="chips">
+          <div class="chip-row"><span><span class="chip good">🔎 수요 높음</span></span><span>자동완성 위쪽에 뜨는 검색어입니다. 낮음이면 써도 찾는 사람이 적습니다.</span></div>
+          <div class="chip-row"><span><span class="chip good">🎯 노린 글 1/10</span></span><span>상위 10개 중 제목에 이 검색어를 다 넣은 글이 1개뿐입니다. 숫자가 작을수록 빈틈이 큽니다.</span></div>
+          <div class="chip-row"><span><span class="chip good">🕰️ 평균 7개월 전</span></span><span>상위 글들이 오래됐다는 뜻입니다. 최신 글을 선호하는 네이버에서 새 글이 밀어내기 쉽습니다.</span></div>
+          <div class="chip-row"><span><span class="chip">📚 1,000건 이상</span></span><span>블로그 문서 수입니다. 1,000건 미만이면 초록색으로 표시됩니다.</span></div>
+        </div>
+        <p style="margin-top:14px;">초록 칩은 유리한 점, 빨간 칩은 불리한 점입니다. 카드를 누르면 오른쪽 패널에 ✅ 유리한 근거와 ⚠️ 불리한 근거가 문장으로 정리되고, 지금 상위 1~5위 글 제목과 작성 시기가 함께 나옵니다. 상위 글마다 붙은 <b>키워드 노린 글 / 키워드 안 노림</b> 표시로 경쟁 상대가 얼마나 제대로 준비했는지 볼 수 있습니다.</p>
+      </section>
+
+      <section class="card" id="actions">
+        <h2>🤝 소통에 넣기</h2>
+        <div class="actions">
+          <div class="action">
+            <strong>1. 키워드 체크</strong>
+            <ol>
+              <li>카드 왼쪽의 체크 칸을 누르거나, 오른쪽 진단 패널의 <b>☑️ 이 키워드 체크</b>를 누릅니다.</li>
+              <li><b>🏆 황금·추천 모두 체크</b>를 누르면 S·A 등급을 한 번에 체크합니다.</li>
+              <li>한 번에 최대 10개까지 체크할 수 있습니다.</li>
+            </ol>
+          </div>
+          <div class="action">
+            <strong>2. 소통 탭에서 직접 시작</strong>
+            <ol>
+              <li>아래 막대의 <b>🤝 소통에 넣기</b>를 누르면 [소통] 탭으로 이동하고, 주제 칸에 체크한 키워드가 쉼표로 들어갑니다.</li>
+              <li>전체 목표 글 수, 공감·AI 댓글·서로이웃, 말투를 확인하거나 바꿉니다.</li>
+              <li>[소통 시작]을 직접 눌러 시작합니다. 키워드는 들어간 순서대로 하나씩 진행됩니다.</li>
+            </ol>
+            <p style="font-size:13px; color:var(--muted); margin:8px 0 0;">소통에 넣기만으로는 아무것도 시작되지 않습니다. 이미 소통이 진행 중이면 그 작업이 끝난 뒤에 시작하세요.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="tips">
+        <h2>💡 잘 쓰는 요령</h2>
+        <ul class="plain">
+          <li><strong>넓은 주제보다 구체적인 주제로.</strong> '캠핑'보다 '캠핑 의자', '동계 캠핑'처럼 한 단계 좁히면 황금 키워드가 훨씬 많이 나옵니다.</li>
+          <li><strong>제목 앞부분에 키워드를 그대로.</strong> '아이패드 대여'가 황금이면 제목을 '아이패드 대여 ○○ 후기'처럼 시작하세요.</li>
+          <li><strong>직접 해 본 내용과 사진.</strong> 상위 글이 오래됐을수록 최신 정보·실제 경험·사진이 들어간 글이 유리합니다.</li>
+          <li><strong>내 블로그 주제와 맞는 키워드로 소통.</strong> 같은 주제 블로거와 소통해야 내 글에 관심 있을 이웃이 늘어납니다.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="limits">
+        <h2>📌 알아 둘 점</h2>
+        <ul class="plain">
+          <li><strong>검색 수요는 추정치입니다.</strong> 자동완성 순위로 판단하므로 '월 몇 회 검색' 같은 숫자는 아닙니다. 정확한 검색량은 네이버 검색광고 API 키가 있어야 받을 수 있습니다.</li>
+          <li><strong>결과는 바뀝니다.</strong> 네이버 검색 결과는 수시로 달라집니다. 같은 검색어 결과는 6시간 동안 저장해 두었다가 다시 씁니다.</li>
+          <li><strong>상위 노출 보장은 아닙니다.</strong> 등급은 가능성을 보여 줄 뿐이고, 글의 품질과 블로그 지수도 함께 영향을 줍니다.</li>
+        </ul>
+        <div class="callout warn">⚠️ 한 번에 아주 많은 주제를 연달아 검색하면 네이버가 잠시 응답을 막을 수 있습니다. 이때는 '확인 실패'가 늘어나니 잠깐 쉬었다가 다시 찾으세요.</div>
+      </section>
+
+      <section class="card" id="faq">
+        <h2>🙋 자주 묻는 질문</h2>
+        <details class="faq">
+          <summary>황금·추천 키워드가 하나도 안 나와요.</summary>
+          <p>넓은 주제는 대부분 경쟁이 치열합니다. '다이어트' 대신 '다이어트 도시락', '캠핑' 대신 '캠핑 냉장고'처럼 좁혀서 다시 찾아보세요.</p>
+        </details>
+        <details class="faq">
+          <summary>문서 수가 전부 '1,000건 이상'이에요.</summary>
+          <p>네이버가 1,000건까지만 알려 주기 때문입니다. 등급은 문서 수보다 상위 10개 글(노린 글 수, 글 나이)로 판단하니 걱정하지 않으셔도 됩니다.</p>
+        </details>
+        <details class="faq">
+          <summary>수요 '낮음'인데 경쟁이 약하면 써도 되나요?</summary>
+          <p>상위에 오르긴 쉽지만 찾는 사람이 적어 방문자가 많지 않습니다. 그래서 수요가 '낮음'이면 S·A 등급을 주지 않습니다. 시리즈 글의 보조 주제로 쓰기엔 괜찮습니다.</p>
+        </details>
+        <details class="faq">
+          <summary>API 키가 필요한가요?</summary>
+          <p>필요 없습니다. 네이버 자동완성과 블로그 검색 결과만으로 무료로 분석합니다.</p>
+        </details>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

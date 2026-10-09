@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { detectGpuSpecs } from './hardware.js';
-import { buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
+import { buildBlogCommentMessages, buildNeighborMessagePrompt, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment, validateNeighborMessage } from './comment-prompt.js';
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
 export class EmbeddedLlamaServer extends EventEmitter {
@@ -11,13 +11,21 @@ export class EmbeddedLlamaServer extends EventEmitter {
     modelManager, 
     binDir = path.join(process.cwd(), 'bin'),
     port = 8089,
-    host = '127.0.0.1'
+    host = '127.0.0.1',
+    remoteUrl = ''
   }) {
     super();
     this.modelManager = modelManager;
     this.binDir = binDir;
     this.port = port;
     this.host = host;
+    // An OpenAI-compatible llama-server elsewhere (e.g. the 112 dev server): used as the "local" engine, never spawned.
+    this.remoteUrl = String(remoteUrl || '').replace(/\/$/, '');
+    if (this.remoteUrl) {
+      const url = new URL(this.remoteUrl);
+      this.host = url.hostname;
+      this.port = Number(url.port) || 80;
+    }
 
     this.serverProcess = null;
     this.status = 'stopped'; // 'stopped' | 'starting' | 'running' | 'error'
@@ -37,7 +45,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
   }
 
   getRuntimeStatus() {
-    return { status: this.status, modelId: this.currentModelId, hasRuntime: this.hasLocalBinary(), acceleration: this.acceleration, setup: { ...this.setup } };
+    return { status: this.status, modelId: this.currentModelId, hasRuntime: this.remoteUrl ? true : this.hasLocalBinary(), acceleration: this.acceleration, remote: this.remoteUrl || '', setup: { ...this.setup } };
   }
 
   getBinaryPath() {
@@ -162,6 +170,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
 
   async _start() {
     if (this.status === 'running') return { status: 'running', port: this.port };
+    if (this.remoteUrl) return this.connectRemote();
 
     if (!this.modelManager?.getActiveModel) {
       this.status = 'stopped';
@@ -283,6 +292,26 @@ export class EmbeddedLlamaServer extends EventEmitter {
     }
   }
 
+  async connectRemote() {
+    try {
+      const response = await fetch(`${this.remoteUrl}/v1/models`, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      this.currentModelId = String(payload?.data?.[0]?.id || payload?.models?.[0]?.model || 'remote-llm');
+      this.status = 'running';
+      this.acceleration = 'GPU';
+      this.setSetup('ready', `원격 AI 서버(${this.remoteUrl})에 연결되었습니다.`, 100);
+      this.emit('ready', { port: this.port, modelId: this.currentModelId });
+      return { status: 'running', port: this.port, modelId: this.currentModelId, remote: true };
+    } catch (error) {
+      this.status = 'error';
+      const message = `원격 AI 서버(${this.remoteUrl})에 연결하지 못했습니다: ${error.message}`;
+      this.setSetup('runtime_error', message, 100);
+      this.addLog(message, 'error');
+      return { status: 'error', message };
+    }
+  }
+
   async waitForReady(timeoutMs = 15000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -309,9 +338,52 @@ export class EmbeddedLlamaServer extends EventEmitter {
   }
 
   async restartWithModel(modelId) {
+    if (this.remoteUrl) return this.start();
     await this.stop();
     await this.modelManager.setActiveModel(modelId);
     return this.start();
+  }
+
+  /** The connected Claude/Gemini subscriptions (CloudLlmManager), used instead of or after the local model. */
+  attachCloud(cloud) {
+    this.cloud = cloud;
+  }
+
+  /**
+   * Where the next AI call goes: the subscription the user picked when it is connected, otherwise the local model
+   * (started here if needed), otherwise any connected subscription so the feature keeps working.
+   */
+  async resolveRoute() {
+    const engine = this.cloud?.settings.engine || 'local';
+    if (engine !== 'local' && this.cloud.isConnected(engine)) return { type: 'cloud', provider: engine };
+    if (this.status !== 'running' && this.modelManager?.getActiveModel) {
+      const startup = await this.start();
+      if (startup.status !== 'running') this.lastCommentFailure = startup.message || `로컬 AI 준비 상태: ${startup.status}`;
+    }
+    if (this.status === 'running') return { type: 'local' };
+    const fallback = this.cloud?.fallbackProvider();
+    if (fallback) return { type: 'cloud', provider: fallback };
+    return { type: 'none', message: this.lastCommentFailure || '사용할 수 있는 AI가 없습니다. 설정에서 로컬 AI 또는 Claude·Gemini 계정을 준비해 주세요.' };
+  }
+
+  /** One chat turn on the routed engine; returns the answer text. */
+  async chatCompletion(messages, { temperature = 0.7, maxTokens = 150, timeoutMs = 25000, json = false } = {}) {
+    const route = await this.resolveRoute();
+    if (route.type === 'none') throw new Error(route.message);
+    if (route.type === 'cloud') {
+      const text = await this.cloud.complete(route.provider, { messages, timeoutMs: Math.max(timeoutMs, 120000) });
+      this.lastUsedModelId = `${route.provider}:${this.cloud.modelFor(route.provider)}`;
+      return text;
+    }
+    const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify({ messages, temperature, max_tokens: maxTokens, ...(json ? { response_format: { type: 'json_object' } } : {}) })
+    });
+    if (!response.ok) throw new Error(`로컬 AI 응답 오류 (HTTP ${response.status})`);
+    this.lastUsedModelId = this.currentModelId || '';
+    return String((await response.json()).choices?.[0]?.message?.content || '');
   }
 
   addLog(text, stream = 'info') {
@@ -352,20 +424,31 @@ export class EmbeddedLlamaServer extends EventEmitter {
     const source = normalizeCommentText(commentText);
     if (!source) throw new Error('답글을 만들 댓글 내용이 없습니다.');
     const fallback = `${commenterName ? `${commenterName}님, ` : ''}따뜻한 댓글 감사합니다. 남겨주신 말씀 덕분에 힘이 나네요!`;
-    if (this.status !== 'running') return fallback;
     try {
-      const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(12000),
-        body: JSON.stringify({ temperature: 0.55, max_tokens: 120, messages: [
-          { role: 'system', content: '당신은 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 정중하고 자연스러운 한국어 대댓글 1~2문장을 작성하세요. 상대 댓글의 구체적인 표현에 답하고, 과장하거나 방문·구매 경험을 지어내지 마세요. 이모지는 최대 1개, 해시태그·URL·따옴표·자기소개는 금지합니다. 답글만 출력하세요.' },
-          { role: 'user', content: `[내 글 제목]\n${postTitle}\n[댓글 작성자]\n${commenterName}\n[받은 댓글]\n${source}` }
-        ] })
-      });
-      if (!response.ok) return fallback;
-      const text = normalizeCommentText((await response.json()).choices?.[0]?.message?.content || '');
+      const text = normalizeCommentText(await this.chatCompletion([
+        { role: 'system', content: '당신은 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 정중하고 자연스러운 한국어 대댓글 1~2문장을 작성하세요. 상대 댓글의 구체적인 표현에 답하고, 과장하거나 방문·구매 경험을 지어내지 마세요. 이모지는 최대 1개, 해시태그·URL·따옴표·자기소개는 금지합니다. 답글만 출력하세요.' },
+        { role: 'user', content: `[내 글 제목]\n${postTitle}\n[댓글 작성자]\n${commenterName}\n[받은 댓글]\n${source}` }
+      ], { temperature: 0.55, maxTokens: 120, timeoutMs: 12000 }));
       if (text.length < 10 || text.length > 120 || /https?:\/\/|www\.|[#<>\[\]{}]/i.test(text)) return fallback;
       return text;
     } catch { return fallback; }
+  }
+
+  // A personal 서로이웃 message for the post just read; '' when no engine answers acceptably,
+  // so the caller can fall back to the user's own message.
+  async generateNeighborMessage({ bloggerName = '', title = '', contentSnippet = '', baseMessage = '' } = {}) {
+    try {
+      const text = (await this.chatCompletion(
+        buildNeighborMessagePrompt({ bloggerName, title, contentSnippet, baseMessage }),
+        { temperature: 0.7, maxTokens: 110, timeoutMs: this.acceleration !== 'GPU' ? 45000 : 20000 }
+      )).trim();
+      const checked = validateNeighborMessage(text, { title, contentSnippet });
+      if (checked.ok) return checked.text;
+      this.addLog(`Neighbor message rejected: ${checked.reasons.join(', ')}`, 'warn');
+    } catch (err) {
+      this.addLog(`Neighbor message generation failed: ${err.message}`, 'warn');
+    }
+    return '';
   }
 
   async generateBlogComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
@@ -378,46 +461,17 @@ export class EmbeddedLlamaServer extends EventEmitter {
     const maxTokens = cpuMode ? 90 : 150;
     this.lastCommentFailure = '';
 
-    // Comments are a one-click feature. If the application just opened or a
-    // model was downloaded moments ago, prepare the local engine here instead
-    // of silently falling through to an empty result.
-    if (this.status !== 'running' && this.modelManager?.getActiveModel) {
-      const startup = await this.start();
-      if (startup.status !== 'running') {
-        this.lastCommentFailure = startup.message || `로컬 AI 준비 상태: ${startup.status}`;
-        this.addLog(`댓글 AI 준비 실패: ${this.lastCommentFailure}`, 'warn');
-      }
+    // 1. The routed engine: local model (started here if needed) or a connected Claude/Gemini subscription.
+    try {
+      const text = (await this.chatCompletion(messages, { temperature: 0.7, maxTokens, timeoutMs })).trim();
+      if (text && text !== 'SKIP') { const checked = validateBlogComment(text, { title, contentSnippet: commentContext, imageSummary }, recentComments); if (checked.ok) return checked.text; this.lastCommentFailure = `AI 응답이 안전성 검증에서 제외됨 (${checked.reasons.join(', ')})`; this.addLog(`Comment rejected: ${checked.reasons.join(', ')}`, 'warn'); }
+      else if (!text) this.lastCommentFailure = 'AI가 빈 응답을 반환했습니다.';
+    } catch (err) {
+      this.lastCommentFailure = `AI 댓글 생성 실패: ${err.message}`;
+      this.addLog(`Comment generation failed, falling back: ${err.message}`, 'warn');
     }
 
-    // 1. Try local embedded llama-server first
-    if (this.status === 'running') {
-      try {
-        const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages,
-            temperature: 0.7,
-            max_tokens: maxTokens
-          }),
-          signal: AbortSignal.timeout(timeoutMs)
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const text = data.choices?.[0]?.message?.content?.trim();
-          if (text && text !== 'SKIP') { const checked = validateBlogComment(text, { title, contentSnippet: commentContext, imageSummary }, recentComments); if (checked.ok) return checked.text; this.lastCommentFailure = `AI 응답이 안전성 검증에서 제외됨 (${checked.reasons.join(', ')})`; this.addLog(`Comment rejected: ${checked.reasons.join(', ')}`, 'warn'); }
-          else if (!text) this.lastCommentFailure = '로컬 AI가 빈 응답을 반환했습니다.';
-        } else {
-          this.lastCommentFailure = `로컬 AI 응답 오류 (HTTP ${response.status})`;
-        }
-      } catch (err) {
-        this.lastCommentFailure = `로컬 AI 추론 요청 실패 (${Math.round(timeoutMs / 1000)}초 대기): ${err.message}`;
-        this.addLog(`Local inference failed, falling back: ${err.message}`, 'warn');
-      }
-    }
-
-    // 2. Smart Template Fallback if local LLM is still loading
+    // 2. Smart Template Fallback when no AI answered
     const fallback = this.generateSmartTemplateComment({ title, contentSnippet: commentContext, imageSummary, tone, recentComments });
     const fallbackCheck = validateBlogComment(fallback, { title, contentSnippet: commentContext, imageSummary }, recentComments);
     if (!fallbackCheck.ok && !this.lastCommentFailure) this.lastCommentFailure = `대체 댓글이 검증에서 제외됨 (${fallbackCheck.reasons.join(', ')})`;
@@ -459,7 +513,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
       method: 'rule-fallback'
     };
 
-    if (this.status !== 'running' || !texts.length) {
+    if (!texts.length) {
       return defaultResponse;
     }
 
@@ -480,23 +534,10 @@ JSON 출력 형식 예시 (오직 유효한 JSON만 반환):
 }`;
 
     try {
-      const response = await fetch(`http://${this.host}:${this.port}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({
-          temperature: 0.3,
-          max_tokens: 600,
-          messages: [
-            { role: 'system', content: 'You are a Korean blog analytics assistant. Output ONLY valid JSON matching the requested schema.' },
-            { role: 'user', content: prompt }
-          ]
-        })
-      });
-
-      if (!response.ok) return defaultResponse;
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content?.trim() || '';
+      const content = (await this.chatCompletion([
+        { role: 'system', content: 'You are a Korean blog analytics assistant. Output ONLY valid JSON matching the requested schema.' },
+        { role: 'user', content: prompt }
+      ], { temperature: 0.3, maxTokens: 600, timeoutMs: 15000 })).trim();
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return defaultResponse;
 

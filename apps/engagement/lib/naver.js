@@ -182,7 +182,13 @@ export function classifyNeighborResult(text = '', pageClosed = false) {
   if (isNeighborGroupFullResponse(normalized)) {
     return withRaw('group_full', '해당 이웃 그룹이 가득 찼습니다. 새 그룹 생성이 필요합니다.');
   }
-  if (/하루에 신청할 수 있는|1일.*(초과|제한|한도)|신청 가능 횟수.*초과|더 이상.*신청할 수 없.*(하루|일일)|오늘.*신청/i.test(normalized)) {
+  // Naver's success dialog repeats the other blogger's nickname ("오늘보다 나은 내일님에게 서로이웃을
+  // 신청하였습니다"), so success is checked first and the limit only matches limit wording, never a bare
+  // "오늘 … 신청" (that once ended a whole run after 8 requests).
+  if (/서로이웃을 신청하였습니다|서로이웃을 신청했습니다|신청내역은.*서로이웃 신청 관리/i.test(normalized)) {
+    return withRaw('requested', '서로이웃 신청이 완료되었습니다.');
+  }
+  if (/하루에 신청할 수 있는|1일.*(초과|제한|한도)|신청 가능 횟수.*초과|더 이상.*신청할 수 없.*(하루|일일)|오늘(?:은)?\s*더 이상.*신청|오늘.*신청.*(?:초과|한도|제한|할 수 없)/i.test(normalized)) {
     return withRaw('limit_reached', '네이버 일일 서로이웃 신청 한도(100명)에 도달했습니다.');
   }
   if (/현재 서로이웃입니다|이미 서로이웃/i.test(normalized)) {
@@ -395,7 +401,27 @@ export class NaverBrowserSession {
       await this.saveSessionState();
       return { connected: true, accountLabel: '네이버 로그인됨' };
     }
-    return { connected: false };
+    // After the phone scans the QR, Naver shows a number on the login page that must be entered in the app.
+    // That page lives in the server's headless browser, so pass the number (and a picture of the page) along.
+    const page = this.page;
+    if (!page || page.isClosed() || !/nid\.naver\.com/.test(page.url())) return { connected: false };
+    const info = await page.evaluate(() => {
+      const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+      const numbers = [...document.querySelectorAll('body *')]
+        .filter((el) => el.children.length === 0 && visible(el) && /^\s*\d{1,3}\s*$/.test(el.textContent || ''))
+        .map((el) => el.textContent.trim());
+      const message = [...document.querySelectorAll('h1, h2, h3, p, strong, .title, [class*="txt"], [class*="desc"]')]
+        .filter((el) => visible(el) && /숫자|번호|입력|승인|확인/.test(el.textContent || ''))
+        .map((el) => el.textContent.replace(/\s+/g, ' ').trim()).filter((t) => t.length < 120).slice(0, 3);
+      return { numbers: [...new Set(numbers)].slice(0, 4), message };
+    }).catch(() => ({ numbers: [], message: [] }));
+    const shot = await page.screenshot({ type: 'jpeg', quality: 60 }).catch(() => null);
+    return {
+      connected: false,
+      code: info.numbers.length ? info.numbers.join(' ') : '',
+      message: info.message.join(' '),
+      screen: shot ? `data:image/jpeg;base64,${shot.toString('base64')}` : ''
+    };
   }
 
   async setSessionCookies({ nidAut = '', nidSes = '' } = {}) {
@@ -675,7 +701,9 @@ export class NaverBrowserSession {
 
     return {
       connected: false,
-      message: '로그인에 실패했거나 2단계 인증/보안 확인이 필요합니다. 아이디와 비밀번호를 다시 확인해주세요.'
+      message: this.headless
+        ? '네이버가 보안 확인(자동입력 방지 또는 2단계 인증)을 요청했는데, 서버에서는 그 화면을 띄울 수 없습니다. [QR로 로그인]을 이용해 주세요.'
+        : '로그인에 실패했거나 2단계 인증/보안 확인이 필요합니다. 아이디와 비밀번호를 다시 확인해주세요.'
     };
   }
 
@@ -1316,7 +1344,7 @@ export class NaverBrowserSession {
   /**
    * Perform Like (Heart) and AI Comment on a Naver Blog post.
    */
-  async likeAndCommentPost({ postUrl, commentText = '', doLike = true, doComment = true }) {
+  async likeAndCommentPost({ postUrl, commentText = '', doLike = true, doComment = true, secret = false }) {
     if (!this.connected) throw new Error('먼저 네이버 계정을 연결해주세요.');
     const page = await this.context.newPage();
     const cleanUrl = String(postUrl || '').trim();
@@ -1520,6 +1548,23 @@ export class NaverBrowserSession {
               });
               await page.waitForTimeout(600);
 
+              // Secret comment: tick Naver's 비밀글 box. If it cannot be ticked, nothing is posted publicly.
+              let secretReady = true;
+              if (secret) {
+                const secretBox = frame.locator('input.u_cbox_secret_check').first();
+                if (await secretBox.count().catch(() => 0)) {
+                  if (!await secretBox.isChecked().catch(() => false)) {
+                    await frame.locator('label.u_cbox_secret_label').first().click({ force: true })
+                      .catch(() => secretBox.check({ force: true }).catch(() => {}));
+                    await page.waitForTimeout(250);
+                  }
+                  secretReady = await secretBox.isChecked().catch(() => false);
+                } else {
+                  secretReady = false;
+                }
+                if (!secretReady) result.commentReason = '비밀댓글 설정을 찾지 못해 댓글을 등록하지 않았습니다.';
+              }
+
               // Step D: Submit comment
               const submitSelectors = [
                 'button.u_cbox_btn_upload',
@@ -1537,7 +1582,7 @@ export class NaverBrowserSession {
               ];
 
               let submitted = false;
-              for (const selector of submitSelectors) {
+              for (const selector of secretReady ? submitSelectors : []) {
                 const submitBtn = frame.locator(selector).first();
                 if (await submitBtn.isVisible().catch(() => false)) {
                   await submitBtn.evaluate((btn) => btn.removeAttribute('disabled')).catch(() => {});
@@ -1579,16 +1624,68 @@ export class NaverBrowserSession {
     }
   }
 
+  // The logged-in account's own blog ID, read from MyBlog.naver's redirect and cached per login.
+  async resolveMyBlogId(page = null) {
+    if (this.myBlogId && this.myBlogIdFor === this.connectedId) return this.myBlogId;
+    const ownPage = page || await this.context.newPage();
+    try {
+      await ownPage.goto('https://blog.naver.com/MyBlog.naver', { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await ownPage.waitForTimeout(1200);
+      const candidates = [ownPage.url(), ...ownPage.frames().map((frame) => frame.url())];
+      let myBlogId = candidates.map(extractBlogId).find(Boolean) || '';
+      if (!myBlogId && !['saved-session', 'cookie-session', 'cookie-injected', 'qr-session'].includes(this.connectedId)) myBlogId = this.connectedId;
+      if (!BLOG_ID_PATTERN.test(myBlogId)) throw new Error('내 블로그 ID를 확인하지 못했습니다. 네이버 블로그를 한 번 열어주세요.');
+      this.myBlogId = myBlogId;
+      this.myBlogIdFor = this.connectedId;
+      return myBlogId;
+    } finally {
+      if (!page && !ownPage.isClosed()) await ownPage.close().catch(() => {});
+    }
+  }
+
+  // People who left comments on another blog's recent posts: active bloggers in the same niche.
+  async collectBlogCommenters(seedBlogId, { postUrls = [], maxAuthors = 200, excludeIds = [] } = {}) {
+    if (!this.connected) throw new Error('먼저 네이버 계정을 연결해주세요.');
+    const excluded = new Set([seedBlogId, ...excludeIds].map((id) => String(id || '').toLowerCase()));
+    const authors = new Map();
+    const page = await this.context.newPage();
+    try {
+      for (const postUrl of postUrls) {
+        const mobileUrl = String(postUrl).replace('://blog.naver.com/', '://m.blog.naver.com/').replace(/\?.*$/, '');
+        await page.goto(mobileUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(900);
+        const opener = page.locator('button[class*="comment"], a[class*="comment"], [data-click-area="pst.re"]').first();
+        if (await opener.isVisible().catch(() => false)) await opener.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(900);
+        const rows = await page.locator('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]').evaluateAll((elements) => elements.map((element) => {
+          const link = element.querySelector('.u_cbox_name a, a[href*="blog.naver.com"], a[href*="m.blog.naver.com"]');
+          const href = link?.href || '';
+          let id = '';
+          try { id = new URL(href).searchParams.get('blogId') || ''; } catch {}
+          id ||= href.match(/blog\.naver\.com\/([^/?#]+)/i)?.[1] || '';
+          const nickname = (element.querySelector('.u_cbox_nick, [class*="nickname"]')?.textContent || '').replace(/\s+/g, ' ').trim();
+          return { id, nickname };
+        })).catch(() => []);
+        for (const row of rows) {
+          const key = String(row.id || '').toLowerCase();
+          if (!BLOG_ID_PATTERN.test(row.id || '') || /\.naver$/i.test(row.id) || excluded.has(key) || authors.has(key)) continue;
+          authors.set(key, { blogId: row.id, nickname: row.nickname || row.id });
+          if (authors.size >= maxAuthors) break;
+        }
+        if (authors.size >= maxAuthors) break;
+        await page.waitForTimeout(800 + Math.floor(Math.random() * 1200));
+      }
+      return [...authors.values()];
+    } finally {
+      await page.close().catch(() => {});
+    }
+  }
+
   async scanMyBlogComments({ postLimit = 10, commentLimit = 100 } = {}) {
     if (!this.connected || !await this.hasAuthenticatedSession()) throw new Error('네이버 로그인 세션이 필요합니다.');
     const page = await this.context.newPage();
     try {
-      await page.goto('https://blog.naver.com/MyBlog.naver', { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await page.waitForTimeout(1200);
-      const candidates = [page.url(), ...page.frames().map((frame) => frame.url())];
-      let myBlogId = candidates.map(extractBlogId).find(Boolean) || '';
-      if (!myBlogId && !['saved-session', 'cookie-session', 'cookie-injected', 'qr-session'].includes(this.connectedId)) myBlogId = this.connectedId;
-      if (!BLOG_ID_PATTERN.test(myBlogId)) throw new Error('내 블로그 ID를 확인하지 못했습니다. 네이버 블로그를 한 번 열어주세요.');
+      const myBlogId = await this.resolveMyBlogId(page);
 
       await page.goto(`https://blog.naver.com/PostList.naver?blogId=${encodeURIComponent(myBlogId)}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
       await page.waitForTimeout(1200);

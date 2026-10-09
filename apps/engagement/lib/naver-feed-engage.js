@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { composeComment, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
 
 function koreaDateKey(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -270,11 +271,18 @@ export class FeedEngagementHistoryStore {
   }
 }
 
+// Same account-wide caps as keyword engagement; both features count against one Naver account.
+export const FEED_DAILY_LIMITS = Object.freeze({ likes: 200, comments: 100 });
+export const FEED_BATCH_BREAK = Object.freeze({ every: 10, minSec: 600, maxSec: 1200 });
+
 export class FeedEngagementManager {
-  constructor({ browserSession, embeddedLlama, historyStore }) {
+  constructor({ browserSession, embeddedLlama, historyStore, getSharedTodayCounts = null, batchBreak = FEED_BATCH_BREAK }) {
     this.browserSession = browserSession;
     this.embeddedLlama = embeddedLlama;
     this.historyStore = historyStore;
+    // Today's likes/comments made by other features (keyword engagement) on the same account.
+    this.getSharedTodayCounts = getSharedTodayCounts;
+    this.batchBreak = batchBreak;
 
     this.state = 'idle'; // idle | running | paused | stopped | completed | error
     this.shouldStop = false;
@@ -301,6 +309,48 @@ export class FeedEngagementManager {
       minDelaySec: 25,
       maxDelaySec: 45
     };
+  }
+
+  async getTodayUsage() {
+    const own = await this.historyStore.getSummary().catch(() => ({}));
+    const shared = this.getSharedTodayCounts ? await this.getSharedTodayCounts().catch(() => ({})) : {};
+    return {
+      likes: (Number(own.todayLikes) || 0) + (Number(shared?.likes) || 0),
+      comments: (Number(own.todayComments) || 0) + (Number(shared?.comments) || 0)
+    };
+  }
+
+  // Drops actions whose daily cap is used up; reason is set when nothing is left to do.
+  async allowedActions({ doLike, doComment }) {
+    const usage = await this.getTodayUsage();
+    const like = Boolean(doLike) && usage.likes < FEED_DAILY_LIMITS.likes;
+    const comment = Boolean(doComment) && usage.comments < FEED_DAILY_LIMITS.comments;
+    const capped = [
+      doLike && !like ? `공감 ${FEED_DAILY_LIMITS.likes}회` : '',
+      doComment && !comment ? `댓글 ${FEED_DAILY_LIMITS.comments}개` : ''
+    ].filter(Boolean).join(', ');
+    return {
+      like,
+      comment,
+      capped,
+      reason: !like && !comment ? `오늘 일일 한도(${capped || '요청 작업 없음'})에 도달했습니다. 계정 보호를 위해 내일 다시 진행해주세요.` : ''
+    };
+  }
+
+  async waitWithCountdown(totalSec, buildLabel) {
+    let elapsed = 0;
+    while (elapsed < totalSec * 1000 && !this.shouldStop) {
+      const remainingSec = Math.max(0, Math.ceil((totalSec * 1000 - elapsed) / 1000));
+      if (this.currentPost) {
+        this.currentPost.countdown = remainingSec;
+        this.currentPost.stepLabel = buildLabel(remainingSec);
+      }
+      await sleep(500);
+      elapsed += 500;
+      while (this.isPaused && !this.shouldStop) {
+        await sleep(500);
+      }
+    }
   }
 
   log(message, level = 'info') {
@@ -373,7 +423,8 @@ export class FeedEngagementManager {
     doLike = true,
     doComment = true,
     commentTone = 'friendly',
-    tone = ''
+    tone = '',
+    secretComment = false
   } = {}) {
     if (!this.browserSession || !this.browserSession.connected) {
       throw new Error('네이버 계정이 연결되어 있지 않습니다. 먼저 네이버 로그인을 완료해주세요.');
@@ -383,6 +434,15 @@ export class FeedEngagementManager {
     const targetUrl = postUrl || `https://m.blog.naver.com/${blogId}/${logNo}`;
     const authorName = author || blogId;
     const postLabel = `@${authorName} ('${(title || '').slice(0, 24)}...')`;
+
+    const allowed = await this.allowedActions({ doLike, doComment });
+    if (allowed.reason) {
+      this.log(`🛑 [즉시 소통] ${allowed.reason}`, 'warn');
+      throw new Error(allowed.reason);
+    }
+    if (allowed.capped) this.log(`⚠️ 오늘 ${allowed.capped} 한도에 도달해 해당 작업은 건너뜁니다.`, 'warn');
+    doLike = allowed.like;
+    doComment = allowed.comment;
 
     this.log(`⚡ [즉시 소통] ${postLabel} 분석 및 소통을 시작합니다.`, 'info');
 
@@ -435,7 +495,8 @@ export class FeedEngagementManager {
       postUrl: targetUrl,
       commentText: generatedComment,
       doLike: Boolean(doLike),
-      doComment: Boolean(doComment) && Boolean(generatedComment)
+      doComment: Boolean(doComment) && Boolean(generatedComment),
+      secret: Boolean(secretComment)
     });
 
     // 4. Save record
@@ -474,7 +535,10 @@ export class FeedEngagementManager {
     tone = '',
     minDelaySec = 25,
     maxDelaySec = 45,
-    selectedPosts = null
+    selectedPosts = null,
+    commentMode = 'ai',
+    commentPhrases = '',
+    secretComment = false
   } = {}) {
     if (this.state === 'running') {
       throw new Error('이미 이웃 새글 자동 소통 작업이 실행 중입니다.');
@@ -494,8 +558,14 @@ export class FeedEngagementManager {
       doComment: Boolean(doComment),
       commentTone: commentTone || tone || 'friendly',
       minDelaySec: minDelaySec !== undefined ? Math.max(0, Number(minDelaySec)) : 25,
-      maxDelaySec: maxDelaySec !== undefined ? Math.max(0, Number(maxDelaySec)) : 45
+      maxDelaySec: maxDelaySec !== undefined ? Math.max(0, Number(maxDelaySec)) : 45,
+      commentMode: normalizeCommentMode(commentMode),
+      commentPhrases: normalizeCommentPhrases(commentPhrases),
+      secretComment: Boolean(secretComment)
     };
+    if (this.config.doComment && this.config.commentMode === 'phrases' && !this.config.commentPhrases.length) {
+      throw new Error('[내 문구만] 댓글을 쓰려면 댓글 문구를 한 줄에 하나씩 입력해주세요.');
+    }
 
     this.state = 'running';
     this.shouldStop = false;
@@ -508,8 +578,10 @@ export class FeedEngagementManager {
       commentedCount: 0,
       skippedCount: 0,
       targetReached: false,
+      dailyLimitReached: false,
       protectionTriggered: false
     };
+    this.limitWarned = false;
 
     const runDesc = this.selectedPosts
       ? `선택한 ${this.selectedPosts.length}개 새글`
@@ -573,6 +645,17 @@ export class FeedEngagementManager {
           break;
         }
 
+        const allowed = await this.allowedActions({ doLike: this.config.doLike, doComment: this.config.doComment });
+        if (allowed.reason) {
+          this.stats.dailyLimitReached = true;
+          this.log(`🏁 ${allowed.reason}`, 'warn');
+          break;
+        }
+        if (allowed.capped && !this.limitWarned) {
+          this.limitWarned = true;
+          this.log(`⚠️ 오늘 ${allowed.capped} 한도에 도달해 남은 글은 가능한 작업만 진행합니다.`, 'warn');
+        }
+
         const post = feedPosts[i];
         const postLabel = `@${post.author} ('${post.title.slice(0, 24)}...')`;
 
@@ -629,27 +712,34 @@ export class FeedEngagementManager {
 
           // 2. Generate contextual AI comment if enabled
           let generatedComment = '';
-          if (this.config.doComment && inspection.canComment) {
+          if (allowed.comment && inspection.canComment) {
             this.currentPost.step = 'generating';
             this.currentPost.stepLabel = '🤖 온디바이스 AI 맞춤 찐이웃 댓글 작성 중...';
             this.log(`🤖 AI가 이웃 글 내용과 사진을 읽고 맞춤 댓글을 생성하고 있습니다...`, 'info');
             const imageSummary = inspection.firstImage?.alt || (inspection.images.length > 0 ? `${inspection.images.length}장의 본문 사진 포함` : '');
             const recentComments = await this.historyStore.getRecentComments(30);
 
-            if (this.embeddedLlama) {
-              generatedComment = await this.embeddedLlama.generateBlogComment({
-                title: inspection.title || post.title,
-                contentSnippet: inspection.snippet || post.snippet,
-                imageSummary,
-                tone: this.config.commentTone,
-                recentComments
-              }).catch(() => '');
-            }
+            const composed = await composeComment({
+              mode: this.config.commentMode,
+              phrases: this.config.commentPhrases,
+              recentComments,
+              bloggerName: post.author,
+              generateAi: () => (this.embeddedLlama
+                ? this.embeddedLlama.generateBlogComment({
+                  title: inspection.title || post.title,
+                  contentSnippet: inspection.snippet || post.snippet,
+                  imageSummary,
+                  tone: this.config.commentTone,
+                  recentComments
+                }).catch(() => '')
+                : Promise.resolve(''))
+            });
+            generatedComment = composed.text;
 
             if (!generatedComment) {
               this.log('⏩ 적합한 댓글을 생성하지 못해 댓글 작성을 건너뜁니다.', 'warn');
             } else {
-              this.log(`💬 검증된 찐이웃 댓글: "${generatedComment}"`, 'info');
+              this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : '검증된 찐이웃'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
             }
           }
 
@@ -659,11 +749,12 @@ export class FeedEngagementManager {
           const result = await this.browserSession.likeAndCommentPost({
             postUrl: post.url,
             commentText: generatedComment,
-            doLike: this.config.doLike,
-            doComment: this.config.doComment && Boolean(generatedComment)
+            doLike: allowed.like,
+            doComment: allowed.comment && Boolean(generatedComment),
+            secret: this.config.secretComment
           });
 
-          if (this.config.doComment && !generatedComment) {
+          if (allowed.comment && !generatedComment) {
             result.commentReason = this.embeddedLlama?.lastCommentFailure || 'AI 댓글 생성·검증에 실패해 등록하지 않았습니다.';
             result.message = result.liked
               ? `공감(❤️) 완료 (댓글 미작성: ${result.commentReason})`
@@ -693,7 +784,7 @@ export class FeedEngagementManager {
             this.currentPost.commented = result.commented;
 
             const actions = [result.liked ? '공감(❤️)' : '', result.commented ? 'AI 댓글(💬)' : ''].filter(Boolean).join(' 및 ');
-            if (this.config.doComment && !result.commented) {
+            if (allowed.comment && !result.commented) {
               this.log(`❌ [댓글 등록 실패] ${postLabel} ${actions || '공감'} 완료 · 댓글 미등록 사유: ${result.commentReason || '확인되지 않은 오류'}`, 'error');
             } else {
               this.log(`✅ [새글 소통 완료] ${postLabel} ${actions} 등록 완료! (누적 성공: ${this.stats.successCount}/${this.config.targetCount})`, 'success');
@@ -738,16 +829,18 @@ export class FeedEngagementManager {
               countdown: totalDelaySec
             };
 
-            let elapsed = 0;
-            while (elapsed < totalDelaySec * 1000 && !this.shouldStop) {
-              const remainingSec = Math.max(0, Math.ceil((totalDelaySec * 1000 - elapsed) / 1000));
-              this.currentPost.countdown = remainingSec;
-              this.currentPost.stepLabel = `🛡️ [계정 보호 안전 대기] ${remainingSec}초 후 ${nextAuthor} 님 글로 이동`;
-              await sleep(500);
-              elapsed += 500;
-              while (this.isPaused && !this.shouldStop) {
-                await sleep(500);
-              }
+            const every = Number(this.batchBreak?.every) || 0;
+            const isBatchBreak = every > 0 && (result.liked || result.commented) && this.stats.successCount % every === 0;
+            if (isBatchBreak) {
+              const minSec = Number(this.batchBreak.minSec) || 0;
+              const maxSec = Math.max(minSec, Number(this.batchBreak.maxSec) || minSec);
+              const breakSec = minSec + Math.floor(Math.random() * (maxSec - minSec + 1));
+              this.currentPost.step = 'session_break';
+              this.currentPost.totalDelaySec = breakSec;
+              this.log(`☕ ${every}건 소통을 마쳐 ${Math.round(breakSec / 60)}분간 쉬어갑니다. (계정 보호 휴식)`, 'info');
+              await this.waitWithCountdown(breakSec, (sec) => `☕ [계정 보호 휴식] ${Math.floor(sec / 60)}분 ${sec % 60}초 후 ${nextAuthor} 님 글로 이동`);
+            } else {
+              await this.waitWithCountdown(totalDelaySec, (sec) => `🛡️ [계정 보호 안전 대기] ${sec}초 후 ${nextAuthor} 님 글로 이동`);
             }
           }
         } catch (postError) {
@@ -755,7 +848,7 @@ export class FeedEngagementManager {
         }
       }
 
-      if (!this.shouldStop && !this.stats.targetReached) {
+      if (!this.shouldStop && !this.stats.targetReached && !this.stats.dailyLimitReached) {
         if (this.stats.successCount > 0) {
           this.log(`🏁 준비된 이웃 새글 처리를 마쳤습니다. (총 ${this.stats.successCount}건 소통 완료)`, 'info');
         } else {

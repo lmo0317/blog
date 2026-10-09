@@ -230,9 +230,11 @@ export class LicenseClientManager {
     try {
       const res = await this.fetchFn(`${this.serverUrl}/api/license/activate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.state.token}`
+        },
         body: JSON.stringify({
-          email: this.state.email,
           licenseKey,
           hwid: this.hwid
         })
@@ -329,4 +331,23 @@ export class LicenseClientManager {
       hwidMasked: this.hwid ? this.hwid.slice(0, 10) + '...' : null
     };
   }
+}
+
+const ACTIVE_LICENSE_STATUSES = new Set(['valid', 'offline_grace']);
+
+// Express middleware: without an active subscription, read-only GET calls still work
+// but every action (POST/PUT/PATCH/DELETE) outside /api/license is refused with 402.
+export function createLicenseGuard(licenseClient, isEnforced = () => true) {
+  return (req, res, next) => {
+    if (!isEnforced()) return next();
+    if (!req.path.startsWith('/api/') || req.path.startsWith('/api/license/')) return next();
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    const status = licenseClient.getStatus();
+    if (ACTIVE_LICENSE_STATUSES.has(status.status)) return next();
+    res.status(402).json({
+      error: status.message || '이용권이 필요합니다. 로그인하거나 이용권을 등록해주세요.',
+      licenseRequired: true,
+      licenseStatus: status.status
+    });
+  };
 }

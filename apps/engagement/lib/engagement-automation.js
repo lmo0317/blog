@@ -1,5 +1,11 @@
 import { EventEmitter } from 'node:events';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { COMMENT_PROMPT_VERSION } from './comment-prompt.js';
+import { composeComment, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
+import { fetchLatestPostsFromRss, MAX_SEED_BLOGS, normalizeBlogIdList, resolveLatestPosts } from './blog-targets.js';
+
+export const TARGET_SOURCES = Object.freeze(['keyword', 'seed_commenters', 'id_list']);
 
 export const ENGAGEMENT_LIMITS = Object.freeze({
   postsPerRun: 500,
@@ -62,11 +68,15 @@ export function buildNeighborMessage(baseMessage, bloggerName, keyword, index = 
 }
 
 export class EngagementAutomationManager extends EventEmitter {
-  constructor({ browserSession, embeddedLlama, historyStore }) {
+  constructor({ browserSession, embeddedLlama, historyStore, statePath = '', getSharedTodayCounts = null }) {
     super();
     this.browserSession = browserSession;
     this.embeddedLlama = embeddedLlama;
     this.historyStore = historyStore;
+    // Today's likes/comments made by feed engagement on the same account, so both share one daily cap.
+    this.getSharedTodayCounts = getSharedTodayCounts;
+    this.statePath = statePath;
+    this.saveTimer = null;
 
     this.state = 'idle'; // 'idle' | 'running' | 'paused' | 'stopped' | 'completed' | 'error'
     this.config = {
@@ -106,6 +116,8 @@ export class EngagementAutomationManager extends EventEmitter {
     };
 
     this.logs = [];
+    this.restoreLastJob();
+    if (this.statePath) this.on('status', () => this.scheduleSave());
     this.shouldStop = false;
     this.isPaused = false;
     this.pausePromise = null;
@@ -127,6 +139,54 @@ export class EngagementAutomationManager extends EventEmitter {
     this.emit('log', entry);
     this.emit('status', this.getStatus());
     console.log(`[AutoEngagement] [${entry.time}] ${message}`);
+  }
+
+  // The latest job (settings, counts, log) is kept on disk so a server restart or a closed browser does
+  // not wipe it. A job that was running when the server stopped comes back as stopped, with a note.
+  restoreLastJob() {
+    if (!this.statePath || !existsSync(this.statePath)) return;
+    try {
+      const saved = JSON.parse(readFileSync(this.statePath, 'utf8'));
+      if (saved.config) this.config = { ...this.config, ...saved.config };
+      if (saved.stats) this.stats = { ...this.stats, ...saved.stats, currentPost: null, delayCountdown: 0 };
+      if (Array.isArray(saved.logs)) this.logs = saved.logs.slice(0, 200);
+      const wasActive = saved.state === 'running' || saved.state === 'paused';
+      this.state = wasActive ? 'stopped' : (saved.state || 'idle');
+      if (wasActive) {
+        this.stats.phase = 'stopped';
+        this.stats.endTime = this.stats.endTime || saved.savedAt || new Date().toISOString();
+        const now = new Date();
+        this.logs.unshift({
+          id: `${Date.now()}-restart`,
+          timestamp: now.toISOString(),
+          time: now.toLocaleTimeString('ko-KR', { hour12: false }),
+          message: '⚠️ 프로그램이 다시 시작되어 진행 중이던 소통이 멈췄습니다. [소통 시작]을 다시 누르면 이미 소통한 글은 건너뛰고 이어서 진행합니다.',
+          type: 'warn',
+          meta: {}
+        });
+      }
+    } catch (error) {
+      console.warn('[AutoEngagement] Could not restore the last job:', error.message);
+    }
+  }
+
+  scheduleSave() {
+    if (this.saveTimer) return;
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      try {
+        mkdirSync(path.dirname(this.statePath), { recursive: true });
+        writeFileSync(this.statePath, JSON.stringify({
+          savedAt: new Date().toISOString(),
+          state: this.state,
+          config: this.config,
+          stats: { ...this.stats, currentPost: null },
+          logs: this.logs.slice(0, 200)
+        }));
+      } catch (error) {
+        console.warn('[AutoEngagement] Could not save the job state:', error.message);
+      }
+    }, 1500);
   }
 
   getStatus() {
@@ -153,7 +213,14 @@ export class EngagementAutomationManager extends EventEmitter {
     sessionPosts = 10,
     sessionBreakMinSeconds = 600,
     sessionBreakMaxSeconds = 1200,
-    activeWithinDays = 14 
+    activeWithinDays = 14,
+    targetSource = 'keyword',
+    seedBlogs = '',
+    targetIds = '',
+    neighborMessageMode = 'ai',
+    commentMode = 'ai',
+    commentPhrases = '',
+    secretComment = false
   }) {
     if (this.state === 'running' || this.state === 'paused') {
       throw new Error('이미 실행 중인 공감/소통 작업이 있습니다.');
@@ -163,9 +230,26 @@ export class EngagementAutomationManager extends EventEmitter {
       throw new Error('네이버 계정이 연결되어 있지 않습니다. 먼저 로그인을 완료해주세요.');
     }
 
-    const keywords = [...new Set(String(keyword || '').split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))].slice(0, 10);
+    const source = TARGET_SOURCES.includes(targetSource) ? targetSource : 'keyword';
+    const cleanSeeds = source === 'seed_commenters' ? normalizeBlogIdList(seedBlogs, { limit: MAX_SEED_BLOGS }) : [];
+    const cleanTargetIds = source === 'id_list' ? normalizeBlogIdList(targetIds) : [];
+    // Non-keyword sources reuse the per-keyword bookkeeping with one label per group.
+    const keywords = source === 'seed_commenters'
+      ? cleanSeeds
+      : source === 'id_list'
+        ? (cleanTargetIds.length ? ['직접 입력 목록'] : [])
+        : [...new Set(String(keyword || '').split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))].slice(0, 10);
     if (!keywords.length) {
-      throw new Error('검색 키워드를 입력해주세요.');
+      throw new Error({
+        keyword: '검색 키워드를 입력해주세요.',
+        seed_commenters: '댓글 이웃을 가져올 블로그 ID나 주소를 입력해주세요.',
+        id_list: '소통할 블로그 ID 목록을 입력해주세요.'
+      }[source]);
+    }
+    const cleanCommentMode = normalizeCommentMode(commentMode);
+    const cleanPhrases = normalizeCommentPhrases(commentPhrases);
+    if (doComment && cleanCommentMode === 'phrases' && !cleanPhrases.length) {
+      throw new Error('[내 문구만] 댓글을 쓰려면 댓글 문구를 한 줄에 하나씩 입력해주세요.');
     }
 
     const cleanTarget = Math.min(Math.max(Number(targetCount) || 100, 1), ENGAGEMENT_LIMITS.postsPerRun);
@@ -193,7 +277,14 @@ export class EngagementAutomationManager extends EventEmitter {
       sessionPosts: cleanSessionPosts,
       sessionBreakMinSeconds: cleanBreakMin,
       sessionBreakMaxSeconds: cleanBreakMax,
-      activeWithinDays: Number(activeWithinDays) || 0
+      activeWithinDays: Number(activeWithinDays) || 0,
+      targetSource: source,
+      seedBlogs: cleanSeeds,
+      targetIds: cleanTargetIds,
+      neighborMessageMode: neighborMessageMode === 'fixed' ? 'fixed' : 'ai',
+      commentMode: cleanCommentMode,
+      commentPhrases: cleanPhrases,
+      secretComment: Boolean(secretComment)
     };
 
     this.stats = {
@@ -218,7 +309,12 @@ export class EngagementAutomationManager extends EventEmitter {
     this.shouldStop = false;
     this.isPaused = false;
     this.state = 'running';
-    this.log(`🚀 ${keywords.length}개 키워드(${keywords.join(', ')})를 순차 실행합니다. (전체 목표 ${cleanTarget}건, 키워드별 최대 ${targetPerKeyword}건, 하루 서로이웃 최대 ${cleanDailyNeighborLimit}명)`, 'info');
+    const sourceLabel = {
+      keyword: `${keywords.length}개 키워드(${keywords.join(', ')})`,
+      seed_commenters: `블로그 ${keywords.length}곳(${keywords.join(', ')})의 댓글 이웃`,
+      id_list: `직접 입력한 블로그 ${cleanTargetIds.length}곳`
+    }[source];
+    this.log(`🚀 ${sourceLabel} 대상으로 순차 실행합니다. (전체 목표 ${cleanTarget}건, 키워드별 최대 ${targetPerKeyword}건, 하루 서로이웃 최대 ${cleanDailyNeighborLimit}명)`, 'info');
     this.log(`🛡️ 보호 설정: 작업 간 ${cleanMinDelay}~${cleanMaxDelay}초, ${cleanSessionPosts}건마다 ${Math.ceil(cleanBreakMin / 60)}~${Math.ceil(cleanBreakMax / 60)}분 휴식`, 'info');
     this.emit('status', this.getStatus());
 
@@ -232,21 +328,69 @@ export class EngagementAutomationManager extends EventEmitter {
     return this.getStatus();
   }
 
+  // Builds the post queue for the chosen target source. Keyword items keep their keyword as the
+  // message topic; other sources have no topic so messages never mention a blog ID.
+  async collectTargetPosts() {
+    const items = [];
+    const { targetSource, activeWithinDays } = this.config;
+    const onSkip = (blogId, reason) => this.log(`⏩ @${blogId} 제외: ${reason}`, 'info');
+    const shouldStop = () => this.shouldStop;
+
+    if (targetSource === 'id_list') {
+      const label = this.config.keywords[0];
+      this.stats.currentKeyword = label;
+      this.stats.phase = 'searching';
+      this.emit('status', this.getStatus());
+      this.log(`🔍 입력한 블로그 ${this.config.targetIds.length}곳의 최신 글을 확인하고 있습니다...`, 'info');
+      const posts = await resolveLatestPosts(this.config.targetIds, { activeWithinDays, onSkip, shouldStop });
+      items.push(...posts.map((post) => ({ ...post, engagementKeyword: label, engagementTopic: '' })));
+      return items;
+    }
+
+    if (targetSource === 'seed_commenters') {
+      const myBlogId = await this.browserSession.resolveMyBlogId?.().catch(() => '') || '';
+      for (const seed of this.config.keywords) {
+        if (this.shouldStop) break;
+        this.stats.currentKeyword = seed;
+        this.stats.phase = 'searching';
+        this.emit('status', this.getStatus());
+        this.log(`🔍 @${seed} 님의 최근 글에 댓글을 단 이웃을 모으고 있습니다...`, 'info');
+        const seedPosts = await fetchLatestPostsFromRss(seed, { limit: 5 });
+        if (!seedPosts.length) {
+          this.log(`⚠️ @${seed} 님의 최근 글을 불러오지 못했습니다. 블로그 ID를 확인해주세요.`, 'warn');
+          continue;
+        }
+        const commenters = await this.browserSession.collectBlogCommenters(seed, {
+          postUrls: seedPosts.map((post) => post.url),
+          maxAuthors: Math.min(Math.max(this.config.targetPerKeyword * 2, 30), 200),
+          excludeIds: myBlogId ? [myBlogId] : []
+        });
+        this.log(`👥 @${seed} 님 글에서 댓글 이웃 ${commenters.length}명을 찾았습니다. 각자의 최신 글을 확인합니다...`, 'info');
+        const nicknames = Object.fromEntries(commenters.map((person) => [person.blogId, person.nickname]));
+        const posts = await resolveLatestPosts(commenters.map((person) => person.blogId), { activeWithinDays, onSkip, shouldStop, nicknames });
+        items.push(...posts.map((post) => ({ ...post, engagementKeyword: seed, engagementTopic: '' })));
+      }
+      return items;
+    }
+
+    for (const keyword of this.config.keywords) {
+      this.stats.currentKeyword = keyword;
+      this.stats.phase = 'searching';
+      this.emit('status', this.getStatus());
+      this.log(`🔍 [${keyword}] 관련 타겟 포스팅을 검색하고 있습니다...`, 'info');
+      const found = await this.browserSession.searchBlogs({ query: keyword, display: Math.min(Math.max(this.config.targetPerKeyword * 2, 100), 1000), activeWithinDays, excludeBlogIds: [] });
+      const candidates = Array.isArray(found) ? found : (found?.items || []);
+      items.push(...candidates.map((post) => ({ ...post, engagementKeyword: keyword })));
+    }
+    return items;
+  }
+
   async runLoop() {
     try {
       const blockedActions = new Set();
       let neighborBlockedDate = '';
       let sessionProcessed = 0;
-      const items = [];
-      for (const keyword of this.config.keywords) {
-        this.stats.currentKeyword = keyword;
-        this.stats.phase = 'searching';
-        this.emit('status', this.getStatus());
-        this.log(`🔍 [${keyword}] 관련 타겟 포스팅을 검색하고 있습니다...`, 'info');
-        const found = await this.browserSession.searchBlogs({ query: keyword, display: Math.min(Math.max(this.config.targetPerKeyword * 2, 100), 1000), activeWithinDays: this.config.activeWithinDays, excludeBlogIds: [] });
-        const candidates = Array.isArray(found) ? found : (found?.items || []);
-        items.push(...candidates.map((post) => ({ ...post, engagementKeyword: keyword })));
-      }
+      const items = await this.collectTargetPosts();
 
       if (!items || items.length === 0) {
         this.state = 'completed';
@@ -297,6 +441,7 @@ export class EngagementAutomationManager extends EventEmitter {
         }
 
         const todaySummary = this.historyStore?.getSummary ? await this.historyStore.getSummary() : {};
+        const sharedToday = this.getSharedTodayCounts ? await this.getSharedTodayCounts().catch(() => ({})) : {};
         const todayKey = koreaDateKey();
         if (neighborBlockedDate && neighborBlockedDate !== todayKey) {
           neighborBlockedDate = '';
@@ -355,8 +500,8 @@ export class EngagementAutomationManager extends EventEmitter {
             neighbor: neighborEligible
           },
           todayCounts: {
-            likes: todaySummary.todayLikes,
-            comments: todaySummary.todayComments,
+            likes: (Number(todaySummary.todayLikes) || 0) + (Number(sharedToday?.likes) || 0),
+            comments: (Number(todaySummary.todayComments) || 0) + (Number(sharedToday?.comments) || 0),
             neighbors: todaySummary.todayNeighbors
           },
           postIndex: this.stats.processedCount,
@@ -397,13 +542,21 @@ export class EngagementAutomationManager extends EventEmitter {
             this.log(`🤖 AI가 포스팅 내용과 사진을 읽고 맞춤 댓글을 생성하고 있습니다...`, 'info');
             imageSummary = inspection.firstImage?.alt || (inspection.images.length > 0 ? `${inspection.images.length}장의 본문 사진 포함` : '');
             recentComments = this.historyStore?.getRecentComments ? await this.historyStore.getRecentComments(30) : [];
-            generatedComment = await this.embeddedLlama.generateBlogComment({
-              title: inspection.title || post.title,
-              contentSnippet: inspection.snippet,
-              imageSummary,
-              tone: this.config.tone, recentComments
+            const composed = await composeComment({
+              mode: this.config.commentMode,
+              phrases: this.config.commentPhrases,
+              recentComments,
+              bloggerName: post.bloggerName,
+              generateAi: () => this.embeddedLlama.generateBlogComment({
+                title: inspection.title || post.title,
+                contentSnippet: inspection.snippet,
+                imageSummary,
+                tone: this.config.tone, recentComments
+              })
             });
-            if (!generatedComment) this.log('⏩ 글 관련성·문자·중복 검증을 통과한 댓글을 만들지 못해 댓글 등록을 건너뜁니다.', 'warn'); else this.log(`💬 검증된 댓글: "${generatedComment}"`, 'info');
+            generatedComment = composed.text;
+            if (!generatedComment) this.log('⏩ 글 관련성·문자·중복 검증을 통과한 댓글을 만들지 못해 댓글 등록을 건너뜁니다.', 'warn');
+            else this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : '검증된 AI'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
           }
 
           // 3. Like and Comment
@@ -411,7 +564,8 @@ export class EngagementAutomationManager extends EventEmitter {
             postUrl: targetUrl,
             commentText: generatedComment,
             doLike: doLikeForPost,
-            doComment: doCommentForPost && !!generatedComment
+            doComment: doCommentForPost && !!generatedComment,
+            secret: this.config.secretComment
           });
 
           // A comment run can be skipped before reaching Naver when the local
@@ -461,7 +615,17 @@ export class EngagementAutomationManager extends EventEmitter {
           if (doNeighborForPost && post.blogId) {
             this.log(`👥 @${post.blogId} 님에게 서로이웃 신청을 함께 보냅니다...`, 'info');
             try {
-              sentNeighborMessage = buildNeighborMessage(this.config.neighborMessage, post.bloggerName || post.blogId, currentKeyword, this.stats.processedCount);
+              const topic = post.engagementTopic ?? currentKeyword;
+              if (this.config.neighborMessageMode === 'ai' && typeof this.embeddedLlama?.generateNeighborMessage === 'function') {
+                sentNeighborMessage = await this.embeddedLlama.generateNeighborMessage({
+                  bloggerName: post.bloggerName || post.blogId,
+                  title: inspection.title || post.title,
+                  contentSnippet: inspection.snippet || post.description,
+                  baseMessage: this.config.neighborMessage
+                });
+                if (sentNeighborMessage) this.log(`✉️ AI 맞춤 신청 메시지: "${sentNeighborMessage}"`, 'info');
+              }
+              sentNeighborMessage ||= buildNeighborMessage(this.config.neighborMessage, post.bloggerName || post.blogId, topic, this.stats.processedCount);
               const nRes = await this.browserSession.addNeighbor(
                 post.blogId,
                 sentNeighborMessage,
@@ -519,7 +683,7 @@ export class EngagementAutomationManager extends EventEmitter {
               imageSummary,
               recentComments,
               promptVersion: COMMENT_PROMPT_VERSION,
-              modelId: this.embeddedLlama?.currentModelId || '',
+              modelId: this.embeddedLlama?.lastUsedModelId || this.embeddedLlama?.currentModelId || '',
               neighborRequested,
               neighborStatus,
               neighborMessage: sentNeighborMessage,

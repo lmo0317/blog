@@ -67,6 +67,10 @@ test('web search links become one card per blog', () => {
 
 test('neighbor result classification handles success and known skips', () => {
   assert.equal(classifyNeighborResult('', true).status, 'added');
+  // A nickname containing "오늘" in Naver's success dialog is a success, not the daily limit.
+  assert.equal(classifyNeighborResult('서로이웃 신청 오늘보다 나은 내일님에게 서로이웃을 신청하였습니다. 신청내역은 내 블로그 관리 > 서로이웃 신청 관리에서 확인 할 수 있습니다.').status, 'requested');
+  assert.equal(classifyNeighborResult('하루에 신청할 수 있는 서로이웃 수를 초과했습니다.').status, 'limit_reached');
+  assert.equal(classifyNeighborResult('오늘은 더 이상 서로이웃을 신청할 수 없습니다.').status, 'limit_reached');
   assert.equal(classifyNeighborResult('이미 이웃으로 추가된 블로그입니다.').status, 'already_added');
   assert.equal(classifyNeighborResult('이미 추가한 이웃입니다.').status, 'already_added');
   assert.equal(classifyNeighborResult('홍길동님과 현재 이웃입니다.').status, 'already_added');
