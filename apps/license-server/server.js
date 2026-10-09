@@ -26,6 +26,11 @@ export function createLicenseServer(db = null, options = {}) {
     return (forwarded ? forwarded.split(',')[0] : req.socket.remoteAddress) || '';
   };
 
+  const getBearerToken = (req) => {
+    const authHeader = req.headers['authorization'];
+    return authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : (req.body?.token || null);
+  };
+
   // Health check
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'neighbor-license-server', timestamp: new Date().toISOString() });
@@ -67,12 +72,12 @@ export function createLicenseServer(db = null, options = {}) {
     res.status(result.ok ? 200 : 401).json(result);
   });
 
-  // License: Activate key
+  // License: Activate key (logged-in account only)
   app.post('/api/license/activate', (req, res) => {
-    const { email, licenseKey, hwid } = req.body || {};
+    const { licenseKey, hwid } = req.body || {};
     const ip = getClientIp(req);
-    const result = service.activateLicenseKey({ email, licenseKey, hwid, ip });
-    res.status(result.ok ? 200 : 400).json(result);
+    const result = service.activateLicenseKey({ token: getBearerToken(req), licenseKey, hwid, ip });
+    res.status(result.ok ? 200 : (result.error === 'LOGIN_REQUIRED' ? 401 : 400)).json(result);
   });
 
   // License: Reset device (monthly cooldown)
@@ -83,15 +88,21 @@ export function createLicenseServer(db = null, options = {}) {
     res.status(result.ok ? 200 : 400).json(result);
   });
 
-  // Webhook: Toss Payments
-  app.post('/api/webhook/toss', (req, res) => {
+  // Webhook: Toss Payments (payment is re-verified against the Toss API)
+  app.post('/api/webhook/toss', async (req, res) => {
     const ip = getClientIp(req);
-    const result = service.handleTossWebhook(req.body || {}, ip);
-    res.json(result);
+    const result = await service.handleTossWebhook(req.body || {}, ip);
+    res.status(result.ok ? 200 : (result.status === 'NOT_CONFIGURED' ? 503 : 400)).json(result);
   });
 
-  // Webhook/Order Sync: Kmong / Smartstore
+  // Webhook/Order Sync: Kmong / Smartstore / manual issuance (requires LICENSE_ADMIN_SECRET)
   app.post('/api/webhook/order', (req, res) => {
+    if (!service.adminSecret) {
+      return res.status(503).json({ ok: false, error: 'NOT_CONFIGURED', message: 'LICENSE_ADMIN_SECRET이 설정되지 않았습니다.' });
+    }
+    if (!service.isAdminRequest(req.headers['x-admin-secret'])) {
+      return res.status(401).json({ ok: false, error: 'UNAUTHORIZED', message: '인증되지 않은 요청입니다.' });
+    }
     const { provider, orderId, email, months } = req.body || {};
     const ip = getClientIp(req);
     const result = service.handleOrderSync({ provider, orderId, email, months, ip });

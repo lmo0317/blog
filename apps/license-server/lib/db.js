@@ -70,6 +70,29 @@ export class LicenseDatabase {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS vouchers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        days INTEGER NOT NULL,
+        order_id TEXT,
+        channel TEXT,
+        redeemed_by INTEGER,
+        redeemed_at TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS processed_orders (
+        provider TEXT NOT NULL,
+        order_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (provider, order_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS server_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_licenses_user_id ON licenses(user_id);
       CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(license_key);
@@ -171,6 +194,43 @@ export class LicenseDatabase {
       WHERE id = ?
     `);
     stmt.run(now, ip, licenseId);
+  }
+
+  getOrCreateSetting(key, createValue) {
+    const row = this.db.prepare('SELECT value FROM server_settings WHERE key = ?').get(key);
+    if (row) return row.value;
+    const value = createValue();
+    this.db.prepare('INSERT INTO server_settings (key, value) VALUES (?, ?)').run(key, value);
+    return value;
+  }
+
+  // Returns false when this order was already processed (replayed webhook).
+  markOrderProcessed(provider, orderId) {
+    const result = this.db.prepare(`
+      INSERT OR IGNORE INTO processed_orders (provider, order_id, created_at) VALUES (?, ?, ?)
+    `).run(provider, orderId, new Date().toISOString());
+    return Number(result.changes) > 0;
+  }
+
+  createVoucher({ code, days, orderId = null, channel = 'manual' }) {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO vouchers (code, days, order_id, channel, created_at) VALUES (?, ?, ?, ?, ?)
+    `).run(code, days, orderId, channel, now);
+    return this.getVoucherByCode(code);
+  }
+
+  getVoucherByCode(code) {
+    if (!code) return null;
+    return this.db.prepare('SELECT * FROM vouchers WHERE UPPER(code) = UPPER(?)').get(code) || null;
+  }
+
+  // Atomically claims an unredeemed voucher; returns false if it was already used.
+  redeemVoucher(voucherId, userId) {
+    const result = this.db.prepare(`
+      UPDATE vouchers SET redeemed_by = ?, redeemed_at = ? WHERE id = ? AND redeemed_by IS NULL
+    `).run(userId, new Date().toISOString(), voucherId);
+    return Number(result.changes) > 0;
   }
 
   logAudit({ userId = null, action, details = '', ip = '' }) {

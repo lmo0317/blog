@@ -1,7 +1,5 @@
 import crypto from 'node:crypto';
 
-const DEFAULT_SECRET = process.env.LICENSE_SERVER_SECRET || 'neighbor-mate-auth-secret-key-2026-production';
-
 /**
  * Hash password using PBKDF2 with SHA-512
  */
@@ -17,7 +15,9 @@ export function hashPassword(password, existingSalt = null) {
 export function verifyPassword(password, storedHash, salt) {
   if (!password || !storedHash || !salt) return false;
   const { hash } = hashPassword(password, salt);
-  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(storedHash, 'hex'));
+  const actual = Buffer.from(hash, 'hex');
+  const expected = Buffer.from(storedHash, 'hex');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
 /**
@@ -45,7 +45,8 @@ function base64UrlDecode(str) {
 /**
  * Create a simple, robust HMAC-SHA256 signed JWT
  */
-export function createJwt(payload, secret = DEFAULT_SECRET, expiresInSeconds = 86400 * 30) {
+export function createJwt(payload, secret, expiresInSeconds = 86400 * 30) {
+  if (!secret) throw new Error('JWT secret is required');
   const header = { alg: 'HS256', typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
   const fullPayload = {
@@ -72,7 +73,8 @@ export function createJwt(payload, secret = DEFAULT_SECRET, expiresInSeconds = 8
 /**
  * Verify HMAC-SHA256 signed JWT
  */
-export function verifyJwt(token, secret = DEFAULT_SECRET) {
+export function verifyJwt(token, secret) {
+  if (!secret) throw new Error('JWT secret is required');
   if (!token || typeof token !== 'string') {
     return { valid: false, error: 'Token missing' };
   }
@@ -125,4 +127,14 @@ export function generateLicenseKey(prefix = 'MATE') {
  */
 export function sha256(input) {
   return crypto.createHash('sha256').update(String(input)).digest('hex');
+}
+
+/**
+ * Constant-time comparison for shared secrets (webhook / admin headers)
+ */
+export function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false;
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  return aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf);
 }

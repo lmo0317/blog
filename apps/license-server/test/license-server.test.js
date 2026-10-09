@@ -151,48 +151,70 @@ test('1인 1PC HWID lock blocks unauthorized devices and allows cooldown reset',
   assert.strictEqual(instantReset.error, 'DEVICE_RESET_COOLDOWN');
 });
 
-test('License activation and Toss webhook extends expiry by 30 days', () => {
+test('Made-up license keys are rejected and issued keys redeem only once', () => {
   const db = new LicenseDatabase(':memory:');
   const service = new LicenseService(db, { defaultTrialDays: 1 });
 
-  service.register({
+  const reg = service.register({
     email: 'subscriber@example.com',
     password: 'password123',
     hwid: 'pc-subscriber'
   });
 
-  // Activate license key
-  const activateRes = service.activateLicenseKey({
-    email: 'subscriber@example.com',
-    licenseKey: 'MATE-9999-8888-7777',
-    hwid: 'pc-subscriber'
-  });
-  assert.strictEqual(activateRes.ok, true);
-  assert.strictEqual(activateRes.license.daysLeft >= 30, true);
+  const fakeKey = service.activateLicenseKey({ token: reg.token, licenseKey: 'MATE-9999-8888-7777' });
+  assert.strictEqual(fakeKey.ok, false);
+  assert.strictEqual(fakeKey.error, 'INVALID_KEY');
 
-  // Toss webhook event
-  const tossRes = service.handleTossWebhook({
-    eventType: 'PAYMENT_STATUS_CHANGED',
-    data: {
-      orderId: 'toss_order_12345',
-      status: 'DONE',
-      totalAmount: 9900,
-      customerEmail: 'subscriber@example.com'
-    }
+  const fakeRegister = service.register({ email: 'faker@example.com', password: 'password123', licenseKey: 'MATE-1234-1234-1234' });
+  assert.strictEqual(fakeRegister.ok, false);
+  assert.strictEqual(db.getUserByEmail('faker@example.com'), null);
+
+  const voucher = service.issueVoucher({ days: 30 });
+  const noLogin = service.activateLicenseKey({ token: null, licenseKey: voucher.code });
+  assert.strictEqual(noLogin.error, 'LOGIN_REQUIRED');
+
+  const activated = service.activateLicenseKey({ token: reg.token, licenseKey: voucher.code, hwid: 'pc-subscriber' });
+  assert.strictEqual(activated.ok, true);
+  assert.strictEqual(activated.license.daysLeft >= 30, true);
+  assert.strictEqual(activated.license.planType, 'monthly_paid');
+
+  const reused = service.activateLicenseKey({ token: reg.token, licenseKey: voucher.code, hwid: 'pc-subscriber' });
+  assert.strictEqual(reused.ok, false);
+  assert.strictEqual(reused.error, 'KEY_ALREADY_USED');
+});
+
+test('Toss webhook only extends after the Toss API confirms the payment, once per order', async () => {
+  const db = new LicenseDatabase(':memory:');
+  const payments = {
+    toss_order_12345: { orderId: 'toss_order_12345', status: 'DONE', totalAmount: 9900, customerEmail: 'subscriber@example.com' }
+  };
+  const service = new LicenseService(db, {
+    defaultTrialDays: 1,
+    tossSecretKey: 'test_sk',
+    tossFetchPayment: async (orderId) => payments[orderId] || null
   });
+  service.register({ email: 'subscriber@example.com', password: 'password123', hwid: 'pc-subscriber' });
+
+  const forged = await service.handleTossWebhook({ eventType: 'PAYMENT_STATUS_CHANGED', data: { orderId: 'forged-1', status: 'DONE', customerEmail: 'subscriber@example.com' } });
+  assert.strictEqual(forged.ok, false);
+  assert.strictEqual(forged.status, 'UNVERIFIED');
+
+  const tossRes = await service.handleTossWebhook({ eventType: 'PAYMENT_STATUS_CHANGED', data: { orderId: 'toss_order_12345', status: 'DONE' } });
   assert.strictEqual(tossRes.ok, true);
   assert.strictEqual(tossRes.status, 'PROCESSED');
 
-  const afterToss = service.login({
-    email: 'subscriber@example.com',
-    password: 'password123',
-    hwid: 'pc-subscriber'
-  });
-  // 30 days trial/activation + 30 days toss webhook = ~60 days
-  assert.strictEqual(afterToss.license.daysLeft >= 59, true);
+  const replay = await service.handleTossWebhook({ eventType: 'PAYMENT_STATUS_CHANGED', data: { orderId: 'toss_order_12345', status: 'DONE' } });
+  assert.strictEqual(replay.status, 'DUPLICATE');
+
+  const afterToss = service.login({ email: 'subscriber@example.com', password: 'password123', hwid: 'pc-subscriber' });
+  assert.strictEqual(afterToss.license.daysLeft >= 30 && afterToss.license.daysLeft <= 31, true);
+
+  const unconfigured = new LicenseService(new LicenseDatabase(':memory:'), { tossSecretKey: '' });
+  const noKey = await unconfigured.handleTossWebhook({ data: { orderId: 'x', status: 'DONE' } });
+  assert.strictEqual(noKey.status, 'NOT_CONFIGURED');
 });
 
-test('Order sync handles Kmong and SmartStore purchases', () => {
+test('Order sync extends known buyers and issues a one-time key for new buyers', () => {
   const db = new LicenseDatabase(':memory:');
   const service = new LicenseService(db);
 
@@ -203,15 +225,22 @@ test('Order sync handles Kmong and SmartStore purchases', () => {
     months: 2
   });
   assert.strictEqual(syncRes.ok, true);
-  assert.strictEqual(syncRes.license.daysLeft >= 59, true);
+  assert.strictEqual(syncRes.status, 'VOUCHER_ISSUED');
+  assert.match(syncRes.licenseKey, /^MATE-/);
 
-  const loginBuyer = service.login({
-    email: 'kmong-buyer@example.com',
-    password: 'welcome1234!',
-    hwid: 'buyer-laptop'
-  });
-  assert.strictEqual(loginBuyer.ok, true);
-  assert.strictEqual(loginBuyer.license.daysLeft >= 59, true);
+  const duplicate = service.handleOrderSync({ provider: 'kmong', orderId: 'KMONG-ORDER-99', email: 'kmong-buyer@example.com', months: 2 });
+  assert.strictEqual(duplicate.error, 'DUPLICATE_ORDER');
+
+  const defaultPassword = service.login({ email: 'kmong-buyer@example.com', password: 'welcome1234!' });
+  assert.strictEqual(defaultPassword.ok, false);
+
+  const reg = service.register({ email: 'kmong-buyer@example.com', password: 'password123', licenseKey: syncRes.licenseKey, hwid: 'buyer-laptop' });
+  assert.strictEqual(reg.ok, true);
+  assert.strictEqual(reg.license.daysLeft >= 59, true);
+
+  const renew = service.handleOrderSync({ provider: 'kmong', orderId: 'KMONG-ORDER-100', email: 'kmong-buyer@example.com', months: 1 });
+  assert.strictEqual(renew.status, 'PROCESSED');
+  assert.strictEqual(renew.license.daysLeft >= 89, true);
 });
 
 test('Heartbeat pings session and returns valid status', () => {
@@ -236,7 +265,7 @@ test('Heartbeat pings session and returns valid status', () => {
 
 test('Express API server routes respond properly', async () => {
   const db = new LicenseDatabase(':memory:');
-  const { app } = createLicenseServer(db);
+  const { app } = createLicenseServer(db, { adminSecret: '' });
 
   const server = app.listen(0);
   const port = server.address().port;
@@ -288,8 +317,50 @@ test('Express API server routes respond properly', async () => {
     assert.strictEqual(hbJson.ok, true);
     assert.strictEqual(hbJson.valid, true);
 
+    // 5. Order webhook is closed when no admin secret is configured
+    const orderRes = await fetch(`${baseUrl}/api/webhook/order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId: 'X-1', email: 'api-user@example.com', months: 12 })
+    });
+    assert.strictEqual(orderRes.status, 503);
+
   } finally {
     server.close();
     db.close();
   }
+});
+
+test('Order webhook requires the admin secret header', async () => {
+  const db = new LicenseDatabase(':memory:');
+  const { app } = createLicenseServer(db, { adminSecret: 'admin-test-secret' });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const post = (headers) => fetch(`${baseUrl}/api/webhook/order`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ provider: 'smartstore', orderId: 'SS-1', months: 1 })
+  });
+
+  try {
+    assert.strictEqual((await post({})).status, 401);
+    assert.strictEqual((await post({ 'x-admin-secret': 'wrong' })).status, 401);
+    const ok = await post({ 'x-admin-secret': 'admin-test-secret' });
+    assert.strictEqual(ok.status, 200);
+    assert.strictEqual((await ok.json()).status, 'VOUCHER_ISSUED');
+  } finally {
+    server.close();
+    db.close();
+  }
+});
+
+test('JWT secret is generated per database instead of a shared default', () => {
+  const a = new LicenseService(new LicenseDatabase(':memory:'));
+  const b = new LicenseService(new LicenseDatabase(':memory:'));
+  if (!process.env.LICENSE_SERVER_SECRET) {
+    assert.notStrictEqual(a.jwtSecret, b.jwtSecret);
+    assert.ok(a.jwtSecret.length >= 64);
+  }
+  const token = a.register({ email: 'a@example.com', password: 'password123' }).token;
+  assert.strictEqual(b.verifyLicense({ token }).error, 'INVALID_TOKEN');
 });

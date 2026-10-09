@@ -3,15 +3,81 @@ import {
   verifyPassword,
   createJwt,
   verifyJwt,
-  generateLicenseKey
+  generateLicenseKey,
+  safeEqual
 } from './crypto-utils.js';
+import crypto from 'node:crypto';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TOSS_API_BASE = 'https://api.tosspayments.com/v1';
+
+// Asks Toss for the real payment record so a forged webhook body cannot grant days.
+export async function fetchTossPayment(orderId, secretKey, fetchFn = globalThis.fetch) {
+  const auth = Buffer.from(`${secretKey}:`).toString('base64');
+  const res = await fetchFn(`${TOSS_API_BASE}/payments/orders/${encodeURIComponent(orderId)}`, {
+    headers: { Authorization: `Basic ${auth}` }
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
 
 export class LicenseService {
   constructor(db, options = {}) {
     this.db = db;
-    this.jwtSecret = options.jwtSecret || process.env.LICENSE_SERVER_SECRET || 'neighbor-mate-auth-secret-key-2026';
+    // No built-in fallback: an env secret, or a random one generated once per database.
+    this.jwtSecret = options.jwtSecret
+      || process.env.LICENSE_SERVER_SECRET
+      || db.getOrCreateSetting('jwt_secret', () => crypto.randomBytes(48).toString('hex'));
     this.defaultTrialDays = options.defaultTrialDays ?? 3;
     this.deviceResetCooldownDays = options.deviceResetCooldownDays ?? 30;
+    this.tossSecretKey = options.tossSecretKey ?? process.env.TOSS_SECRET_KEY ?? '';
+    this.tossFetchPayment = options.tossFetchPayment
+      || ((orderId) => fetchTossPayment(orderId, this.tossSecretKey));
+    this.monthlyPrice = options.monthlyPrice ?? 9900;
+    this.adminSecret = options.adminSecret ?? process.env.LICENSE_ADMIN_SECRET ?? '';
+  }
+
+  isAdminRequest(secret) {
+    return safeEqual(secret, this.adminSecret);
+  }
+
+  // Applies paid days to an account: extends the latest license or creates one.
+  grantDays(userId, days, { orderId = null, channel = 'direct' } = {}) {
+    const license = this.db.getLicenseByUserId(userId);
+    if (license) {
+      const extended = this.db.extendLicense(license.id, days);
+      if (extended.plan_type === 'free_trial') {
+        this.db.db.prepare('UPDATE licenses SET plan_type = ? WHERE id = ?').run('monthly_paid', extended.id);
+        return this.db.getLicenseById(extended.id);
+      }
+      return extended;
+    }
+    return this.db.createLicense({
+      userId,
+      licenseKey: generateLicenseKey('MATE'),
+      planType: 'monthly_paid',
+      expiresAt: new Date(Date.now() + days * DAY_MS).toISOString(),
+      orderId,
+      channel
+    });
+  }
+
+  issueVoucher({ days = 30, orderId = null, channel = 'manual' } = {}) {
+    let code = generateLicenseKey('MATE');
+    while (this.db.getVoucherByCode(code)) code = generateLicenseKey('MATE');
+    return this.db.createVoucher({ code, days, orderId, channel });
+  }
+
+  // Checks a purchased key without consuming it.
+  findRedeemableVoucher(licenseKey) {
+    const voucher = this.db.getVoucherByCode(String(licenseKey || '').trim());
+    if (!voucher) {
+      return { ok: false, error: 'INVALID_KEY', message: '유효하지 않은 라이선스 키입니다. 구매 시 받은 키를 정확히 입력해주세요.' };
+    }
+    if (voucher.redeemed_by) {
+      return { ok: false, error: 'KEY_ALREADY_USED', message: '이미 사용된 라이선스 키입니다.' };
+    }
+    return { ok: true, voucher };
   }
 
   calcDaysLeft(expiresAtStr) {
@@ -33,13 +99,11 @@ export class LicenseService {
       return { ok: false, error: 'EMAIL_ALREADY_EXISTS', message: '이미 등록된 이메일 계정입니다.' };
     }
 
-    // Check licenseKey if supplied
-    let existingLicense = null;
+    let voucher = null;
     if (licenseKey) {
-      existingLicense = this.db.getLicenseByKey(licenseKey);
-      if (existingLicense && existingLicense.user_id) {
-        return { ok: false, error: 'LICENSE_ALREADY_CLAIMED', message: '이미 다른 사용자가 등록한 라이선스 키입니다.' };
-      }
+      const found = this.findRedeemableVoucher(licenseKey);
+      if (!found.ok) return found;
+      voucher = found.voucher;
     }
 
     const { hash, salt } = hashPassword(password);
@@ -52,31 +116,15 @@ export class LicenseService {
     });
 
     let license;
-    const now = Date.now();
-    if (existingLicense) {
-      // Re-bind orphaned license to this new user
-      const stmt = this.db.db.prepare('UPDATE licenses SET user_id = ? WHERE id = ?');
-      stmt.run(user.id, existingLicense.id);
-      license = this.db.getLicenseById(existingLicense.id);
-    } else if (licenseKey) {
-      // Initial 30-day license for given key
-      const expiresAt = new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
-      license = this.db.createLicense({
-        userId: user.id,
-        licenseKey,
-        planType: 'monthly_paid',
-        expiresAt,
-        channel: 'direct_key'
-      });
+    if (voucher && this.db.redeemVoucher(voucher.id, user.id)) {
+      license = this.grantDays(user.id, voucher.days, { orderId: voucher.order_id, channel: voucher.channel });
     } else {
       // Free trial license (e.g. 3 days)
-      const expiresAt = new Date(now + this.defaultTrialDays * 24 * 60 * 60 * 1000).toISOString();
-      const generatedKey = generateLicenseKey('MATE');
       license = this.db.createLicense({
         userId: user.id,
-        licenseKey: generatedKey,
+        licenseKey: generateLicenseKey('MATE'),
         planType: 'free_trial',
-        expiresAt,
+        expiresAt: new Date(Date.now() + this.defaultTrialDays * DAY_MS).toISOString(),
         channel: 'trial'
       });
     }
@@ -249,61 +297,39 @@ export class LicenseService {
     };
   }
 
-  activateLicenseKey({ email, licenseKey, hwid = null, ip = '' }) {
+  activateLicenseKey({ token, licenseKey, hwid = null, ip = '' }) {
     if (!licenseKey) {
       return { ok: false, error: 'MISSING_KEY', message: '라이선스 키를 입력해주세요.' };
     }
 
-    const cleanKey = licenseKey.trim().toUpperCase();
-    let user = email ? this.db.getUserByEmail(email) : null;
-
-    let license = this.db.getLicenseByKey(cleanKey);
-    if (license && license.user_id) {
-      // Key belongs to a user
-      if (user && license.user_id !== user.id) {
-        return { ok: false, error: 'KEY_ALREADY_USED', message: '이미 다른 사용자 계정에 귀속된 라이선스 키입니다.' };
-      }
-      user = user || this.db.getUserById(license.user_id);
-      // Extend existing license by 30 days
-      license = this.db.extendLicense(license.id, 30);
-    } else if (license) {
-      // Key exists but has no user yet
-      if (!user) {
-        return { ok: false, error: 'USER_REQUIRED', message: '라이선스를 귀속할 사용자 계정이 필요합니다.' };
-      }
-      const stmt = this.db.db.prepare('UPDATE licenses SET user_id = ? WHERE id = ?');
-      stmt.run(user.id, license.id);
-      license = this.db.extendLicense(license.id, 30);
-    } else {
-      // Key is new, format check
-      if (!cleanKey.startsWith('MATE-') || cleanKey.length < 10) {
-        return { ok: false, error: 'INVALID_KEY_FORMAT', message: '올바른 형식의 라이선스 키가 아닙니다. (예: MATE-XXXX-XXXX-XXXX)' };
-      }
-      if (!user) {
-        return { ok: false, error: 'USER_REQUIRED', message: '라이선스를 활성화할 계정으로 로그인해주세요.' };
-      }
-      // Create new active 30-day license
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      license = this.db.createLicense({
-        userId: user.id,
-        licenseKey: cleanKey,
-        planType: 'monthly_paid',
-        expiresAt,
-        channel: 'key_activation'
-      });
+    const jwtResult = verifyJwt(token, this.jwtSecret);
+    const user = jwtResult.valid ? this.db.getUserById(jwtResult.payload.userId) : null;
+    if (!user) {
+      return { ok: false, error: 'LOGIN_REQUIRED', message: '라이선스를 활성화할 계정으로 먼저 로그인해주세요.' };
     }
+    if (hwid && user.hwid && user.hwid !== hwid) {
+      return { ok: false, error: 'UNAUTHORIZED_DEVICE', message: '등록된 PC가 아닙니다.' };
+    }
+
+    const found = this.findRedeemableVoucher(licenseKey);
+    if (!found.ok) return found;
+    const { voucher } = found;
+    if (!this.db.redeemVoucher(voucher.id, user.id)) {
+      return { ok: false, error: 'KEY_ALREADY_USED', message: '이미 사용된 라이선스 키입니다.' };
+    }
+    const license = this.grantDays(user.id, voucher.days, { orderId: voucher.order_id, channel: voucher.channel });
 
     this.db.logAudit({
       userId: user.id,
       action: 'ACTIVATE_KEY',
-      details: `Key=${cleanKey}, newExpiresAt=${license.expires_at}`,
+      details: `Key=${voucher.code}, +${voucher.days}d, newExpiresAt=${license.expires_at}`,
       ip
     });
 
     const daysLeft = this.calcDaysLeft(license.expires_at);
     return {
       ok: true,
-      message: '정품 라이선스가 성공적으로 활성화되었습니다! (+30일 연장)',
+      message: `정품 라이선스가 성공적으로 활성화되었습니다! (+${voucher.days}일 연장)`,
       license: {
         licenseKey: license.license_key,
         planType: license.plan_type,
@@ -357,139 +383,110 @@ export class LicenseService {
     };
   }
 
-  handleTossWebhook(payload, ip = '') {
+  async handleTossWebhook(payload, ip = '') {
     // Toss Payments Webhook payload
-    // { eventType: 'PAYMENT_STATUS_CHANGED', data: { orderId, status: 'DONE', totalAmount: 9900, customerEmail, ... } }
+    // { eventType: 'PAYMENT_STATUS_CHANGED', data: { orderId, status: 'DONE', ... } }
+    // The body is only a hint: the payment is re-read from the Toss API with our secret key.
     const eventType = payload.eventType || payload.status || 'UNKNOWN';
     const data = payload.data || payload;
-    const orderId = data.orderId || data.paymentKey || '';
-    const status = data.status || '';
-    const email = data.customerEmail || data.email || '';
-    const amount = Number(data.totalAmount || data.amount || 0);
+    const orderId = String(data.orderId || '').trim();
 
     this.db.logWebhook({
       provider: 'toss',
       eventType,
       orderId,
-      amount,
+      amount: Number(data.totalAmount || data.amount || 0),
       rawPayload: payload
     });
 
-    if (status !== 'DONE' && eventType !== 'PAYMENT_CONFIRMED') {
-      return { ok: true, status: 'IGNORED', message: `Status is not DONE (${status})` };
+    if (!this.tossSecretKey) {
+      return { ok: false, status: 'NOT_CONFIGURED', message: 'TOSS_SECRET_KEY가 설정되지 않아 결제를 확인할 수 없습니다.' };
+    }
+    if (!orderId) {
+      return { ok: false, status: 'INVALID', message: 'orderId가 없습니다.' };
     }
 
-    let user = email ? this.db.getUserByEmail(email) : null;
-    let license = null;
+    let payment = null;
+    try {
+      payment = await this.tossFetchPayment(orderId);
+    } catch {
+      payment = null;
+    }
+    if (!payment || payment.orderId !== orderId) {
+      return { ok: false, status: 'UNVERIFIED', message: '토스 결제 내역을 확인할 수 없습니다.' };
+    }
+    if (payment.status !== 'DONE') {
+      return { ok: true, status: 'IGNORED', message: `Status is not DONE (${payment.status})` };
+    }
 
+    const amount = Number(payment.totalAmount || 0);
+    const months = Math.floor(amount / this.monthlyPrice);
+    if (months < 1) {
+      return { ok: false, status: 'AMOUNT_MISMATCH', message: `결제 금액이 이용권 가격보다 적습니다. (${amount}원)` };
+    }
+    if (!this.db.markOrderProcessed('toss', orderId)) {
+      return { ok: true, status: 'DUPLICATE', orderId, message: '이미 처리된 주문입니다.' };
+    }
+
+    const email = payment.customerEmail || payment.metadata?.email || data.customerEmail || data.email || '';
+    return this.applyPurchase({ provider: 'toss', orderId, email, days: months * 30 });
+  }
+
+  // Paid days go straight onto an existing account; otherwise a one-time key is issued
+  // for the buyer to enter at sign-up.
+  applyPurchase({ provider, orderId, email, days }) {
+    const user = email ? this.db.getUserByEmail(email) : null;
     if (user) {
-      license = this.db.getLicenseByUserId(user.id);
-      if (license) {
-        license = this.db.extendLicense(license.id, 30);
-      } else {
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        license = this.db.createLicense({
-          userId: user.id,
-          licenseKey: generateLicenseKey('MATE'),
-          planType: 'monthly_paid',
-          expiresAt,
-          orderId,
-          channel: 'toss'
-        });
-      }
-    } else {
-      // If user not registered yet, create a pre-generated license with orderId
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const generatedKey = generateLicenseKey('MATE');
-      // Create user placeholder or unassigned license
-      const tempUser = this.db.createUser({
-        email: email || `guest-${orderId}@neighbor-mate.local`,
-        password_hash: 'PENDING_SETUP',
-        password_salt: 'PENDING',
-        name: '구독 구매자'
-      });
-      license = this.db.createLicense({
-        userId: tempUser.id,
-        licenseKey: generatedKey,
-        planType: 'monthly_paid',
-        expiresAt,
+      const license = this.grantDays(user.id, days, { orderId, channel: provider });
+      this.db.logAudit({ userId: user.id, action: 'PURCHASE_APPLIED', details: `${provider} ${orderId} +${days}d` });
+      const daysLeft = this.calcDaysLeft(license.expires_at);
+      return {
+        ok: true,
+        status: 'PROCESSED',
         orderId,
-        channel: 'toss'
-      });
+        message: `구독 +${days}일이 계정에 반영되었습니다.`,
+        user: { id: user.id, email: user.email },
+        expiresAt: license.expires_at,
+        license: {
+          licenseKey: license.license_key,
+          planType: license.plan_type,
+          expiresAt: license.expires_at,
+          daysLeft
+        }
+      };
     }
 
+    const voucher = this.issueVoucher({ days, orderId, channel: provider });
     return {
       ok: true,
-      status: 'PROCESSED',
+      status: 'VOUCHER_ISSUED',
       orderId,
-      expiresAt: license?.expires_at,
-      licenseKey: license?.license_key
+      message: `가입된 계정이 없어 ${days}일 이용권 키를 발급했습니다. 구매자에게 키를 전달해주세요.`,
+      licenseKey: voucher.code,
+      days
     };
   }
 
-  handleOrderSync({ provider = 'manual', orderId, email, months = 1, ip = '' }) {
-    if (!orderId || !email) {
-      return { ok: false, error: 'MISSING_PARAMS', message: '주문번호와 구매자 이메일이 필요합니다.' };
+  handleOrderSync({ provider = 'manual', orderId, email = '', months = 1, ip = '' }) {
+    if (!orderId) {
+      return { ok: false, error: 'MISSING_PARAMS', message: '주문번호가 필요합니다.' };
     }
-
-    let user = this.db.getUserByEmail(email);
-    const addedDays = months * 30;
-
-    let license;
-    if (user) {
-      license = this.db.getLicenseByUserId(user.id);
-      if (license) {
-        license = this.db.extendLicense(license.id, addedDays);
-      } else {
-        const expiresAt = new Date(Date.now() + addedDays * 24 * 60 * 60 * 1000).toISOString();
-        license = this.db.createLicense({
-          userId: user.id,
-          licenseKey: generateLicenseKey('MATE'),
-          planType: 'monthly_paid',
-          expiresAt,
-          orderId,
-          channel: provider
-        });
-      }
-    } else {
-      const { hash, salt } = hashPassword('welcome1234!');
-      user = this.db.createUser({
-        email,
-        password_hash: hash,
-        password_salt: salt,
-        name: email.split('@')[0]
-      });
-      const expiresAt = new Date(Date.now() + addedDays * 24 * 60 * 60 * 1000).toISOString();
-      license = this.db.createLicense({
-        userId: user.id,
-        licenseKey: generateLicenseKey('MATE'),
-        planType: 'monthly_paid',
-        expiresAt,
-        orderId,
-        channel: provider
-      });
+    const monthCount = Math.trunc(Number(months));
+    if (!Number.isFinite(monthCount) || monthCount < 1 || monthCount > 24) {
+      return { ok: false, error: 'INVALID_MONTHS', message: '개월 수는 1~24 사이여야 합니다.' };
+    }
+    if (!this.db.markOrderProcessed(provider, String(orderId))) {
+      return { ok: false, error: 'DUPLICATE_ORDER', message: '이미 처리된 주문번호입니다.' };
     }
 
     this.db.logWebhook({
       provider,
       eventType: 'ORDER_SYNC',
       orderId,
-      amount: 9900 * months,
-      rawPayload: { provider, orderId, email, months }
+      amount: this.monthlyPrice * monthCount,
+      rawPayload: { provider, orderId, email, months: monthCount, ip }
     });
 
-    const daysLeft = this.calcDaysLeft(license.expires_at);
-
-    return {
-      ok: true,
-      message: `${months}개월 (+${addedDays}일) 구독이 자동 반영되었습니다.`,
-      user: { id: user.id, email: user.email },
-      license: {
-        licenseKey: license.license_key,
-        planType: license.plan_type,
-        expiresAt: license.expires_at,
-        daysLeft
-      }
-    };
+    return this.applyPurchase({ provider, orderId: String(orderId), email, days: monthCount * 30 });
   }
 }
