@@ -1893,6 +1893,7 @@ function initEngagementAutomation() {
           keyword, targetCount, doLike, doComment, doNeighbor, neighborMessage, tone,
           targetSource, seedBlogs, targetIds, ...commentStyle,
           neighborMessageMode: $('#engAiNeighborMessage')?.checked === false ? 'fixed' : 'ai',
+          neighborActiveOnly: $('#engNeighborActiveOnly')?.checked !== false,
           minDelay, maxDelay, dailyNeighborLimit, sessionPosts,
           sessionBreakMinSeconds: breakMinMinutes * 60,
           sessionBreakMaxSeconds: breakMaxMinutes * 60
@@ -3468,6 +3469,8 @@ function initNeighborCleaner() {
       const targetSubtab = btn.dataset.subtab;
       $('#subtabReceivedCleaner')?.classList.toggle('hidden', targetSubtab !== 'received-cleaner');
       $('#subtabSentCleaner')?.classList.toggle('hidden', targetSubtab !== 'sent-cleaner');
+      $('#subtabNeighborHealth')?.classList.toggle('hidden', targetSubtab !== 'neighbor-health');
+      if (targetSubtab === 'neighbor-health') refreshNeighborHealth();
 
     });
   });
@@ -5222,7 +5225,7 @@ function initGrowthOptions() {
     }
   });
 
-  ['engTargetSource', 'engSeedBlogs', 'engTargetIds', 'engAiNeighborMessage', 'commentReturnVisit', 'commentReturnVisitSecret'].forEach(rememberField);
+  ['engTargetSource', 'engSeedBlogs', 'engTargetIds', 'engAiNeighborMessage', 'engNeighborActiveOnly', 'commentReturnVisit', 'commentReturnVisitSecret'].forEach(rememberField);
   const savedSource = $('#engTargetSource')?.value;
   if (savedSource) setOptionChipValue('engTargetSourceChips', savedSource);
   syncTargetSource();
@@ -5275,6 +5278,8 @@ function readAutopilotSettings() {
     returnVisitPerCycle: Number($('#apReturnVisitPerCycle')?.value) || 10,
     acceptMode: $('#apAcceptMode')?.value || 'screen',
     cancelSentDays: Number($('#apCancelSentDays')?.value ?? 14),
+    pruneDormant: $('#apPruneDormant')?.checked === true,
+    pruneDormantDays: Number($('#apPruneDormantDays')?.value) || 60,
     steps: Object.fromEntries(Object.entries(AP_STEP_INPUTS).map(([id, selector]) => [id, $(selector)?.checked !== false]))
   };
 }
@@ -5289,6 +5294,8 @@ function applyAutopilotSettings(settings) {
   setOptionChipValue('apIntervalChips', String(settings.intervalMinutes));
   setOptionChipValue('apAcceptModeChips', settings.acceptMode || 'screen');
   setOptionChipValue('apCancelSentChips', String(settings.cancelSentDays ?? 14));
+  setOptionChipValue('apPruneDaysChips', String(settings.pruneDormantDays ?? 60));
+  setChecked('#apPruneDormant', settings.pruneDormant);
   if ($('#apActiveStart')) $('#apActiveStart').value = String(settings.activeStartHour);
   if ($('#apActiveEnd')) $('#apActiveEnd').value = String(settings.activeEndHour);
   setChecked('#apDoLike', settings.doLike);
@@ -5303,6 +5310,7 @@ function applyAutopilotSettings(settings) {
 
 function syncAutopilotSubPanels() {
   $('#apNeighborPanel')?.classList.toggle('hidden', !$('#apStepAcceptNeighbors')?.checked);
+  $('#apPruneDaysGroup')?.classList.toggle('hidden', !$('#apPruneDormant')?.checked);
   $('#apEngagePanel')?.classList.toggle('hidden', !$('#apStepEngage')?.checked);
   $('#apFeedPanel')?.classList.toggle('hidden', !$('#apStepFeed')?.checked);
   $('#apReturnVisitPanel')?.classList.toggle('hidden', !$('#apStepReturnVisit')?.checked);
@@ -5464,3 +5472,135 @@ function initAutopilot() {
 }
 
 initAutopilot();
+
+// ---------------------------------------------------------------------------
+// 이웃 건강도: grade my neighbors by recent posts and prune the dormant ones I pick
+// ---------------------------------------------------------------------------
+let nhStatus = null;
+let nhPollTimer = null;
+const nhSelected = new Set();
+let nhKnownCandidates = '';
+
+function nhRelationLabel(relation) {
+  return relation === 'mutual' ? '서로이웃' : relation === 'oneway' ? '이웃(일방)' : '열린이웃';
+}
+
+function renderNeighborHealth(status) {
+  nhStatus = status;
+  const running = status.state === 'running';
+  const summary = status.summary;
+
+  const badge = $('#nhStatusBadge');
+  if (badge) {
+    badge.className = `status ${running ? 'running' : summary ? 'online' : 'ready'}`;
+    badge.innerHTML = `<i></i> ${running ? (status.progress?.phase === 'prune' ? '정리 중' : '분석 중') : summary ? '분석 완료' : '분석 전'}`;
+  }
+  $('#nhScanBtn').disabled = running;
+  $('#nhStopBtn')?.classList.toggle('hidden', !running);
+  const progress = status.progress || {};
+  $('#nhProgressText').textContent = running
+    ? (progress.phase === 'prune' ? `이웃 정리 중… ${progress.done || 0} / ${progress.total || 0}명` : `이웃 목록 읽는 중… ${progress.done || 0} / ${progress.total || '?'}페이지 (${progress.count || 0}명)`)
+    : '';
+
+  $('#nhStatTotal').textContent = summary ? summary.total.toLocaleString() : '-';
+  $('#nhStatActive').textContent = summary ? summary.active.toLocaleString() : '-';
+  $('#nhStatSlow').textContent = summary ? summary.slow.toLocaleString() : '-';
+  $('#nhStatDormant').textContent = summary ? summary.dormant.toLocaleString() : '-';
+  $('#nhMetaText').textContent = summary
+    ? `${new Date(status.scannedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 분석 · 서로이웃 ${summary.mutual.toLocaleString()}명 · 일방 이웃 ${summary.oneway.toLocaleString()}명 · 소통 이웃 ${summary.protected.toLocaleString()}명 보호`
+    : '아직 분석하지 않았습니다.';
+  $('#nhLimitBadge').textContent = `오늘 ${status.prunedToday || 0} / ${status.dailyLimit || 30}명`;
+
+  const candidates = status.candidates || [];
+  const signature = candidates.map((n) => n.buddyBlogNo).join(',');
+  if (signature !== nhKnownCandidates) {
+    // New scan result: everything is selected by default.
+    nhKnownCandidates = signature;
+    nhSelected.clear();
+    candidates.forEach((n) => nhSelected.add(n.buddyBlogNo));
+  }
+  const list = $('#nhCandidateList');
+  if (list) {
+    if (!summary) {
+      list.innerHTML = `<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>이웃 상태를 먼저 분석하세요</strong><p>분석이 끝나면 오래 활동이 없는 이웃이 여기에 나타납니다.</p></div>`;
+    } else if (!candidates.length) {
+      list.innerHTML = `<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>정리할 이웃이 없습니다 🎉</strong><p>지금 기준으로 휴면 이웃이 없습니다.</p></div>`;
+    } else {
+      list.innerHTML = candidates.map((n) => `
+        <label class="nh-candidate${nhSelected.has(n.buddyBlogNo) ? ' selected' : ''}">
+          <input type="checkbox" class="nh-candidate-check" value="${escapeHtml(n.buddyBlogNo)}"${nhSelected.has(n.buddyBlogNo) ? ' checked' : ''}${running ? ' disabled' : ''}>
+          <div class="nh-candidate-main">
+            <div class="nh-candidate-title"><strong>${escapeHtml(n.nickname || n.blogId)}</strong><a href="https://blog.naver.com/${encodeURIComponent(n.blogId)}" target="_blank" rel="noopener">@${escapeHtml(n.blogId)}</a></div>
+            <div class="nh-candidate-meta">
+              <span class="nh-badge ${n.relation}">${nhRelationLabel(n.relation)}</span>
+              <span class="nh-badge dormant">${escapeHtml(n.pruneReason)}</span>
+              <span>최근 글 ${escapeHtml(n.lastPostText || '없음')} · 추가 ${escapeHtml(n.addedText || '-')}</span>
+            </div>
+          </div>
+        </label>`).join('');
+    }
+  }
+  const selectedCount = candidates.filter((n) => nhSelected.has(n.buddyBlogNo)).length;
+  const remaining = Math.max(0, (status.dailyLimit || 30) - (status.prunedToday || 0));
+  $('#nhSelectedCount').textContent = `${selectedCount}명 선택${selectedCount > remaining ? ` (오늘은 ${remaining}명까지)` : ''}`;
+  $('#nhSelectAll').checked = candidates.length > 0 && selectedCount === candidates.length;
+  const pruneBtn = $('#nhPruneBtn');
+  if (pruneBtn) pruneBtn.disabled = running || !selectedCount || !remaining;
+
+  const terminal = $('#nhTerminalLogs');
+  if (terminal && status.logs?.length) {
+    terminal.innerHTML = status.logs.slice(0, 60).map((entry) => `<div class="terminal-line ${entry.type || 'info'}">[${escapeHtml(entry.time)}] ${escapeHtml(entry.message)}</div>`).join('');
+  }
+
+  if (running && !nhPollTimer) nhPollTimer = setInterval(refreshNeighborHealth, 2000);
+  if (!running && nhPollTimer) { clearInterval(nhPollTimer); nhPollTimer = null; }
+}
+
+async function refreshNeighborHealth() {
+  try { renderNeighborHealth(await api('api/neighbor-health/status')); } catch {}
+}
+
+function initNeighborHealth() {
+  $('#nhScanBtn')?.addEventListener('click', async () => {
+    if (!state.connected) return toast('⚠️ 네이버 계정을 먼저 연결해주세요.', true);
+    try {
+      renderNeighborHealth(await api('api/neighbor-health/scan', {
+        method: 'POST',
+        body: JSON.stringify({ dormantDays: Number($('#nhDormantDays')?.value) || 60, includeOneway: $('#nhIncludeOneway')?.checked === true })
+      }));
+      toast('🔍 내 이웃 목록을 읽고 있습니다. 이웃이 많으면 몇 분 걸립니다.');
+    } catch (error) { toast(error.message, true); }
+  });
+  $('#nhStopBtn')?.addEventListener('click', async () => {
+    try { renderNeighborHealth(await api('api/neighbor-health/stop', { method: 'POST' })); } catch (error) { toast(error.message, true); }
+  });
+  $('#nhCandidateList')?.addEventListener('change', (event) => {
+    const box = event.target.closest('.nh-candidate-check');
+    if (!box) return;
+    if (box.checked) nhSelected.add(box.value); else nhSelected.delete(box.value);
+    box.closest('.nh-candidate')?.classList.toggle('selected', box.checked);
+    if (nhStatus) renderNeighborHealth(nhStatus);
+  });
+  $('#nhSelectAll')?.addEventListener('change', (event) => {
+    nhSelected.clear();
+    if (event.target.checked) (nhStatus?.candidates || []).forEach((n) => nhSelected.add(n.buddyBlogNo));
+    if (nhStatus) renderNeighborHealth(nhStatus);
+  });
+  $('#nhPruneBtn')?.addEventListener('click', () => {
+    const remaining = Math.max(0, (nhStatus?.dailyLimit || 30) - (nhStatus?.prunedToday || 0));
+    const count = Math.min(nhSelected.size, remaining);
+    $('#nhConfirmText').textContent = `선택한 이웃 ${count}명을 이웃에서 삭제할까요? 서로이웃도 함께 끊기며 되돌릴 수 없습니다.`;
+    $('#nhConfirmBar')?.classList.remove('hidden');
+  });
+  $('#nhConfirmCancel')?.addEventListener('click', () => $('#nhConfirmBar')?.classList.add('hidden'));
+  $('#nhConfirmOk')?.addEventListener('click', async () => {
+    $('#nhConfirmBar')?.classList.add('hidden');
+    try {
+      renderNeighborHealth(await api('api/neighbor-health/prune', { method: 'POST', body: JSON.stringify({ buddyBlogNos: [...nhSelected] }) }));
+      toast('🧹 선택한 이웃 정리를 시작했습니다.');
+    } catch (error) { toast(error.message, true); }
+  });
+  refreshNeighborHealth();
+}
+
+initNeighborHealth();

@@ -17,6 +17,7 @@ export async function returnVisitCommenter({
   doComment = true,
   secret = false,
   tone = 'friendly',
+  assessActivity = null,
   fetchLatest = (id) => fetchLatestPostsFromRss(id, { limit: 1 })
 }) {
   const skip = (message, extra = {}) => ({ status: 'skipped', message, liked: false, commented: false, ...extra });
@@ -26,6 +27,13 @@ export async function returnVisitCommenter({
   const like = doLike && (Number(usage.likes) || 0) < RETURN_VISIT_LIMITS.likes;
   const comment = doComment && (Number(usage.comments) || 0) < RETURN_VISIT_LIMITS.comments;
   if (!like && !comment) return skip('오늘 공감·댓글 일일 한도에 도달해 답방하지 않았습니다.');
+
+  if (assessActivity) {
+    const activity = await assessActivity(blogId).catch(() => null);
+    if (activity && ['dormant', 'spam'].includes(activity.grade)) {
+      return skip(`활동이 없거나 광고성 블로그라 답방하지 않았습니다. (${activity.reason || activity.grade})`);
+    }
+  }
 
   const [latest] = await fetchLatest(blogId);
   if (!latest) return skip('상대 블로그의 최신 글을 불러오지 못했습니다.');

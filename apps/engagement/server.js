@@ -23,6 +23,7 @@ import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from '.
 import { CommentReplyStore } from './lib/comment-replies.js';
 import { returnVisitCommenter } from './lib/return-visit.js';
 import { AutopilotManager } from './lib/autopilot.js';
+import { BlogActivityCache, NeighborHealthManager } from './lib/neighbor-health.js';
 import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManager } from './lib/naver-feed-engage.js';
 import { acceptReceivedBuddyRequest, fetchReceivedBuddyRequests, fetchAllSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
 import { LicenseClientManager, createLicenseGuard } from './lib/license-client.js';
@@ -61,6 +62,9 @@ const browserSession = new NaverBrowserSession({
   groupStorePath: path.join(__dirname, '.data', 'neighbor-group-state.json')
 });
 const historyStore = new NeighborHistoryStore(path.join(__dirname, '.data', 'neighbor-history.json'));
+// Activity grades (active / slow / dormant / ad) from public RSS, cached for a few days.
+const blogActivityCache = new BlogActivityCache(path.join(__dirname, '.data', 'blog-activity.json'));
+const assessActivity = (blogId) => blogActivityCache.assess(blogId);
 const automationManager = new NeighborAutomationManager({ browserSession, historyStore });
 
 const engagementHistoryStore = new EngagementHistoryStore(path.join(__dirname, '.data', 'engagement-history.json'));
@@ -69,6 +73,7 @@ const engagementManager = new EngagementAutomationManager({
   embeddedLlama,
   historyStore: engagementHistoryStore,
   statePath: path.join(__dirname, '.data', 'engagement-last-job.json'),
+  assessActivity,
   getSharedTodayCounts: async () => {
     const summary = await feedHistoryStore.getSummary();
     return { likes: summary.todayLikes, comments: summary.todayComments };
@@ -88,7 +93,8 @@ const feedManager = new FeedEngagementManager({
 const neighborCleanerManager = new NeighborCleanerManager({
   browserSession,
   embeddedLlama,
-  neighborGroupStore: browserSession.groupStore
+  neighborGroupStore: browserSession.groupStore,
+  assessActivity
 });
 const licenseClient = new LicenseClientManager({
   cachePath: path.join(__dirname, '.data', 'license-cache.json')
@@ -1198,7 +1204,12 @@ async function processMyBlogComments(comments, { requestNeighbor = true, returnV
         });
         console.log(`[CommentManagement] 대댓글 등록 완료!`);
 
-        if (requestNeighbor && comment.authorId && comment.authorId !== comment.myBlogId) {
+        const commenterActivity = requestNeighbor && comment.authorId && comment.authorId !== comment.myBlogId
+          ? await assessActivity(comment.authorId).catch(() => null)
+          : null;
+        if (commenterActivity && commenterActivity.grade !== 'active') {
+          neighborResult = { status: 'skipped_inactive', message: `활성 블로거가 아니라 서로이웃 신청을 건너뜀 (${commenterActivity.reason || commenterActivity.grade})` };
+        } else if (requestNeighbor && comment.authorId && comment.authorId !== comment.myBlogId) {
           console.log(`[CommentManagement] @${comment.authorId} 서로이웃 신청 진행 중...`);
           const message = `${comment.authorName || '이웃'}님, 제 글에 남겨주신 댓글 감사합니다. 서로이웃으로 소통하고 지내요 :)`;
           try {
@@ -1224,7 +1235,8 @@ async function processMyBlogComments(comments, { requestNeighbor = true, returnV
               embeddedLlama,
               historyStore: engagementHistoryStore,
               getTodayUsage: getCombinedTodayUsage,
-              secret: secretComment
+              secret: secretComment,
+              assessActivity
             });
             protectionTriggered = Boolean(visitResult.protectionTriggered);
             console.log(`[CommentManagement] 답방 결과: ${visitResult.status} (${visitResult.message || ''})`);
@@ -1293,6 +1305,38 @@ async function waitForJob(getState) {
 }
 
 let lastSentCleanupDate = '';
+let lastPruneDate = '';
+const neighborHealthManager = new NeighborHealthManager({
+  browserSession,
+  statePath: path.join(__dirname, '.data', 'neighbor-health.json'),
+  // People who commented on my posts are kept even when they rarely post.
+  getProtectedIds: async () => new Set((await commentReplyStore.list()).map((record) => String(record.authorId || '').toLowerCase()).filter(Boolean))
+});
+
+app.get('/api/neighbor-health/status', (_req, res) => {
+  res.json(neighborHealthManager.getStatus());
+});
+
+app.post('/api/neighbor-health/scan', (req, res) => {
+  if (!browserSession.connected) return res.status(400).json({ error: '먼저 네이버 계정을 연결해주세요.' });
+  if (neighborHealthManager.state === 'running') return res.status(409).json({ error: '이웃 건강도 작업이 이미 진행 중입니다.' });
+  neighborHealthManager.runScan(req.body || {}).catch(() => {});
+  res.json(neighborHealthManager.getStatus());
+});
+
+app.post('/api/neighbor-health/prune', (req, res) => {
+  if (!browserSession.connected) return res.status(400).json({ error: '먼저 네이버 계정을 연결해주세요.' });
+  if (neighborHealthManager.state === 'running') return res.status(409).json({ error: '이웃 건강도 작업이 이미 진행 중입니다.' });
+  const ids = Array.isArray(req.body?.buddyBlogNos) ? req.body.buddyBlogNos.map(String) : [];
+  if (!ids.length) return res.status(400).json({ error: '정리할 이웃을 선택해주세요.' });
+  neighborHealthManager.prune(ids).catch(() => {});
+  res.json(neighborHealthManager.getStatus());
+});
+
+app.post('/api/neighbor-health/stop', (_req, res) => {
+  neighborHealthManager.stop();
+  res.json(neighborHealthManager.getStatus());
+});
 // Replies and return visits both read my posts' comments; one scan serves a whole cycle.
 let myCommentsScan = { at: 0, data: null };
 async function scanMyCommentsCached() {
@@ -1309,6 +1353,7 @@ const autopilot = new AutopilotManager({
     if (isActiveJob(feedManager.state)) return '이웃 새글 소통';
     if (isActiveJob(neighborCleanerManager.state)) return '이웃 관리';
     if (commentProcessingActive) return '내 글 대댓글';
+    if (neighborHealthManager.state === 'running') return '이웃 건강도';
     return '';
   },
   getStopReason: () => {
@@ -1320,6 +1365,7 @@ const autopilot = new AutopilotManager({
     if (isActiveJob(engagementManager.state)) engagementManager.stop();
     if (isActiveJob(feedManager.state)) feedManager.stop();
     if (isActiveJob(neighborCleanerManager.state)) neighborCleanerManager.stop();
+    neighborHealthManager.stop();
   },
   steps: {
     acceptNeighbors: async (settings) => {
@@ -1338,6 +1384,17 @@ const autopilot = new AutopilotManager({
         const sent = await neighborCleanerManager.startCancelSent({ olderThanDays: settings.cancelSentDays, maxCancelCount: 30 });
         lastSentCleanupDate = today;
         parts.push(`${settings.cancelSentDays}일 넘은 보낸 신청 회수 ${sent?.stats?.canceled || 0}건`);
+      }
+      if (settings.pruneDormant && lastPruneDate !== today) {
+        lastPruneDate = today;
+        await neighborHealthManager.runScan({ dormantDays: settings.pruneDormantDays });
+        const candidates = neighborHealthManager.getStatus().candidates.map((n) => n.buddyBlogNo);
+        if (candidates.length && neighborHealthManager.prunedToday() < 30) {
+          const pruned = await neighborHealthManager.prune(candidates);
+          parts.push(`휴면 이웃 정리 ${pruned.deleted}명`);
+        } else {
+          parts.push('정리할 휴면 이웃 없음');
+        }
       }
       const didWork = receivedStats.total || parts.length > 1;
       return { skipped: !didWork, summary: parts.join(' · ') };
@@ -1380,7 +1437,8 @@ const autopilot = new AutopilotManager({
           historyStore: engagementHistoryStore,
           getTodayUsage: getCombinedTodayUsage,
           doLike: settings.doLike,
-          doComment: settings.doComment
+          doComment: settings.doComment,
+          assessActivity
         }).catch((error) => ({ status: 'failed', message: error.message }));
         if (result.protectionTriggered) { protectionTriggered = true; break; }
         if (/일일 한도/.test(result.message || '')) { limitMessage = result.message; break; }

@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=38">
-  <link rel="stylesheet" href="app-mode.css?v=44">
+  <link rel="stylesheet" href="app-mode.css?v=45">
 </head>
 <body>
   <main class="shell">
@@ -117,6 +117,22 @@
                   </div>
                   <input type="hidden" id="apCancelSentDays" value="14">
                   <span class="field-hint">하루 한 번, 이 기간이 지나도 수락되지 않은 신청을 최대 30건 취소합니다.</span>
+                </div>
+                <label class="comment-neighbor-switch-card">
+                  <input type="checkbox" id="apPruneDormant">
+                  <div class="switch-card-text">
+                    <span class="switch-title">🧹 휴면 이웃 자동 정리</span>
+                    <span class="switch-desc">하루 한 번, 오래 새 글이 없는 이웃을 최대 30명 삭제합니다. 내 글에 댓글을 단 이웃과 추가한 지 14일이 안 된 이웃은 지킵니다. 먼저 '이웃 관리 → 이웃 건강도'에서 후보를 확인해 보세요.</span>
+                  </div>
+                </label>
+                <div class="form-group hidden" id="apPruneDaysGroup">
+                  <label><strong>휴면 기준</strong></label>
+                  <div class="option-chip-row" id="apPruneDaysChips" data-target-input="apPruneDormantDays">
+                    <button type="button" class="chip-btn active" data-value="60">60일</button>
+                    <button type="button" class="chip-btn" data-value="90">90일</button>
+                    <button type="button" class="chip-btn" data-value="180">180일</button>
+                  </div>
+                  <input type="hidden" id="apPruneDormantDays" value="60">
                 </div>
               </div>
 
@@ -887,6 +903,13 @@
                 <div class="form-group" id="engNeighborMsgGroup" style="margin-top: 14px;">
                   <label for="engNeighborMessage"><strong>서로이웃 신청 인사말</strong> <small>(서로이웃 체크 시 전송)</small></label>
                   <input type="text" id="engNeighborMessage" value="안녕하세요! 포스팅 잘 보고 갑니다. 좋은 이웃으로 소통하고 지내요 😊" placeholder="서로이웃 신청 메시지 입력" class="desktop-input">
+                  <label class="comment-neighbor-switch-card option-switch">
+                    <input type="checkbox" id="engNeighborActiveOnly" checked>
+                    <div class="switch-card-text">
+                      <span class="switch-title">🟢 활성 블로거에게만 신청</span>
+                      <span class="switch-desc">최근 14일 안에 글을 쓴 블로거에게만 보냅니다. 휴면·광고성 블로그는 건너뜁니다.</span>
+                    </div>
+                  </label>
                   <label class="comment-neighbor-switch-card option-switch">
                     <input type="checkbox" id="engAiNeighborMessage" checked>
                     <div class="switch-card-text">
@@ -1715,6 +1738,10 @@
           <strong>내가 보낸 신청</strong>
           <small>미수락 신청 확인 및 회수</small>
         </button>
+        <button type="button" class="cleaner-subtab-btn" data-subtab="neighbor-health">
+          <strong>이웃 건강도</strong>
+          <small>활성·휴면 분석 및 정리</small>
+        </button>
       </div>
 
       <!-- Subtab 1: Received Requests AI Cleaner -->
@@ -1944,6 +1971,118 @@
                     <div class="cleaner-empty-icon" aria-hidden="true"></div>
                     <strong>보낸 신청을 확인하세요</strong>
                     <p>목록 조회를 누르면 설정한 기간의 미수락 신청을 불러옵니다.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subtab: Neighbor Health (이웃 건강도) -->
+      <div id="subtabNeighborHealth" class="cleaner-subtab-panel hidden">
+        <div class="desktop-workspace-grid">
+          <div class="desktop-col desktop-col-left">
+            <div class="desktop-card hero-card">
+              <div class="desktop-card-header">
+                <div class="card-title-group">
+                  <span class="card-badge pulse">분석</span>
+                  <h3>내 이웃 활동 상태</h3>
+                </div>
+                <span class="status ready" id="nhStatusBadge"><i></i> 분석 전</span>
+              </div>
+              <div class="desktop-card-body">
+                <p class="section-desc cleaner-compact-desc">내 이웃 목록의 '최근 글' 날짜로 활성·활동 뜸·휴면 이웃을 나눕니다. 분석은 읽기만 하고, 정리는 오른쪽에서 고른 이웃만 진행합니다.</p>
+
+                <div class="form-group" style="margin-top:14px;">
+                  <label><strong>휴면 기준</strong> <small>(이 기간 동안 새 글이 없으면 휴면)</small></label>
+                  <div class="option-chip-row" id="nhDormantChips" data-target-input="nhDormantDays">
+                    <button type="button" class="chip-btn active" data-value="60">60일</button>
+                    <button type="button" class="chip-btn" data-value="90">90일</button>
+                    <button type="button" class="chip-btn" data-value="180">180일</button>
+                  </div>
+                  <input type="hidden" id="nhDormantDays" value="60">
+                </div>
+
+                <label class="comment-neighbor-switch-card option-switch">
+                  <input type="checkbox" id="nhIncludeOneway">
+                  <div class="switch-card-text">
+                    <span class="switch-title">↔️ 서로이웃이 아닌 일방 이웃도 정리 후보에 넣기</span>
+                    <span class="switch-desc">추가한 지 30일이 지나도 서로이웃이 되지 않은 이웃입니다. 신청 대기 중인 상대도 여기에 포함됩니다.</span>
+                  </div>
+                </label>
+
+                <div class="action-command-toolbar" style="margin-top:16px;">
+                  <button type="button" class="cleaner-cta-btn" id="nhScanBtn"><strong>🔍 이웃 상태 분석</strong></button>
+                  <button type="button" class="button danger medium full-width hidden" id="nhStopBtn" style="margin-top:8px;">⏹️ 작업 중단</button>
+                  <span class="field-hint" id="nhProgressText"></span>
+                </div>
+
+                <div class="cleaner-stat-grid nh-stat-grid">
+                  <div class="cleaner-stat-card stat-total">
+                    <span class="stat-label">전체 이웃</span>
+                    <div class="stat-value" id="nhStatTotal">-</div>
+                  </div>
+                  <div class="cleaner-stat-card nh-stat-active">
+                    <span class="stat-label">🟢 활성</span>
+                    <div class="stat-value" id="nhStatActive">-</div>
+                  </div>
+                  <div class="cleaner-stat-card nh-stat-slow">
+                    <span class="stat-label">🟡 활동 뜸</span>
+                    <div class="stat-value" id="nhStatSlow">-</div>
+                  </div>
+                  <div class="cleaner-stat-card nh-stat-dormant">
+                    <span class="stat-label">🔴 휴면</span>
+                    <div class="stat-value" id="nhStatDormant">-</div>
+                  </div>
+                </div>
+                <p class="nh-meta" id="nhMetaText">아직 분석하지 않았습니다.</p>
+              </div>
+            </div>
+
+            <div class="desktop-card" style="margin-top:14px;">
+              <div class="desktop-card-header">
+                <div class="card-title-group">
+                  <span class="card-badge terminal-badge">LOG</span>
+                  <h3>처리 로그</h3>
+                </div>
+              </div>
+              <div class="desktop-card-body">
+                <div class="cleaner-terminal-box" id="nhTerminalLogs">
+                  <div class="terminal-line info">[대기 중] '이웃 상태 분석'을 누르면 내 이웃 목록을 읽어 활동 상태를 나눕니다.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="desktop-col desktop-col-right">
+            <div class="desktop-card">
+              <div class="desktop-card-header">
+                <div class="card-title-group">
+                  <span class="card-badge">정리</span>
+                  <h3>정리 후보</h3>
+                </div>
+                <span class="nh-limit-badge" id="nhLimitBadge">오늘 0 / 30명</span>
+              </div>
+              <div class="desktop-card-body">
+                <div class="nh-candidate-toolbar">
+                  <label class="nh-select-all"><input type="checkbox" id="nhSelectAll" checked><span>전체 선택</span></label>
+                  <span class="nh-selected-count" id="nhSelectedCount">0명 선택</span>
+                  <button type="button" class="button danger small" id="nhPruneBtn" disabled>🧹 선택한 이웃 정리</button>
+                </div>
+                <div class="nh-confirm-bar hidden" id="nhConfirmBar">
+                  <span id="nhConfirmText">선택한 이웃을 정리할까요? 되돌릴 수 없습니다.</span>
+                  <div class="nh-confirm-actions">
+                    <button type="button" class="button secondary small" id="nhConfirmCancel">취소</button>
+                    <button type="button" class="button danger small" id="nhConfirmOk">정리하기</button>
+                  </div>
+                </div>
+                <p class="nh-protect-note">💬 내 글에 댓글을 남긴 이웃과 추가한 지 14일이 안 된 이웃은 휴면이어도 후보에서 빠집니다. 하루 최대 30명까지만 정리합니다.</p>
+                <div class="nh-candidate-list" id="nhCandidateList">
+                  <div class="empty-state cleaner-empty-state">
+                    <div class="cleaner-empty-icon" aria-hidden="true"></div>
+                    <strong>이웃 상태를 먼저 분석하세요</strong>
+                    <p>분석이 끝나면 오래 활동이 없는 이웃이 여기에 나타납니다.</p>
                   </div>
                 </div>
               </div>
@@ -2381,6 +2520,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=48"></script>
+  <script type="module" src="app.js?v=50"></script>
 </body>
 </html>

@@ -182,3 +182,11 @@ test('return visits are their own step: they run with replies switched off', asy
   assert.equal(manager.settings.returnVisitPerCycle, 5);
   await rm(statePath, { force: true });
 });
+
+test('dormant-neighbor pruning in autopilot is off by default and only accepts 60/90/180 days', () => {
+  const defaults = normalizeAutopilotSettings({});
+  assert.equal(defaults.pruneDormant, false);
+  assert.equal(defaults.pruneDormantDays, 60);
+  assert.equal(normalizeAutopilotSettings({ pruneDormant: true, pruneDormantDays: 90 }).pruneDormantDays, 90);
+  assert.equal(normalizeAutopilotSettings({ pruneDormantDays: 5 }).pruneDormantDays, 60);
+});

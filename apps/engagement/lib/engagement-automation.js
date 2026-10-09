@@ -68,13 +68,15 @@ export function buildNeighborMessage(baseMessage, bloggerName, keyword, index = 
 }
 
 export class EngagementAutomationManager extends EventEmitter {
-  constructor({ browserSession, embeddedLlama, historyStore, statePath = '', getSharedTodayCounts = null }) {
+  constructor({ browserSession, embeddedLlama, historyStore, statePath = '', getSharedTodayCounts = null, assessActivity = null }) {
     super();
     this.browserSession = browserSession;
     this.embeddedLlama = embeddedLlama;
     this.historyStore = historyStore;
     // Today's likes/comments made by feed engagement on the same account, so both share one daily cap.
     this.getSharedTodayCounts = getSharedTodayCounts;
+    // Grades a blog's activity (see neighbor-health.js) so 서로이웃 goes only to active bloggers.
+    this.assessActivity = assessActivity;
     this.statePath = statePath;
     this.saveTimer = null;
 
@@ -220,7 +222,8 @@ export class EngagementAutomationManager extends EventEmitter {
     neighborMessageMode = 'ai',
     commentMode = 'ai',
     commentPhrases = '',
-    secretComment = false
+    secretComment = false,
+    neighborActiveOnly = true
   }) {
     if (this.state === 'running' || this.state === 'paused') {
       throw new Error('이미 실행 중인 공감/소통 작업이 있습니다.');
@@ -284,7 +287,8 @@ export class EngagementAutomationManager extends EventEmitter {
       neighborMessageMode: neighborMessageMode === 'fixed' ? 'fixed' : 'ai',
       commentMode: cleanCommentMode,
       commentPhrases: cleanPhrases,
-      secretComment: Boolean(secretComment)
+      secretComment: Boolean(secretComment),
+      neighborActiveOnly: neighborActiveOnly !== false
     };
 
     this.stats = {
@@ -469,6 +473,14 @@ export class EngagementAutomationManager extends EventEmitter {
             };
             neighborEligible = false;
             this.log(`⏩ [이웃 이력 제외] @${post.blogId} ${neighborPreflight.message}`, 'info');
+          }
+        }
+        if (neighborEligible && post.blogId && this.config.neighborActiveOnly && this.assessActivity) {
+          const activity = await this.assessActivity(post.blogId).catch(() => null);
+          if (activity && activity.grade !== 'active') {
+            neighborEligible = false;
+            neighborPreflight = { status: 'skipped_inactive', message: `활성 블로거가 아니라 서로이웃 신청을 건너뜁니다. (${activity.reason || activity.grade})` };
+            this.log(`⏩ [비활성 제외] @${post.blogId} ${neighborPreflight.message}`, 'info');
           }
         }
         if (neighborEligible && post.blogId && typeof this.browserSession.inspectNeighborRelationship === 'function') {

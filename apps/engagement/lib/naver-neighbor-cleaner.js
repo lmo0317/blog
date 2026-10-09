@@ -493,6 +493,8 @@ class NeighborCleanerManager {
     this.browserSession = options.browserSession || null;
     this.embeddedLlama = options.embeddedLlama || null;
     this.neighborGroupStore = options.neighborGroupStore || null;
+    // Optional activity grading (neighbor-health.js) used while screening received requests.
+    this.assessActivity = options.assessActivity || null;
     this.state = 'idle'; // 'idle' | 'running' | 'paused' | 'stopped' | 'completed' | 'error'
     this.isPaused = false;
     this.shouldStop = false;
@@ -640,16 +642,30 @@ class NeighborCleanerManager {
         this.log(`[${i + 1}/${requests.length}] @${req.targetBlogId} (${req.nickname}) 신청 검토 중...`, 'info');
 
         // No filters means explicit accept-all mode; otherwise use heuristics and AI.
-        const evaluation = acceptAll
+        let evaluation = acceptAll
           ? { decision: 'accept', reason: 'AI 조건 없음 - 전체 수락', rule: 'accept_all' }
           : await evaluateBuddyRequestWithAI(req, this.embeddedLlama);
+        if (!acceptAll && this.assessActivity) {
+          const activity = await this.assessActivity(req.targetBlogId).catch(() => null);
+          if (activity?.grade === 'spam') {
+            evaluation = { decision: 'reject', reason: `광고성 블로그 (${activity.reason})`, rule: 'activity_spam' };
+          } else if (activity?.grade === 'dormant' && evaluation.decision === 'accept') {
+            evaluation = { decision: 'hold', reason: `활동이 없는 블로그라 수락을 보류합니다. (${activity.reason})`, rule: 'activity_dormant' };
+          }
+        }
         this.log(`🤖 판정: [${evaluation.decision.toUpperCase()}] ${evaluation.reason}`, evaluation.decision === 'accept' ? 'success' : 'warn');
 
         this.stats.processed++;
 
         if (dryRun) {
           if (evaluation.decision === 'accept') this.stats.accepted++;
+          else if (evaluation.decision === 'hold') this.stats.skipped++;
           else this.stats.rejected++;
+          continue;
+        }
+
+        if (evaluation.decision === 'hold') {
+          if (!dryRun) this.stats.skipped++;
           continue;
         }
 

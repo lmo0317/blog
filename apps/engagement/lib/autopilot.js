@@ -30,6 +30,8 @@ export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
   returnVisitPerCycle: 10,
   acceptMode: 'screen',
   cancelSentDays: 14,
+  pruneDormant: false,
+  pruneDormantDays: 60,
   steps: { acceptNeighbors: true, replies: true, returnVisit: true, engage: true, feed: true }
 });
 
@@ -62,6 +64,9 @@ export function normalizeAutopilotSettings(input = {}, base = DEFAULT_AUTOPILOT_
     acceptMode: merged.acceptMode === 'all' ? 'all' : 'screen',
     // Withdraw sent requests still pending after this many days (0 = off), once a day.
     cancelSentDays: [0, 7, 14, 30].includes(Number(merged.cancelSentDays)) ? Number(merged.cancelSentDays) : 14,
+    // Once a day: remove neighbors with no post for this many days (up to 30 people).
+    pruneDormant: merged.pruneDormant === true,
+    pruneDormantDays: [60, 90, 180].includes(Number(merged.pruneDormantDays)) ? Number(merged.pruneDormantDays) : 60,
     steps: Object.fromEntries(AUTOPILOT_STEPS.map(({ id }) => [id, merged.steps[id] !== false]))
   };
 }

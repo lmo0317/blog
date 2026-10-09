@@ -6582,3 +6582,191 @@ textarea.phrase-textarea:focus {
   display: block;
   margin-top: 6px;
 }
+
+/* --------------------------------------------------------------------------
+   이웃 건강도 (neighbor health)
+   -------------------------------------------------------------------------- */
+#subtabNeighborHealth .status.running {
+  background: #eff6ff;
+  color: #2563eb;
+}
+#subtabNeighborHealth .status.running i {
+  background: #3b82f6;
+}
+
+.cleaner-stat-grid.nh-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.nh-stat-active { background: #f0fdf4; border-color: #bbf7d0; }
+.nh-stat-active .stat-value { color: #15803d; }
+.nh-stat-slow { background: #fffbeb; border-color: #fde68a; }
+.nh-stat-slow .stat-value { color: #d97706; }
+.nh-stat-dormant { background: #fef2f2; border-color: #fecaca; }
+.nh-stat-dormant .stat-value { color: #dc2626; }
+
+.nh-meta {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.nh-limit-badge {
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nh-candidate-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nh-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+}
+
+.nh-selected-count {
+  font-size: 12px;
+  color: #64748b;
+  margin-right: auto;
+}
+
+.nh-confirm-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.nh-confirm-bar > span {
+  flex: 1;
+  min-width: 200px;
+}
+
+.nh-confirm-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.nh-protect-note {
+  margin: 10px 0;
+  padding: 9px 11px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  color: #1e40af;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.nh-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+.nh-candidate {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.nh-candidate:hover {
+  border-color: #cbd5e1;
+}
+
+.nh-candidate.selected {
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
+.nh-candidate input[type="checkbox"] {
+  margin-top: 2px !important;
+  accent-color: #dc2626 !important;
+}
+
+.nh-candidate-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.nh-candidate-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nh-candidate-title strong {
+  font-size: 13px;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nh-candidate-title a {
+  font-size: 11.5px;
+  color: #64748b;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nh-candidate-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.nh-badge {
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+}
+.nh-badge.mutual { background: #e0e7ff; color: #4338ca; }
+.nh-badge.oneway { background: #f1f5f9; color: #475569; }
+.nh-badge.dormant { background: #fee2e2; color: #b91c1c; }
+
+@media (max-width: 1100px) {
+  .cleaner-stat-grid.nh-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
