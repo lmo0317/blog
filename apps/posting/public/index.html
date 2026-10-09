@@ -5,10 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>이웃메이트 Post · AI 자동 포스팅</title>
   <meta name="description" content="관심 키워드로 네이버 블로그를 찾고 검토한 뒤 이웃 추가 화면을 여는 로컬 도구">
-  <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/login.css">
-  <link rel="stylesheet" href="/refresh.css">
-  <link rel="stylesheet" href="/app-mode.css">
+  <!-- Pretendard (registered as "Pretendard", the name every rule uses) is the design font but is not installed on most PCs; without it Korean falls back to Malgun Gothic. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+  <script>if (!/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add('web-mode');</script>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="login.css">
+  <link rel="stylesheet" href="refresh.css?v=20">
+  <link rel="stylesheet" href="app-mode.css?v=20">
+  <link rel="stylesheet" href="keyword.css?v=4">
+  <link rel="stylesheet" href="oneshot.css?v=4">
 </head>
 <body>
   <main class="shell">
@@ -25,10 +30,6 @@
     </header>
 
     <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
-      <button class="workspace-tab" id="settingsTab" type="button" role="tab" aria-selected="false" aria-controls="settingsWorkspace" data-tab="settings" tabindex="-1">
-        <span class="tab-icon" aria-hidden="true">⚙️</span>
-        <span><strong>공통 환경 설정</strong><small>네이버 계정 &amp; Gemini AI 설정</small></span>
-      </button>
       <button class="workspace-tab active" id="neighborTab" type="button" role="tab" aria-selected="true" aria-controls="neighborWorkspace" data-tab="neighbor">
         <span class="tab-icon" aria-hidden="true">＋</span>
         <span><strong>서로이웃 추가</strong><small>타겟 탐색 및 자동 신청</small></span>
@@ -39,11 +40,144 @@
       </button>
       <button class="workspace-tab" id="publishTab" type="button" role="tab" aria-selected="false" aria-controls="publishWorkspace" data-tab="publish" tabindex="-1">
         <span class="tab-icon" aria-hidden="true">✍️</span>
-        <span><strong>AI 자동 포스팅</strong><small>핫딜 &amp; 뉴스/기사 재해석</small></span>
+        <span><strong>포스팅</strong><small>반자동 · 원샷 · 사진 기반</small></span>
+      </button>
+      <button class="workspace-tab" id="keywordTab" type="button" role="tab" aria-selected="false" aria-controls="keywordWorkspace" data-tab="keyword" tabindex="-1">
+        <span class="tab-icon" aria-hidden="true">🏆</span>
+        <span><strong>황금 키워드</strong><small>포스팅 주제 찾기</small></span>
+      </button>
+      <button class="workspace-tab" id="settingsTab" type="button" role="tab" aria-selected="false" aria-controls="settingsWorkspace" data-tab="settings" tabindex="-1">
+        <span class="tab-icon" aria-hidden="true">⚙️</span>
+        <span><strong>설정</strong><small>네이버 계정 · AI 엔진 · 이미지</small></span>
       </button>
     </nav>
 
-    <!-- Workspace 0: Common Settings & AI Engine Configuration Panel -->
+    <!-- Workspace: Golden keyword finder → posting topic -->
+    <section class="workspace-panel hidden" id="keywordWorkspace" role="tabpanel" aria-labelledby="keywordTab" data-tab-panel="keyword">
+      <section class="panel keyword-hero-panel">
+        <div class="keyword-hero-header">
+          <div class="keyword-hero-title-box">
+            <span class="eyebrow"><span class="badge-icon">🏆</span> 네이버 검색 데이터 실시간 분석</span>
+            <h2>황금 키워드 찾기</h2>
+            <p class="panel-sub"><strong>사람들이 실제로 검색하는데, 그 검색어를 노린 글은 아직 적은 키워드</strong>를 찾습니다. 마음에 드는 키워드에서 <strong>✍️ 포스팅</strong>을 누르면 그 키워드로 바로 글을 쓸 수 있습니다.</p>
+          </div>
+          <div class="keyword-hero-actions">
+            <span class="pill pill-green">🟢 API 키 없이 무료</span>
+            <a class="kw-guide-btn" href="golden-keyword-guide.html" target="_blank" rel="noopener">📖 황금 키워드 설명서</a>
+          </div>
+        </div>
+
+        <form class="keyword-search-form" id="keywordSearchForm">
+          <div class="keyword-search-input-wrap">
+            <span class="search-input-icon">🔍</span>
+            <input type="text" id="keywordSearchInput" class="keyword-search-input" placeholder="관심 주제를 넣으세요 (예: 캠핑, 다이어트 도시락, 아이패드)" autocomplete="off" maxlength="50">
+            <button type="submit" class="button primary keyword-submit-btn" id="keywordSubmitBtn">
+              <span class="btn-icon">⚡</span> <strong>황금 키워드 찾기</strong>
+            </button>
+          </div>
+        </form>
+
+        <details class="kw-legend" id="keywordLegend">
+          <summary>
+            <span class="kw-legend-grades">
+              <span class="kw-grade-badge grade-s">🏆 S 황금</span>
+              <span class="kw-grade-badge grade-a">👍 A 추천</span>
+              <span class="kw-grade-badge grade-b">🙂 B 보통</span>
+              <span class="kw-grade-badge grade-c">⚠️ C 경쟁 심함</span>
+            </span>
+            <span class="kw-legend-toggle">등급은 어떻게 정하나요?</span>
+          </summary>
+          <ol class="kw-legend-steps">
+            <li><strong>실제 검색어만</strong> 네이버 자동완성에 뜨는 검색어만 후보로 씁니다. 자동완성 위쪽에 뜰수록, 여러 번 뜰수록 <em>검색 수요</em>가 높다고 봅니다.</li>
+            <li><strong>상위 10개 글 진단</strong> 검색어마다 네이버 블로그 상위 10개 글을 확인해, 제목에 그 검색어를 그대로 넣은 글이 몇 개인지, 글이 얼마나 오래됐는지 봅니다.</li>
+            <li><strong>등급</strong> 수요가 있고, 노린 글이 적고, 상위 글이 오래됐을수록 높은 등급입니다. <em>S 황금</em>은 새 글이 상위에 오를 가능성이 가장 큰 검색어입니다.</li>
+          </ol>
+          <p class="kw-legend-note">검색 수요는 자동완성 순위로 추정한 값이라 월 검색량 숫자는 아닙니다. <a href="golden-keyword-guide.html" target="_blank" rel="noopener">점수 기준까지 자세히 보기 →</a></p>
+        </details>
+
+        <div class="keyword-quick-seeds">
+          <span class="seed-label">💡 추천 주제:</span>
+          <div class="seed-chips-wrap">
+            <button type="button" class="seed-chip" data-seed="성수동 맛집">성수동 맛집</button>
+            <button type="button" class="seed-chip" data-seed="다이어트 식단">다이어트 식단</button>
+            <button type="button" class="seed-chip" data-seed="제주도 여행 코스">제주도 여행 코스</button>
+            <button type="button" class="seed-chip" data-seed="직장인 점심 도시락">직장인 점심</button>
+            <button type="button" class="seed-chip" data-seed="아이폰 꿀팁">아이폰 꿀팁</button>
+            <button type="button" class="seed-chip" data-seed="캠핑 장비 추천">캠핑 장비</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="keyword-dashboard-grid">
+        <div class="keyword-main-col">
+          <div class="keyword-results-toolbar" id="keywordResultsToolbar">
+            <div class="results-stats">
+              <span class="results-query" id="keywordCurrentQueryBadge">탐색 대기</span>
+              <span class="results-count" id="keywordResultsCount">키워드를 검색하면 분석이 시작됩니다.</span>
+            </div>
+            <div class="results-filters" id="keywordFilterChips">
+              <button type="button" class="filter-pill active" data-filter="all">전체</button>
+              <button type="button" class="filter-pill" data-filter="good">🏆 황금·추천만</button>
+              <button type="button" class="filter-pill" data-filter="niche">🎯 노린 글 적음</button>
+              <button type="button" class="filter-pill" data-filter="vacant">🏚️ 상위 글 오래됨</button>
+            </div>
+          </div>
+
+          <div class="keyword-loading-box hidden" id="keywordLoadingBox">
+            <div class="finder-spinner"></div>
+            <div class="loading-text">
+              <strong>실제 검색어를 모으고 상위 글을 확인하는 중...</strong>
+              <small>자동완성에서 검색어를 모은 뒤, 검색어마다 네이버 블로그 상위 10개 글을 살펴봅니다. 10~20초쯤 걸립니다.</small>
+            </div>
+          </div>
+
+          <div class="keyword-empty-box" id="keywordEmptyBox">
+            <div class="empty-icon">💡</div>
+            <h3>관심 주제를 넣으면 황금 키워드를 찾아 드려요</h3>
+            <p>위 검색창에 주제를 넣거나 추천 주제를 눌러 보세요.<br>
+            찾은 키워드에서 <strong>✍️ 포스팅</strong>을 누르면 [AI 자동 포스팅] 주제 칸에 그 키워드가 들어갑니다.</p>
+          </div>
+
+          <div class="keyword-cards-list hidden" id="keywordCardsList"></div>
+        </div>
+
+        <div class="keyword-sidebar-col">
+          <div class="keyword-detail-card" id="keywordDetailCard">
+            <div class="detail-header">
+              <span class="eyebrow">선택한 키워드 진단</span>
+              <h3 id="detailKeywordTitle">키워드를 선택하세요</h3>
+              <div class="detail-badge-row">
+                <span class="pill pill-green" id="detailScorePill">점수 대기</span>
+              </div>
+            </div>
+            <div class="detail-metrics-grid">
+              <div class="metric-box"><span class="metric-label">검색 수요 (추정)</span><strong class="metric-val" id="detailDemand">-</strong></div>
+              <div class="metric-box"><span class="metric-label">키워드 넣은 상위 글</span><strong class="metric-val" id="detailMatchRate">-</strong></div>
+              <div class="metric-box"><span class="metric-label">상위 글 평균 나이</span><strong class="metric-val" id="detailAvgAge">-</strong></div>
+              <div class="metric-box"><span class="metric-label">블로그 문서 수</span><strong class="metric-val" id="detailDocCount">-</strong></div>
+            </div>
+            <div class="detail-strategy-box">
+              <div class="strategy-head"><span class="strategy-icon">🔎</span><strong>왜 이 등급인가요?</strong></div>
+              <div class="strategy-body" id="detailStrategyAdvice">왼쪽 목록에서 키워드를 누르면 등급의 근거와 글쓰기 팁을 보여 드립니다.</div>
+            </div>
+            <div class="detail-top-posts">
+              <div class="top-posts-head">
+                <strong>지금 상위 1~5위 글</strong>
+                <a href="#" target="_blank" id="detailNaverSearchLink" class="naver-link" rel="noopener noreferrer">네이버 검색 ↗</a>
+              </div>
+              <div class="top-posts-list" id="detailTopPostsList"><p class="empty-hint">키워드를 누르면 상위 글이 표시됩니다.</p></div>
+            </div>
+            <div class="detail-actions-bar">
+              <button type="button" class="button primary kw-post-btn" id="detailPostBtn" disabled>
+                <strong>✍️ 이 키워드로 포스팅</strong>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Workspace: Settings (Naver account, AI engine, image models) -->
     <section class="workspace-panel hidden" id="settingsWorkspace" role="tabpanel" aria-labelledby="settingsTab" data-tab-panel="settings">
       <!-- Section 1: Naver Account Connection -->
       <section class="panel" id="settingsAccountPanel">
@@ -68,8 +202,26 @@
               <button class="button primary" type="submit" style="padding:10px 24px; font-weight:600;">네이버 로그인하고 연결</button>
             </div>
           </form>
-
+          <div class="qr-login" data-qr-login>
+            <div class="qr-login-row">
+              <span>보안 확인이나 2단계 인증 때문에 로그인이 안 되면 휴대폰으로 로그인하세요.</span>
+              <button class="button ghost qr-login-open" type="button">QR로 로그인</button>
+            </div>
+            <div class="qr-login-box hidden">
+              <img class="qr-login-image" alt="네이버 로그인 QR 코드">
+              <div class="qr-login-text">
+                <strong>휴대폰 네이버 앱으로 QR 코드를 스캔하세요</strong>
+                <span>앱에서 로그인을 승인하면 자동으로 연결됩니다.</span>
+                <span class="qr-login-status">QR 코드를 불러오는 중…</span>
+                <div class="qr-login-actions">
+                  <button class="button ghost qr-login-refresh" type="button">새 QR 받기</button>
+                  <button class="button ghost qr-login-close" type="button">닫기</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+
 
         <div class="connected-card hidden" id="settingsConnectedCard">
           <div>
@@ -119,7 +271,7 @@
           <div><span class="eyebrow">CONFIG 03 · IMAGE AI</span><h2>포스팅 이미지 모델 관리</h2></div>
           <span class="pill pill-green" id="currentImageEngineBadge">이미지 모델 확인 중</span>
         </div>
-        <p style="margin:0 0 14px; color:#4a5568; font-size:13px;">Google Imagen(agy 연동) 또는 초고속 온라인 FLUX를 선택합니다. 클라우드에서 빠르고 아름답게 고화질 이미지를 완성합니다.</p>
+        <p style="margin:0 0 14px; color:#4a5568; font-size:13px;">포스팅 이미지는 Google Imagen(Gemini 구독 연동)이 글 내용에 맞춰 새로 그립니다.</p>
         <div class="ai-models-grid" id="settingsImageModelCardsGrid" aria-label="사용 가능한 이미지 모델 목록"></div>
       </section>
     </section>
@@ -146,6 +298,24 @@
               <button class="button primary" type="submit" style="padding:10px 24px; font-weight:600;">네이버 로그인하고 연결</button>
             </div>
           </form>
+          <div class="qr-login" data-qr-login>
+            <div class="qr-login-row">
+              <span>보안 확인이나 2단계 인증 때문에 로그인이 안 되면 휴대폰으로 로그인하세요.</span>
+              <button class="button ghost qr-login-open" type="button">QR로 로그인</button>
+            </div>
+            <div class="qr-login-box hidden">
+              <img class="qr-login-image" alt="네이버 로그인 QR 코드">
+              <div class="qr-login-text">
+                <strong>휴대폰 네이버 앱으로 QR 코드를 스캔하세요</strong>
+                <span>앱에서 로그인을 승인하면 자동으로 연결됩니다.</span>
+                <span class="qr-login-status">QR 코드를 불러오는 중…</span>
+                <div class="qr-login-actions">
+                  <button class="button ghost qr-login-refresh" type="button">새 QR 받기</button>
+                  <button class="button ghost qr-login-close" type="button">닫기</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="connected-card hidden" id="connectedCard">
           <div>
@@ -612,7 +782,7 @@
     <section class="workspace-panel hidden" id="publishWorkspace" role="tabpanel" aria-labelledby="publishTab" data-tab-panel="publish">
       <section class="panel publish-panel">
         <div class="panel-heading publish-heading">
-          <div><span class="eyebrow">AI AUTO POSTING</span><h2>네이버 블로그 AI 자동 포스팅 (자동 게시)</h2></div>
+          <div><span class="eyebrow">BLOG POSTING</span><h2>네이버 블로그 포스팅</h2></div>
           <div class="publish-statuses" style="display:flex; align-items:center; gap:8px;">
             <span class="status online" id="llmStatus"><i></i> 💎 Gemini 3.8 Flash (agy)</span>
             <span class="status" id="publishAccountStatus"><i></i> 네이버 연결 안 됨</span>
@@ -633,8 +803,42 @@
               <button class="button primary" type="submit" style="padding:8px 20px;">로그인하고 세션 연결</button>
             </div>
           </form>
+          <div class="qr-login" data-qr-login>
+            <div class="qr-login-row">
+              <span>보안 확인이나 2단계 인증 때문에 로그인이 안 되면 휴대폰으로 로그인하세요.</span>
+              <button class="button ghost qr-login-open" type="button">QR로 로그인</button>
+            </div>
+            <div class="qr-login-box hidden">
+              <img class="qr-login-image" alt="네이버 로그인 QR 코드">
+              <div class="qr-login-text">
+                <strong>휴대폰 네이버 앱으로 QR 코드를 스캔하세요</strong>
+                <span>앱에서 로그인을 승인하면 자동으로 연결됩니다.</span>
+                <span class="qr-login-status">QR 코드를 불러오는 중…</span>
+                <div class="qr-login-actions">
+                  <button class="button ghost qr-login-refresh" type="button">새 QR 받기</button>
+                  <button class="button ghost qr-login-close" type="button">닫기</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <div class="post-mode-tabs" role="tablist" aria-label="포스팅 방법">
+          <button type="button" class="post-mode-tab active" role="tab" aria-selected="true" data-post-mode="semi">
+            <span class="post-mode-icon" aria-hidden="true">✍️</span>
+            <span><strong>반자동 포스팅</strong><small>주제·내용을 정하고 검토 후 발행</small></span>
+          </button>
+          <button type="button" class="post-mode-tab" role="tab" aria-selected="false" data-post-mode="oneshot">
+            <span class="post-mode-icon" aria-hidden="true">🚀</span>
+            <span><strong>원샷 포스팅</strong><small>주제만 넣으면 발행까지 자동</small></span>
+          </button>
+          <button type="button" class="post-mode-tab" role="tab" aria-selected="false" data-post-mode="photo">
+            <span class="post-mode-icon" aria-hidden="true">📷</span>
+            <span><strong>사진 기반 포스팅</strong><small>사진만 올리면 사진을 보고 글 작성</small></span>
+          </button>
+        </div>
+
+        <div class="post-mode-panel" data-post-mode-panel="semi">
         <div id="articleModeContainer">
           <form id="articleDraftForm" class="publish-step">
             <div class="publish-step-heading">
@@ -642,7 +846,12 @@
             </div>
             <div id="topicInputFields" style="margin-top:14px; display:grid; gap:10px;">
               <label>포스팅 주제<input id="autoPostTopic" maxlength="200" placeholder="예: 직장인을 위한 아침 혈액순환 습관"></label>
-              <label>간략한 내용 / 요청 프롬프트<textarea id="autoPostBrief" rows="6" maxlength="3000" placeholder="예: 초보자도 이해하기 쉽게 실제 생활 팁 중심으로 작성해줘.&#10;&#10;링크 재해석 예시:&#10;https://example.com/article&#10;이 링크의 핵심 사실을 분석해서 복사하지 말고 새로운 관점의 글로 재해석해줘."></textarea></label>
+              <div class="brief-field-head">
+                <span class="brief-field-label">간략한 내용 / 요청 프롬프트</span>
+                <button type="button" class="brief-ai-btn" id="autoBriefBtn" title="주제를 보고 Gemini가 간략한 내용을 써 줍니다">✨ 간략한 내용 자동 생성</button>
+              </div>
+              <p class="brief-golden-hint hidden" id="autoBriefGoldenHint"></p>
+              <label class="brief-field-box"><span class="visually-hidden">간략한 내용 / 요청 프롬프트</span><textarea id="autoPostBrief" rows="6" maxlength="3000" placeholder="예: 초보자도 이해하기 쉽게 실제 생활 팁 중심으로 작성해줘.&#10;&#10;링크 재해석 예시:&#10;https://example.com/article&#10;이 링크의 핵심 사실을 분석해서 복사하지 말고 새로운 관점의 글로 재해석해줘."></textarea></label>
             </div>
 
             <div class="publish-step-heading" style="margin-top:20px;">
@@ -709,20 +918,13 @@
               </label>
               <label style="grid-column: 1 / -1;">이미지 생성 모델
                 <select id="articleImageModelSelect" class="custom-select image-model-global-select">
-                  <option value="gemini-imagen" selected>💎 Google Imagen (Gemini 구독 연동 · 스마트 고화질)</option>
-                  <option value="real-photo">📸 고화질 실사 라이프스타일 포토 (추천 · 100% 무결점)</option>
+                  <option value="gemini-imagen" selected>💎 Google Imagen (Gemini 구독 연동)</option>
                 </select>
               </label>
             </div>
             <label class="publish-notes" style="margin-top:16px;">강조하고 싶은 포인트 / 추가 요청사항 (선택)
               <textarea id="articleNotes" maxlength="1000" placeholder="예: 초보자도 이해하기 쉽게 설명해줘, 결론에 실생활 적용 팁을 더 강조해줘"></textarea>
               <small style="display:block; color:#718096; margin-top:4px;">실제 사용 예제: 주제 - 직장인을 위한 아침 스트레칭 / 요청 - 5분 루틴과 주의사항 정리</small>
-            </label>
-            <label class="auto-publish-consent">
-              <input type="checkbox" id="autoPublishNow">
-              <span class="auto-publish-icon" aria-hidden="true">🚀</span>
-              <span class="auto-publish-copy"><strong>완성되면 네이버에 바로 발행</strong><small>끄면 생성된 글과 이미지를 먼저 검토할 수 있습니다.</small></span>
-              <span class="auto-publish-switch" aria-hidden="true"><i></i></span>
             </label>
             <div id="autoPostProgress" class="hidden" role="status" aria-live="polite" style="margin-top:14px; padding:12px 14px; border-radius:10px; background:#edf6ff; color:#24527a; font-weight:700;"></div>
             <div class="prompt-action-row">
@@ -735,6 +937,95 @@
               </button>
             </div>
           </form>
+        </div>
+
+        </div>
+
+        <div class="post-mode-panel hidden" data-post-mode-panel="oneshot">
+          <div class="oneshot-hero">
+            <div class="oneshot-hero-head">
+              <div>
+                <p class="oneshot-sub">주제만 넣으면 <strong>황금 키워드 고르기 → 간략한 내용 → 글 작성 → Imagen 이미지 → 네이버 발행</strong>까지 자동으로 합니다. 서버에서 돌아가니 브라우저를 닫아도 계속 진행됩니다.</p>
+              </div>
+            </div>
+
+            <form class="oneshot-form" id="oneshotForm">
+              <div class="oneshot-field oneshot-topic">
+                <span id="oneshotSeedLabel">주제</span>
+                <input type="text" id="oneshotSeed" maxlength="50" placeholder="예: 캠핑 의자, 다이어트 도시락, 아이패드" autocomplete="off" aria-labelledby="oneshotSeedLabel">
+              </div>
+              <div class="oneshot-field">
+                <span>글 개수</span>
+                <div class="oneshot-count" role="radiogroup" aria-label="글 개수">
+                  <label><input type="radio" name="oneshotCount" value="1"><span>1개</span></label>
+                  <label><input type="radio" name="oneshotCount" value="2"><span>2개</span></label>
+                  <label><input type="radio" name="oneshotCount" value="3" checked><span>3개</span></label>
+                  <label><input type="radio" name="oneshotCount" value="5"><span>5개</span></label>
+                </div>
+              </div>
+              <div class="oneshot-field">
+                <span id="oneshotToneLabel">말투</span>
+                <select id="oneshotTone" class="custom-select" aria-labelledby="oneshotToneLabel">
+                  <option value="friendly" selected>친근한 이웃체</option>
+                  <option value="informative">정보 전달형</option>
+                  <option value="review">후기형</option>
+                </select>
+              </div>
+              <button type="submit" class="button primary oneshot-start" id="oneshotStartBtn"><strong>🚀 원샷 시작</strong></button>
+            </form>
+            <ul class="oneshot-notes">
+              <li>🏆 주제에서 <b>아직 안 쓴 황금·추천 키워드</b>를 골라 글마다 다른 키워드로 씁니다.</li>
+              <li>⏳ 네이버 보호조치 예방을 위해 <b>글 사이에 15~30분</b> 쉽니다. 글 1개에 4~6분쯤 걸립니다.</li>
+              <li>📤 시작하면 확인 없이 <b>네이버에 바로 발행</b>됩니다. 이미 발행한 글과 비슷하면 건너뜁니다.</li>
+            </ul>
+          </div>
+          <div class="oneshot-progress hidden" id="oneshotProgress">
+            <div class="oneshot-progress-head">
+              <div>
+                <span class="eyebrow">진행 상태</span>
+                <h3 id="oneshotStatusText">대기 중</h3>
+              </div>
+              <button type="button" class="button secondary" id="oneshotStopBtn">⏹ 중단</button>
+            </div>
+            <ol class="oneshot-posts" id="oneshotPosts"></ol>
+            <div class="live-terminal oneshot-terminal">
+              <div class="terminal-header"><span>🖥️ 진행 로그</span></div>
+              <div class="terminal-body" id="oneshotLogs"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="post-mode-panel hidden" data-post-mode-panel="photo">
+          <div class="publish-step photo-post">
+            <div class="publish-step-heading">
+              <div><b>1</b><span><strong>사진 올리기</strong><small>사진만 올리면 Gemini가 사진을 직접 보고 글을 씁니다. 최대 10장이며, 올린 순서대로 글에 들어갑니다.</small></span></div>
+            </div>
+            <label class="photo-drop" id="photoDrop">
+              <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" multiple>
+              <span class="photo-drop-icon" aria-hidden="true">📷</span>
+              <strong>사진을 끌어다 놓거나 눌러서 고르세요</strong>
+              <small>JPG · PNG · WEBP · 최대 10장 · 위치 정보는 지우고 올립니다</small>
+            </label>
+            <ol class="photo-grid hidden" id="photoGrid"></ol>
+            <div class="photo-options">
+              <div class="photo-field photo-hint-field">
+                <span id="photoHintLabel">한 줄 메모 (선택)</span>
+                <input id="photoHint" maxlength="300" placeholder="예: 성수동 카페 다녀온 후기, 디저트 위주로" aria-labelledby="photoHintLabel">
+              </div>
+              <div class="photo-field">
+                <span id="photoToneLabel">말투</span>
+                <select id="photoTone" class="custom-select" aria-labelledby="photoToneLabel">
+                  <option value="friendly" selected>친근한 이웃체</option>
+                  <option value="review">후기형</option>
+                  <option value="informative">정보 전달형</option>
+                </select>
+              </div>
+            </div>
+            <div class="photo-progress hidden" id="photoProgress" role="status" aria-live="polite"></div>
+            <div class="prompt-action-row">
+              <button type="button" class="button primary large full-width" id="photoPostBtn" disabled><strong>📷 사진으로 글 만들기</strong></button>
+            </div>
+          </div>
         </div>
 
         <!-- Step 3: Common Publish Editor (Hidden until draft generated) -->
@@ -899,6 +1190,6 @@
     </form>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/app.js?v=15"></script>
+  <script type="module" src="app.js?v=32"></script>
 </body>
 </html>

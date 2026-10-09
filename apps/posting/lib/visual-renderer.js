@@ -367,9 +367,9 @@ export async function renderVisualCardToPng(cardData, outputDir, { filename = ''
   return {
     id: `ai-visual-${randomUUID().slice(0, 8)}`,
     title: cardData.title || 'AI 비주얼 인포그래픽',
-    previewUrl: `/generated-images/thumb/${finalFilename}`,
-    downloadUrl: `/generated-images/${finalFilename}`,
-    thumbnailUrl: `/generated-images/thumb/${finalFilename}`,
+    previewUrl: `generated-images/thumb/${finalFilename}`,
+    downloadUrl: `generated-images/${finalFilename}`,
+    thumbnailUrl: `generated-images/thumb/${finalFilename}`,
     pageUrl: '',
     author: 'Google Gemini Cloud AI Engine',
     license: 'Google Gemini AI 직접 생성',

@@ -3,27 +3,15 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export const IMAGE_MODEL_CATALOG = {
+  // Google Imagen through the Gemini (agy) subscription is the only image model. When it cannot
+  // generate (quota, network), ai-image-generator falls back to a matching photo on its own.
   'gemini-imagen': {
     id: 'gemini-imagen',
-    name: '💎 Google Imagen (Gemini 연동 · 스마트 고화질)',
+    name: '💎 Google Imagen (Gemini 구독 연동)',
     type: 'remote',
     sizeFormatted: '구독 연동',
-    description: '구독 중인 Google Gemini(agy) 연동 스마트 고화질 엔진으로 1280px 고화질 실사 포토와 초고속 클라우드 신경망을 자동 매칭합니다.',
+    description: '글 내용에 맞춰 Google Imagen이 그림을 새로 그립니다. 한 장에 1분쯤 걸리고 3장을 동시에 만듭니다. 한도 초과 등으로 못 그리면 주제에 맞는 사진으로 대신 채웁니다.',
     isDefault: true
-  },
-  'real-photo': {
-    id: 'real-photo',
-    name: '📸 고화질 실사 라이프스타일 포토 (추천 · 100% 무결점)',
-    type: 'remote',
-    sizeFormatted: '실사 라이브러리',
-    description: 'AI 왜곡이나 뭉개짐 없는 1280px 초고해상도 실제 촬영 라이프스타일 포토를 본문 섹션별로 1:1 자동 매칭합니다. (워터마크 0%, 실패율 0%, 초고속)'
-  },
-  pollinations: {
-    id: 'pollinations',
-    name: '⚡ 온라인 FLUX (초고속 AI 일러스트/사진)',
-    type: 'remote',
-    sizeFormatted: '클라우드',
-    description: '온라인 클라우드 AI 엔진을 사용하여 2초 만에 감성적인 고화질 이미지를 생성합니다.'
   }
 };
 

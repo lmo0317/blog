@@ -5,6 +5,22 @@ import path, { dirname } from 'node:path';
 
 const BLOG_ID_PATTERN = /^[a-zA-Z0-9_.-]{2,50}$/;
 
+export function normalizeAutocompleteKeywords(payload, seed = '', limit = 20) {
+  const cleanSeed = String(seed || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const rows = Array.isArray(payload?.items?.[0]) ? payload.items[0] : [];
+  const seen = new Set();
+  const keywords = [];
+  for (const row of rows) {
+    const value = String(Array.isArray(row) ? row[0] : row || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    const key = value.toLowerCase();
+    if (!value || key === cleanSeed || seen.has(key)) continue;
+    seen.add(key);
+    keywords.push(value);
+    if (keywords.length >= Math.min(Math.max(Number(limit) || 20, 1), 30)) break;
+  }
+  return keywords;
+}
+
 export function normalizeBlogItem(item) {
   const link = String(item?.bloggerlink || item?.link || '').trim();
   const blogId = extractBlogId(link);
@@ -137,7 +153,13 @@ export function isPostActiveWithinDays(dateStr = '', days = 0) {
 export function classifyNeighborResult(text = '', pageClosed = false) {
   if (pageClosed) return { status: 'added', message: '이웃 추가가 완료되었습니다.' };
   const normalized = String(text).replace(/\s+/g, ' ').trim();
-  if (/하루에 신청할 수 있는|1일.*(초과|제한|한도)|신청 가능 횟수.*초과|더 이상.*신청할 수 없.*(하루|일일)|오늘.*신청/i.test(normalized)) {
+  // Naver's success dialog repeats the other blogger's nickname ("오늘보다 나은 내일님에게 서로이웃을
+  // 신청하였습니다"), so success is checked first and the limit only matches limit wording, never a bare
+  // "오늘 … 신청" (that once ended a whole run after 8 requests).
+  if (/서로이웃을 신청하였습니다|서로이웃을 신청했습니다|신청내역은.*서로이웃 신청 관리/i.test(normalized)) {
+    return withRaw('requested', '서로이웃 신청이 완료되었습니다.');
+  }
+  if (/하루에 신청할 수 있는|1일.*(초과|제한|한도)|신청 가능 횟수.*초과|더 이상.*신청할 수 없.*(하루|일일)|오늘(?:은)?\s*더 이상.*신청|오늘.*신청.*(?:초과|한도|제한|할 수 없)/i.test(normalized)) {
     return { status: 'limit_reached', message: '네이버 일일 서로이웃 신청 한도(100명)에 도달했습니다.' };
   }
   if (/현재 서로이웃입니다|이미 서로이웃/i.test(normalized)) {
@@ -329,7 +351,27 @@ export class NaverBrowserSession {
       await this.saveSessionState();
       return { connected: true, accountLabel: '네이버 로그인됨' };
     }
-    return { connected: false };
+    // After the phone scans the QR, Naver shows a number on the login page that must be entered in the app.
+    // That page lives in the server's headless browser, so pass the number (and a picture of the page) along.
+    const page = this.page;
+    if (!page || page.isClosed() || !/nid\.naver\.com/.test(page.url())) return { connected: false };
+    const info = await page.evaluate(() => {
+      const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+      const numbers = [...document.querySelectorAll('body *')]
+        .filter((el) => el.children.length === 0 && visible(el) && /^\s*\d{1,3}\s*$/.test(el.textContent || ''))
+        .map((el) => el.textContent.trim());
+      const message = [...document.querySelectorAll('h1, h2, h3, p, strong, .title, [class*="txt"], [class*="desc"]')]
+        .filter((el) => visible(el) && /숫자|번호|입력|승인|확인/.test(el.textContent || ''))
+        .map((el) => el.textContent.replace(/\s+/g, ' ').trim()).filter((t) => t.length < 120).slice(0, 3);
+      return { numbers: [...new Set(numbers)].slice(0, 4), message };
+    }).catch(() => ({ numbers: [], message: [] }));
+    const shot = await page.screenshot({ type: 'jpeg', quality: 60 }).catch(() => null);
+    return {
+      connected: false,
+      code: info.numbers.length ? info.numbers.join(' ') : '',
+      message: info.message.join(' '),
+      screen: shot ? `data:image/jpeg;base64,${shot.toString('base64')}` : ''
+    };
   }
 
   async setSessionCookies({ nidAut = '', nidSes = '' } = {}) {
@@ -609,7 +651,9 @@ export class NaverBrowserSession {
 
     return {
       connected: false,
-      message: '로그인에 실패했거나 2단계 인증/보안 확인이 필요합니다. 아이디와 비밀번호를 다시 확인해주세요.'
+      message: this.headless
+        ? '네이버가 보안 확인(자동입력 방지 또는 2단계 인증)을 요청했는데, 서버에서는 그 화면을 띄울 수 없습니다. [QR로 로그인]을 이용해 주세요.'
+        : '로그인에 실패했거나 2단계 인증/보안 확인이 필요합니다. 아이디와 비밀번호를 다시 확인해주세요.'
     };
   }
 
@@ -1541,7 +1585,7 @@ export class NaverBrowserSession {
     const finalContent = normalizedTags.length
       ? `${cleanContent}\n\n${normalizedTags.map((tag) => `#${tag.replace(/\s+/g, '')}`).join(' ')}`
       : cleanContent;
-    const selectedImages = (Array.isArray(images) ? images : []).slice(0, 5);
+    const selectedImages = (Array.isArray(images) ? images : []).slice(0, 10);
 
     if (this.pendingPostUpdate?.page && !this.pendingPostUpdate.page.isClosed()) {
       await this.pendingPostUpdate.page.close().catch(() => {});

@@ -1,7 +1,10 @@
 import express from 'express';
+import { createWebAuth } from './lib/web-auth.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { copyFile, mkdir, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { loadEnvFile } from 'node:process';
 import sharp from 'sharp';
 import { NaverBrowserSession } from './lib/naver.js';
@@ -15,6 +18,8 @@ import { NeighborAutomationManager } from './lib/automation.js';
 import { EngagementAutomationManager } from './lib/engagement-automation.js';
 import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
+import { discoverGoldenKeywords, analyzeSingleKeyword } from './lib/golden-keyword.js';
+import { OneShotPostingManager } from './lib/oneshot.js';
 import { ImageModelManager } from './lib/image-model-manager.js';
 import { contentSimilarity, PostHistoryStore } from './lib/post-history.js';
 import { AgyClient, AGY_GEMINI_MODELS } from './lib/agy-client.js';
@@ -100,10 +105,18 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 app.disable('x-powered-by');
+// Web build only (APP_PASSWORD set): every page and API call needs the password first.
+const webAuth = createWebAuth({ cookieName: 'nm_posting_auth', title: '블로그 자동 포스팅' });
+if (webAuth) app.use(webAuth);
+// SSE through the hub's nginx would otherwise be buffered until the stream ends.
+app.use((_req, res, next) => { res.setHeader('X-Accel-Buffering', 'no'); next(); });
+
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   next();
 });
+// Photo uploads carry one resized photo as a data URL, so they get a larger body limit.
+app.use('/api/blog/photo-upload', express.json({ limit: '15mb' }));
 app.use(express.json({ limit: '64kb' }));
 app.use((req, res, next) => {
   const start = Date.now();
@@ -154,8 +167,17 @@ app.get('/generated-images/thumb/:filename', async (req, res) => {
 
 app.use('/generated-images', express.static(imagesStorageDir, { etag: false, maxAge: 0 }));
 
+// NAVER_LOGIN_MODE=qr (the 112 web build): only Naver QR login is allowed. A program typing the ID and password
+// on a server browser looks like credential stuffing to Naver and gets the account locked (보호조치).
+const qrOnlyLogin = String(process.env.NAVER_LOGIN_MODE || '').toLowerCase() === 'qr';
+
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, connected: browserSession.connected });
+  res.json({ ok: true, connected: browserSession.connected, loginMode: qrOnlyLogin ? 'qr' : 'all' });
+});
+
+app.post(['/api/naver/login', '/api/naver/open-login', '/api/naver/open-login-window'], (_req, res, next) => {
+  if (!qrOnlyLogin) return next();
+  res.status(403).json({ error: '이 서버에서는 계정 보호를 위해 QR 로그인만 사용합니다. [QR로 로그인]을 눌러 휴대폰 네이버 앱으로 로그인해 주세요.' });
 });
 
 app.get('/api/blog/generation-status/:id', (req, res) => {
@@ -1037,6 +1059,42 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
   }
 });
 
+// Golden keyword finder (same engine as 이웃메이트 Engage): real searched keywords graded by how easy
+// they are to rank for, so a post can start from one.
+app.post('/api/blog/brief', async (req, res, next) => {
+  try {
+    const topic = String(req.body?.topic || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (topic.length < 2) return res.status(400).json({ error: '포스팅 주제를 2자 이상 입력해 주세요.' });
+    const golden = req.body?.golden && typeof req.body.golden === 'object' ? req.body.golden : null;
+    res.json({ ok: true, brief: await agyClient.generatePostBrief({ topic, golden }) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/blog/golden-keywords', async (req, res, next) => {
+  try {
+    const keyword = String(req.query?.keyword || '').replace(/\s+/g, ' ').trim();
+    if (keyword.length < 1 || keyword.length > 50) {
+      return res.status(400).json({ error: '황금 키워드 검색어는 1~50자로 입력해주세요.' });
+    }
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 20, 5), 25);
+    res.json(await discoverGoldenKeywords({ keyword, limit }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/blog/keyword-detail', async (req, res, next) => {
+  try {
+    const keyword = String(req.query?.keyword || '').replace(/\s+/g, ' ').trim();
+    if (!keyword) return res.status(400).json({ error: '키워드를 입력해주세요.' });
+    res.json(await analyzeSingleKeyword(keyword));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/blog/images/generate', async (req, res, next) => {
   try {
     const { prompt, title, style = 'photorealistic', afterHeading } = req.body || {};
@@ -1126,15 +1184,13 @@ app.post('/api/blog/images/auto', async (req, res, next) => {
   }
 });
 
-app.post('/api/blog/publish', async (req, res, next) => {
-  if (publishing) return res.status(409).json({ error: '다른 게시글을 발행 중입니다. 잠시 후 다시 시도해주세요.' });
+// Publishes one prepared post (manual review form or one-shot job). Only one post is published at a
+// time: the browser session drives a single Naver editor.
+async function publishPreparedPost({ title, content, tags, images, sourceTopic, categoryName, isDeals = false }) {
   let downloadedImages = [];
+  publishing = true;
   try {
-    if (req.body?.confirmed !== true || req.body?.confirmationText !== '발행') {
-      return res.status(400).json({ error: '내용을 검토하고 발행 동의를 확인해주세요.' });
-    }
-    publishing = true;
-    const requestedImages = (Array.isArray(req.body?.images) ? req.body.images : []).slice(0, 5);
+    const requestedImages = (Array.isArray(images) ? images : []).slice(0, 10);
     downloadedImages = await downloadCommonsImages(
       requestedImages,
       path.join(__dirname, '.playwright', 'publish-uploads')
@@ -1143,23 +1199,165 @@ app.post('/api/blog/publish', async (req, res, next) => {
       throw new Error(`선택한 상품 이미지 ${requestedImages.length}장 중 ${downloadedImages.length}장만 준비되었습니다. 이미지 주소를 확인한 뒤 다시 시도해주세요.`);
     }
     const result = await browserSession.publishBlogPost({
-      title: req.body?.title,
-      content: appendImageAttributions(req.body?.content, downloadedImages),
-      tags: req.body?.tags,
+      title,
+      content: appendImageAttributions(content, downloadedImages),
+      tags,
       images: downloadedImages,
-      isDeals: req.body?.isDeals === true,
-      categoryName: req.body?.categoryName
+      isDeals,
+      categoryName
     });
     if (result?.status === 'published') {
-      await postHistoryStore.add({ title: req.body?.title, content: req.body?.content, url: result.url, sourceTopic: req.body?.sourceTopic });
+      await postHistoryStore.add({ title, content, url: result.url, sourceTopic });
     }
-    res.json(result);
-  } catch (error) {
-    next(error);
+    return result;
   } finally {
     await cleanupDownloadedImages(downloadedImages);
     publishing = false;
   }
+}
+
+app.post('/api/blog/publish', async (req, res, next) => {
+  if (publishing) return res.status(409).json({ error: '다른 게시글을 발행 중입니다. 잠시 후 다시 시도해주세요.' });
+  try {
+    if (req.body?.confirmed !== true || req.body?.confirmationText !== '발행') {
+      return res.status(400).json({ error: '내용을 검토하고 발행 동의를 확인해주세요.' });
+    }
+    res.json(await publishPreparedPost({
+      title: req.body?.title,
+      content: req.body?.content,
+      tags: req.body?.tags,
+      images: req.body?.images,
+      sourceTopic: req.body?.sourceTopic,
+      categoryName: req.body?.categoryName,
+      isDeals: req.body?.isDeals === true
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 🚀 One-shot auto posting: topic in, golden keywords → brief → post → images → publish, in the background.
+const oneShotManager = new OneShotPostingManager({
+  agyClient,
+  browserSession,
+  postHistoryStore,
+  imageModelManager,
+  discoverGoldenKeywords,
+  generateAiDrawingsForPost,
+  imagesDir: path.join(__dirname, '.images'),
+  statePath: path.join(__dirname, '.data', 'oneshot-last-job.json'),
+  publishPost: async (post) => {
+    for (let waited = 0; publishing && waited < 600; waited += 5) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+    if (publishing) throw new Error('다른 글 발행이 끝나지 않아 이번 글을 발행하지 못했습니다.');
+    return publishPreparedPost(post);
+  }
+});
+
+// 📷 Photo-based posting: the user's photos are stored with the generated images (so the review form and
+// publishing treat them alike), then Gemini looks at them and writes the post.
+const PHOTO_FILE = /^photo-[a-f0-9-]{8,40}\.jpg$/;
+
+app.post('/api/blog/photo-upload', async (req, res, next) => {
+  try {
+    const match = String(req.body?.dataUrl || '').match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+    if (!match) return res.status(400).json({ error: 'JPG, PNG, WEBP 사진만 올릴 수 있습니다.' });
+    const filename = `photo-${randomUUID()}.jpg`;
+    const filePath = path.join(imagesStorageDir, filename);
+    await mkdir(imagesStorageDir, { recursive: true });
+    // rotate() applies the camera orientation; metadata (GPS etc.) is not copied to the output.
+    await sharp(Buffer.from(match[2], 'base64'))
+      .rotate()
+      .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 88, mozjpeg: true })
+      .toFile(filePath);
+    const name = String(req.body?.name || '내 사진').replace(/\.[a-z0-9]+$/i, '').slice(0, 60);
+    res.json({
+      id: filename,
+      title: name,
+      filePath,
+      previewUrl: `generated-images/thumb/${filename}`,
+      downloadUrl: `generated-images/${filename}`,
+      thumbnailUrl: `generated-images/thumb/${filename}`,
+      pageUrl: '',
+      author: '내 사진',
+      license: '직접 촬영한 사진',
+      isUserPhoto: true,
+      autoSelected: true
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/blog/photo-post', async (req, res, next) => {
+  try {
+    const files = (Array.isArray(req.body?.photos) ? req.body.photos : []).map((value) => path.basename(String(value || ''))).filter((file) => PHOTO_FILE.test(file));
+    if (!files.length) return res.status(400).json({ error: '사진을 한 장 이상 올려 주세요.' });
+    if (files.length > 10) return res.status(400).json({ error: '사진은 한 번에 10장까지 쓸 수 있습니다.' });
+    const missing = files.filter((file) => !existsSync(path.join(imagesStorageDir, file)));
+    if (missing.length) return res.status(400).json({ error: '올린 사진 일부를 찾지 못했습니다. 사진을 다시 올려 주세요.' });
+
+    // Gemini reads the photos from a private folder holding only them.
+    const workDir = path.join(imagesStorageDir, '.photo-jobs', randomUUID());
+    await mkdir(workDir, { recursive: true });
+    const names = files.map((_file, i) => `photo-${String(i + 1).padStart(2, '0')}.jpg`);
+    await Promise.all(files.map((file, i) => copyFile(path.join(imagesStorageDir, file), path.join(workDir, names[i]))));
+    let post;
+    try {
+      post = await agyClient.generatePhotoBlogPost({
+        photoDir: workDir,
+        photoFiles: names,
+        hint: String(req.body?.hint || '').trim().slice(0, 500),
+        tone: ['informative', 'friendly', 'review'].includes(req.body?.tone) ? req.body.tone : 'friendly',
+        length: ['short', 'medium', 'long'].includes(req.body?.length) ? req.body.length : 'medium'
+      });
+    } finally {
+      await rm(workDir, { recursive: true, force: true }).catch(() => {});
+    }
+
+    const images = files.map((file, i) => ({
+      id: file,
+      title: post.photoPlacement?.[i]?.caption || `내 사진 ${i + 1}`,
+      filePath: path.join(imagesStorageDir, file),
+      previewUrl: `generated-images/thumb/${file}`,
+      downloadUrl: `generated-images/${file}`,
+      thumbnailUrl: `generated-images/thumb/${file}`,
+      pageUrl: '',
+      author: '내 사진',
+      license: '직접 촬영한 사진',
+      caption: post.photoPlacement?.[i]?.caption || '',
+      afterHeading: post.photoPlacement?.[i]?.afterHeading || '',
+      isUserPhoto: true,
+      autoSelected: true
+    }));
+    const endpoint = await resolveActiveLlmEndpoint();
+    res.json({ ...post, autoImages: images, images, model: endpoint.model, engineLabel: endpoint.label });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/oneshot/status', (_req, res) => {
+  res.json(oneShotManager.getStatus());
+});
+
+app.post('/api/oneshot/start', async (req, res, next) => {
+  try {
+    res.json(await oneShotManager.start({
+      seed: req.body?.seed,
+      count: req.body?.count,
+      tone: req.body?.tone,
+      length: req.body?.length
+    }));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/oneshot/stop', (_req, res) => {
+  res.json(oneShotManager.stop());
 });
 
 app.post('/api/blog/update', async (req, res, next) => {
@@ -1233,7 +1431,8 @@ export function startServer(customPort = port) {
   return new Promise((resolve, reject) => {
     let isSettled = false;
     try {
-      const server = app.listen(customPort, '127.0.0.1', () => {
+      // HOST=0.0.0.0 serves the app to other machines (web development on the 112 server); the desktop app keeps loopback.
+      const server = app.listen(customPort, process.env.HOST || '127.0.0.1', () => {
         if (isSettled) return;
         isSettled = true;
         serverInstance = server;

@@ -669,9 +669,9 @@ export async function findBespokeTopicImage({
       id: `bespoke-gemini-${randomUUID().slice(0, 8)}`,
       title: chosen.title,
       filePath: targetPath,
-      previewUrl: `/generated-images/thumb/${filename}`,
-      downloadUrl: `/generated-images/${filename}`,
-      thumbnailUrl: `/generated-images/thumb/${filename}`,
+      previewUrl: `generated-images/thumb/${filename}`,
+      downloadUrl: `generated-images/${filename}`,
+      thumbnailUrl: `generated-images/thumb/${filename}`,
       pageUrl: '',
       author: '💎 Google Imagen 3 (스튜디오 실사 에디토리얼)',
       license: '상업용 라이선스 완비',
@@ -733,9 +733,9 @@ export async function fetchRealEditorialPhoto({
               id: `editorial-photo-${randomUUID().slice(0, 8)}`,
               title: curated.title,
               filePath,
-              previewUrl: `/generated-images/thumb/${filename}`,
-              downloadUrl: `/generated-images/${filename}`,
-              thumbnailUrl: `/generated-images/thumb/${filename}`,
+              previewUrl: `generated-images/thumb/${filename}`,
+              downloadUrl: `generated-images/${filename}`,
+              thumbnailUrl: `generated-images/thumb/${filename}`,
               pageUrl: curated.url,
               author: `📷 고화질 에디토리얼 포토 (${curated.author || 'Unsplash Pro'})`,
               license: '자유 상업용 라이선스',
@@ -784,6 +784,21 @@ export function buildEnhancedImagePrompt(basePrompt, style = 'photorealistic') {
   return `${text}, ${attireGuard}${SAFE_IMAGE_RULES}, ${styleConfig.suffix}`.slice(0, 900);
 }
 
+// Prompt for Google Imagen. Unlike buildEnhancedImagePrompt (which strips Korean for engines that cannot
+// read it), Gemini understands Korean, so the post title and section heading go in as written; dropping
+// them made Imagen draw generic scenes unrelated to the post.
+export function buildImagenPrompt(basePrompt, style = 'photorealistic', { postTitle = '', afterHeading = '' } = {}) {
+  const subject = String(basePrompt || '').replace(SENSITIVE_WORDS_REGEX, 'wholesome lifestyle').trim();
+  const styleConfig = AI_IMAGE_STYLES[style] || AI_IMAGE_STYLES.photorealistic;
+  return [
+    postTitle ? `Image for a Korean blog post titled "${postTitle}"` : 'Image for a Korean blog post',
+    afterHeading ? `, for the section "${afterHeading}"` : '',
+    `. Show exactly what this is about: ${subject || postTitle}.`,
+    ` ${SAFE_IMAGE_RULES}. Any people are fully clothed in modest casual attire.`,
+    ` Style: ${styleConfig.suffix}`
+  ].join('').slice(0, 1200);
+}
+
 export async function generateAiDrawing({
   prompt,
   style = 'photorealistic',
@@ -799,105 +814,30 @@ export async function generateAiDrawing({
   excludeTitles = new Set()
 }) {
   await mkdir(outputDir, { recursive: true });
-  const filename = `ai-art-${randomUUID()}.jpg`;
-  const filePath = path.join(outputDir, filename);
-
-  const enhancedPrompt = buildEnhancedImagePrompt(prompt, style);
-  const resolvedSeed = typeof seed === 'number' ? seed : Math.floor(Math.random() * 900000) + 100000;
-  const encodedPrompt = encodeURIComponent(enhancedPrompt);
-  const styleConfig = AI_IMAGE_STYLES[style] || AI_IMAGE_STYLES.photorealistic;
-  const styleLabel = styleConfig.label;
-
-  const isRealPhotoForced = imageModelManager?.activeModelId === 'real-photo';
-  const isPhotorealistic = style === 'photorealistic';
-
-  // 1. If real-photo mode or photorealistic style is selected: provide 1280px flawless commercial photography
-  if (isRealPhotoForced || isPhotorealistic) {
-    const bespokeImg = await findBespokeTopicImage({
-      query: prompt,
-      outputDir,
-      afterHeading,
-      postTitle,
-      excludeUrls,
-      excludeTitles
-    });
-    if (bespokeImg) return bespokeImg;
-
-    const realImg = await fetchRealEditorialPhoto({
-      query: prompt,
-      outputDir,
-      afterHeading,
-      postTitle,
-      fetchImpl,
-      excludeUrls,
-      excludeTitles
-    });
-    if (realImg) return realImg;
-  }
-
-  // 2. Google Gemini Imagen via agy CLI (Bespoke AI creation when available)
-  if (imageModelManager?.activeModelId === 'gemini-imagen' || imageModelManager?.agyClient) {
+  // 1. Google Imagen (agy generate_image): the only image model.
+  const agyClient = imageModelManager?.agyClient;
+  if (agyClient && typeof agyClient.generateImageWithAgy === 'function') {
     try {
-      const agyClient = imageModelManager.agyClient;
-      if (agyClient && typeof agyClient.generateImageWithAgy === 'function') {
-        const agyImg = await agyClient.generateImageWithAgy({
-          prompt: enhancedPrompt,
-          outputDir,
-          imageName: `gemini_art_${randomUUID().slice(0, 6)}`,
-          style,
-          afterHeading
-        });
-        if (agyImg) return agyImg;
+      const imagenImg = await agyClient.generateImageWithAgy({
+        prompt: buildImagenPrompt(prompt, style, { postTitle, afterHeading }),
+        outputDir,
+        imageName: afterHeading || postTitle || 'blog',
+        style,
+        afterHeading,
+        width,
+        height
+      });
+      if (imagenImg) {
+        const label = (afterHeading || postTitle || prompt).replace(/^[#\s0-9.]+/, '').slice(0, 60);
+        return { ...imagenImg, title: label, caption: `💎 Google Imagen: ${label}` };
       }
     } catch (agyErr) {
-      console.warn('[AiImageGen] Gemini Imagen generation bypassed:', agyErr.message);
+      console.warn('[AiImageGen] Google Imagen failed:', agyErr.message);
     }
   }
 
-  // 3. Stylized art or cloud neural fallback (clean prompt with nofeed=true to eliminate watermark)
-  const candidateUrls = [
-    `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${resolvedSeed}&nologo=true&nofeed=true`,
-    `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${resolvedSeed}&nologo=true&nofeed=true&model=turbo`
-  ];
-
-  for (const imageUrl of candidateUrls) {
-    try {
-      const response = await fetchImpl(imageUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        signal: AbortSignal.timeout(6000)
-      });
-
-      if (response.status === 429) break;
-
-      if (response.ok) {
-        const bytes = Buffer.from(await response.arrayBuffer());
-        if (bytes.length > 10000) {
-          await writeFile(filePath, bytes, { mode: 0o600 });
-          return {
-            id: `ai-art-${randomUUID().slice(0, 8)}`,
-            title: prompt.slice(0, 60),
-            filePath,
-            previewUrl: `/generated-images/thumb/${filename}`,
-            downloadUrl: `/generated-images/${filename}`,
-            thumbnailUrl: `/generated-images/thumb/${filename}`,
-            pageUrl: '',
-            author: `⚡ AI 그래픽 아트 (${styleLabel})`,
-            license: `AI 맞춤 생성 (${styleLabel})`,
-            licenseUrl: '',
-            afterHeading,
-            caption: `⚡ AI ${styleLabel}: ${prompt.slice(0, 60)}`,
-            isAiGenerated: true,
-            style,
-            autoSelected: true
-          };
-        }
-      }
-    } catch (err) {
-      console.warn(`[AiImageGen] Neural render failed (${err.message}), trying fallback photo...`);
-    }
-  }
-
-  // 4. Ultimate reliable fallback: 1280px verified editorial photo matching the exact section
+  // 2. When Imagen is unavailable (quota, network), fall back to a photo matching the section so the
+  //    post is never left without images.
   const bespokeFallback = await findBespokeTopicImage({
     query: prompt,
     outputDir,
@@ -987,8 +927,8 @@ export async function generateAiDrawingsForPost(
     }
   }
 
-  const generatedImages = [];
-  for (const target of targets.slice(0, 3)) {
+  // Imagen takes about a minute per picture, so the three run at once.
+  const results = await Promise.all(targets.slice(0, 3).map(async (target) => {
     try {
       const img = await generateAiDrawing({
         prompt: target.prompt,
@@ -1003,15 +943,16 @@ export async function generateAiDrawingsForPost(
         excludeTitles
       });
       if (img) {
-        generatedImages.push(img);
         if (img.downloadUrl) excludeUrls.add(img.downloadUrl);
         if (img.pageUrl) excludeUrls.add(img.pageUrl);
         if (img.title) excludeTitles.add(img.title);
       }
+      return img;
     } catch (err) {
       console.error('[AiImageGen] Failed target rendering:', err);
+      return null;
     }
-  }
+  }));
 
-  return generatedImages;
+  return results.filter(Boolean);
 }

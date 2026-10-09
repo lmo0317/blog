@@ -9,13 +9,13 @@ import { parseMarkdownBatch } from '../lib/markdown-batch.js';
 
 const appRoot = path.resolve(import.meta.dirname, '..');
 
-test('auto posting UI uses topic and free-form prompt with explicit immediate-publish consent', async () => {
+test('auto posting UI uses topic and free-form prompt and always reviews before publishing', async () => {
   const html = await readFile(path.join(appRoot, 'public', 'index.html'), 'utf8');
   assert.match(html, /id="autoPostTopic"/);
   assert.match(html, /id="autoPostBrief"/);
   assert.doesNotMatch(html, /알구몬 핫딜/);
   assert.doesNotMatch(html, /id="dealsModeContainer"/);
-  assert.match(html, /id="autoPublishNow"/);
+  assert.doesNotMatch(html, /id="autoPublishNow"/);
   assert.match(html, /id="autoPostProgress"/);
   assert.match(html, /id="articleImageModelSelect"/);
   assert.match(html, /id="articleModelSelect"/);
@@ -30,20 +30,20 @@ test('auto posting UI uses topic and free-form prompt with explicit immediate-pu
 
 test('auto posting client routes the unified user prompt through draft, image, and publish flow', async () => {
   const script = await readFile(path.join(appRoot, 'public', 'app.js'), 'utf8');
-  assert.match(script, /api\('\/api\/blog\/draft'/);
+  assert.match(script, /api\('\/?api\/blog\/draft'/);
   assert.doesNotMatch(script, /inputMode === 'link'/);
   assert.match(script, /publishCurrentDraft\(\)/);
   assert.match(script, /state\.images = data\.autoImages \|\| \[\]/);
-  assert.match(script, /3\/3 생성된 글과 이미지를 네이버 블로그에 발행/);
+  assert.match(script, /아래에서 검토 후 발행할 수 있습니다/);
   assert.match(script, /generation-status/);
   assert.match(script, /경과 시간/);
   assert.match(script, /오류 발생/);
-  assert.match(script, /\/api\/image-models\/select/);
+  assert.match(script, /api\/image-models\/select/);
   assert.match(script, /gemini-imagen/);
   assert.match(script, /function resetPublishedPostWorkspace\(\)/);
   assert.match(script, /resetPublishedPostWorkspace\(\)/);
   assert.match(script, /promptConfig/);
-  assert.match(script, /api\('\/api\/blog\/prompt-template'/);
+  assert.match(script, /api\('\/?api\/blog\/prompt-template'/);
 });
 
 test('draft endpoint detects a URL inside the user prompt for automatic reinterpretation', async () => {
@@ -67,10 +67,10 @@ test('editable prompt JSON exposes the complete writing and image instructions',
   assert.match(llm, /노출, 속옷, 수영복/);
 });
 
-test('image model catalog exposes Google Imagen and online FLUX choices without ComfyUI', async () => {
+test('image model catalog offers only Google Imagen, without ComfyUI or FLUX', async () => {
   const manager = await readFile(path.join(appRoot, 'lib', 'image-model-manager.js'), 'utf8');
   assert.match(manager, /gemini-imagen/);
-  assert.match(manager, /pollinations/);
+  assert.doesNotMatch(manager, /pollinations|real-photo/);
   assert.doesNotMatch(manager, /ComfyUI/i);
   assert.doesNotMatch(manager, /diffusers/i);
   const generator = await readFile(path.join(appRoot, 'lib', 'ai-image-generator.js'), 'utf8');
@@ -179,7 +179,7 @@ test('multi-part series generates all episodes, supports interactive episode tab
   assert.match(server, /\/api\/blog\/series\/generate-images/);
 
   const agy = await readFile(path.join(appRoot, 'lib', 'agy-client.js'), 'utf8');
-  assert.match(agy, /fst\.mtimeMs < callStartTime/);
+  assert.match(agy, /mtime >= startedAt/);
   assert.match(agy, /RESOURCE_EXHAUSTED/);
 
   const imageGen = await readFile(path.join(appRoot, 'lib', 'ai-image-generator.js'), 'utf8');

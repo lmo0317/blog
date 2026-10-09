@@ -5,9 +5,47 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { copyFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import { DEFAULT_PROMPT_CONFIG, normalizeGeneratedPost, parseLlmJson } from './llm.js';
 
 const execFileAsync = promisify(execFile);
+
+const AGY_BRAIN_DIR = path.join(os.homedir(), '.gemini', 'antigravity-cli', 'brain');
+const claimedImagenFiles = new Set();
+
+// The image path agy printed, or else the newest image it saved since the call started that no other
+// concurrent call has taken.
+function findGeneratedImage(output, startedAt) {
+  const pattern = /([A-Za-z]:[\\/][^\s"'`<>|]+?|\/[^\s"'`<>|]+?)\.(png|jpe?g|webp)\b/gi;
+  const printed = [...output.matchAll(pattern)].map((match) => match[0]).reverse();
+  for (const candidate of printed) {
+    if (fs.existsSync(candidate) && !claimedImagenFiles.has(candidate)) {
+      claimedImagenFiles.add(candidate);
+      return candidate;
+    }
+  }
+  const found = [];
+  const walk = (dir, depth) => {
+    if (depth > 3) return;
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full, depth + 1);
+      else if (/\.(png|jpe?g|webp)$/i.test(entry.name)) {
+        try {
+          const mtime = fs.statSync(full).mtimeMs;
+          if (mtime >= startedAt - 1000 && !claimedImagenFiles.has(full)) found.push({ full, mtime });
+        } catch {}
+      }
+    }
+  };
+  walk(AGY_BRAIN_DIR, 0);
+  found.sort((a, b) => b.mtime - a.mtime);
+  if (!found.length) return null;
+  claimedImagenFiles.add(found[0].full);
+  return found[0].full;
+}
 
 export const AGY_GEMINI_MODELS = [
   {
@@ -77,17 +115,17 @@ export class AgyClient {
     return AGY_GEMINI_MODELS;
   }
 
-  async executeAgyPrompt(prompt, { model = this.defaultModel, json = true, timeoutMs = this.timeoutMs } = {}) {
+  async executeAgyPrompt(prompt, { model = this.defaultModel, json = true, timeoutMs = this.timeoutMs, cwd = os.tmpdir(), readFiles = [] } = {}) {
     const args = ['--model', model, '--disable-slash-commands'];
     if (json) {
       args.push('--output-format', 'json');
     }
 
-    const isolatedPrompt = [
-      '[시스템 절대 원칙: 본 요청은 순수 텍스트(JSON) 생성 작업입니다. 파일 탐색, 저장소 검색 등 어떤 도구(Tool Call)도 절대 호출하지 마십시오. 오직 요청된 JSON 스키마에 맞는 완성된 텍스트만을 즉시 출력해야 합니다.]',
-      '',
-      prompt
-    ].join('\n');
+    // Text jobs may not touch any tool. A photo job may only open the listed photo files.
+    const guard = readFiles.length
+      ? `[시스템 절대 원칙: 아래 사진 파일만 열어서 보세요(${readFiles.join(', ')}). 그 밖의 파일 탐색, 명령 실행, 파일 수정은 절대 하지 마십시오. 사진을 다 본 뒤 요청된 JSON만 출력하세요.]`
+      : '[시스템 절대 원칙: 본 요청은 순수 텍스트(JSON) 생성 작업입니다. 파일 탐색, 저장소 검색 등 어떤 도구(Tool Call)도 절대 호출하지 마십시오. 오직 요청된 JSON 스키마에 맞는 완성된 텍스트만을 즉시 출력해야 합니다.]';
+    const isolatedPrompt = [guard, '', prompt].join('\n');
 
     return new Promise((resolve, reject) => {
       let stdout = '';
@@ -95,7 +133,7 @@ export class AgyClient {
       let isSettled = false;
 
       const child = spawn('agy', args, {
-        cwd: os.tmpdir(),
+        cwd,
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe']
       });
@@ -164,6 +202,110 @@ export class AgyClient {
 
       child.stdin.end(isolatedPrompt, 'utf8');
     });
+  }
+
+  // Photo-based post: Gemini opens the user's photos, works out what they show, and writes a post around
+  // them. Each section says which photos (1-based, in upload order) belong under it.
+  async generatePhotoBlogPost({ photoDir, photoFiles = [], hint = '', tone = 'friendly', length = 'medium', model = this.defaultModel } = {}) {
+    if (!photoFiles.length) throw new Error('사진을 한 장 이상 올려 주세요.');
+    const list = photoFiles.map((file, i) => `  ${i + 1}번 사진: ${file}`).join('\n');
+    const chosenTone = TONE_GUIDE[tone] || TONE_GUIDE.friendly;
+    const chosenLength = LENGTH_GUIDE[length] || LENGTH_GUIDE.medium;
+    const promptText = [
+      '너는 네이버 블로그 작가다. 아래 사진 파일을 모두 열어 직접 보고, 사진 속 장소·음식·물건·상황을 파악해서 이 사진들로 쓰는 블로그 글을 한국어로 써라.',
+      '',
+      '[사진 파일] (현재 폴더)',
+      list,
+      hint ? `\n[글쓴이 메모] ${hint}` : '',
+      '',
+      `- 어조/말투: ${chosenTone}`,
+      `- 목표 글자 수: ${chosenLength}`,
+      '- 사진에서 실제로 보이는 것만 근거로 쓴다. 가게 이름, 가격, 위치처럼 사진이나 메모로 확인되지 않는 정보는 지어내지 말고 "직접 확인한 내용으로 채우기"처럼 비워 둔다.',
+      '- 소제목은 3~5개, 사진 순서를 따라 자연스럽게 이어지게 하고, 모든 사진이 정확히 한 소제목에 들어가게 한다.',
+      '',
+      '[필수 JSON 출력 스키마] 마크다운 백틱 없이 순수 JSON만 출력:',
+      '{',
+      '  "title": "사진 내용을 담은 매력적인 네이버 블로그 제목 (20~40자)",',
+      '  "lead": "사진 속 상황으로 시작하는 도입부 (200~300자)",',
+      '  "summaryPoints": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"],',
+      '  "sections": [',
+      '    { "heading": "1. 소제목", "body": "이 소제목에 들어가는 사진들을 설명하고 이야기를 이어가는 본문 (300~500자)", "photos": [1, 2] }',
+      '  ],',
+      '  "closing": "마무리와 소통 유도 멘트 (150~250자)",',
+      '  "tags": ["태그1", "태그2", "태그3", "태그4", "태그5", "태그6", "태그7", "태그8"],',
+      '  "photoCaptions": ["1번 사진 한 줄 설명", "2번 사진 한 줄 설명"]',
+      '}'
+    ].filter(Boolean).join('\n');
+
+    const raw = await this.executeAgyPrompt(promptText, { model, cwd: photoDir, readFiles: photoFiles, timeoutMs: 240000 });
+    const parsed = typeof raw === 'string' ? parseLlmJson(raw) : (raw || {});
+    const sections = Array.isArray(parsed.sections) ? parsed.sections : [];
+    for (const section of sections) {
+      delete section.imageQuery;
+    }
+    const post = normalizeGeneratedPost(parsed);
+
+    // Photo i goes under the section that lists it; any photo no section claimed goes under the
+    // section whose turn it is in upload order.
+    const headingOf = (index) => String(sections[index]?.heading || '').trim();
+    const placement = photoFiles.map(() => -1);
+    sections.forEach((section, sectionIndex) => {
+      (Array.isArray(section.photos) ? section.photos : []).forEach((n) => {
+        const i = Number(n) - 1;
+        if (i >= 0 && i < placement.length && placement[i] === -1) placement[i] = sectionIndex;
+      });
+    });
+    placement.forEach((value, i) => {
+      if (value === -1) placement[i] = sections.length ? Math.min(sections.length - 1, Math.floor((i * sections.length) / photoFiles.length)) : -1;
+    });
+    const captions = Array.isArray(parsed.photoCaptions) ? parsed.photoCaptions : [];
+    post.photoPlacement = photoFiles.map((file, i) => ({
+      file,
+      afterHeading: placement[i] >= 0 ? headingOf(placement[i]) : '',
+      caption: String(captions[i] || '').trim().slice(0, 120)
+    }));
+    post.imagePlans = post.photoPlacement.map((item) => ({ query: item.caption, afterHeading: item.afterHeading }));
+    return post;
+  }
+
+  // Short writing brief for the "간략한 내용" field, from the topic and, when the topic came from the
+  // golden keyword finder, its diagnosis (what the current top posts cover and why it is a gap).
+  async generatePostBrief({ topic = '', golden = null, model = this.defaultModel } = {}) {
+    const keyword = String(topic || '').trim();
+    if (!keyword) throw new Error('포스팅 주제를 먼저 입력해 주세요.');
+    const g = golden && String(golden.keyword || '').trim() === keyword ? golden : null;
+    const lines = [
+      '너는 네이버 블로그 글 기획자다. 아래 주제로 쓸 블로그 글의 "간략한 내용"을 한국어로 써라.',
+      '이 내용은 그대로 AI 글쓰기 요청문으로 쓰인다. 글 본문을 쓰지 말고, 어떤 글을 쓸지 정리만 해라.',
+      '',
+      `주제(검색 키워드): ${keyword}`
+    ];
+    if (g) {
+      lines.push('', '[황금 키워드 진단]');
+      if (g.demand) lines.push(`- 검색 수요: ${g.demand}`);
+      if (g.summary) lines.push(`- 진단 요약: ${g.summary}`);
+      for (const reason of (g.reasons || []).slice(0, 5)) lines.push(`- ${reason}`);
+      const titles = (g.topPosts || []).slice(0, 5).map((post, i) => `  ${i + 1}. ${post.title}${post.ageText ? ` (${post.ageText})` : ''}`);
+      if (titles.length) lines.push('- 지금 네이버 상위 글 제목:', ...titles);
+    }
+    lines.push(
+      '',
+      '[출력 형식] 마크다운 기호(#, *, **) 없이 아래 다섯 줄 머리말을 그대로 쓰고, 전체 8~14줄로 간결하게.',
+      '대상 독자: 이 키워드를 검색하는 사람이 누구이고 무엇이 궁금한지 한두 문장',
+      '글의 방향: 검색한 사람이 가장 알고 싶은 답을 중심으로 한 글의 관점',
+      '꼭 다룰 내용: 소제목 후보 3~5개를 "- " 로 시작하는 줄로',
+      g ? '상위 글과 다르게: 위 상위 글 제목들이 놓친 정보나 관점 한두 개' : '차별점: 비슷한 글과 다르게 담을 정보나 관점 한두 개',
+      `제목 팁: "${keyword}"를 제목 앞부분에 넣은 제목 예시 하나`,
+      '',
+      '[지킬 것] 확인되지 않은 가격, 수치, 효과, 사용 경험은 지어내지 말고 "직접 확인한 내용으로 채우기"처럼 적어라. 답변에는 간략한 내용만 출력해라.'
+    );
+    const text = await this.executeAgyPrompt(lines.join('\n'), { model, json: false, timeoutMs: 120000 });
+    return String(text || '')
+      .replace(/^```[a-z]*\n?|```$/gim, '')
+      .replace(/\*\*/g, '')
+      .replace(/^#+\s*/gm, '')
+      .trim()
+      .slice(0, 3000);
   }
 
   buildSystemPrompt(promptConfig = null, { seriesCount = 1, seriesEpisode = 1 } = {}) {
@@ -435,19 +577,86 @@ export class AgyClient {
     return normalizeGeneratedPost(rawJson, deals);
   }
 
+  // Google Imagen through agy's generate_image tool. agy saves the picture under
+  // ~/.gemini/antigravity-cli/brain/<conversation>/ and replies with the path; headless agy may not
+  // copy files, so we copy and crop it here. Takes about a minute per image; several can run at once.
   async generateImageWithAgy({
     prompt = '',
     outputDir = '',
     imageName = 'blog_visual',
     style = 'photorealistic',
-    aspectRatio = '1:1',
-    timeoutMs = 5000,
-    afterHeading = ''
+    afterHeading = '',
+    width = 1024,
+    height = 768,
+    timeoutMs = 300000
   } = {}) {
-    // RESOURCE_EXHAUSTED fallback: agy CLI is optimized for ultra-fast Gemini text models.
-    // Image requests immediately fall back to 1280px real photo or FLUX without waiting.
-    // Verified: if matched, checks (fst.mtimeMs < callStartTime) to prevent stale images.
-    return null;
+    if (!prompt || !outputDir) return null;
+    if (Date.now() < this.imagenQuotaExhaustedUntil) return null;
+
+    const instruction = [
+      'Call generate_image exactly once to create this image:',
+      '',
+      `${prompt}. Landscape composition with the subject centered so it survives a 4:3 crop. No text, no letters, no watermark, no logo.`,
+      '',
+      'Do NOT run any terminal commands and do not copy, move or edit any files.',
+      'When done, reply with only the absolute file path where generate_image saved the image.'
+    ].join('\n');
+
+    const startedAt = Date.now();
+    const output = await new Promise((resolve) => {
+      let text = '';
+      const child = spawn('agy', ['-p', instruction, '--print-timeout', `${Math.round(timeoutMs / 1000)}s`], {
+        cwd: os.tmpdir(),
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      const timer = setTimeout(() => { try { child.kill('SIGTERM'); } catch {} }, timeoutMs + 30000);
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', (chunk) => { text += chunk; });
+      child.stderr.on('data', (chunk) => { text += chunk; });
+      child.on('error', (err) => { clearTimeout(timer); resolve(`${text}\n${err.message}`); });
+      child.on('close', () => { clearTimeout(timer); resolve(text); });
+    });
+
+    if (/RESOURCE_EXHAUSTED|quota/i.test(output)) {
+      this.imagenQuotaExhaustedUntil = Date.now() + 30 * 60 * 1000;
+      console.warn('[Imagen] quota exhausted; using photos for the next 30 minutes');
+      return null;
+    }
+
+    const source = findGeneratedImage(output, startedAt);
+    if (!source) {
+      console.warn('[Imagen] no image produced:', output.trim().slice(-300));
+      return null;
+    }
+
+    await mkdir(outputDir, { recursive: true });
+    const filename = `imagen-${imageName.replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'art'}-${randomUUID().slice(0, 8)}.jpg`;
+    const filePath = path.join(outputDir, filename);
+    await sharp(source)
+      .resize({ width, height, fit: 'cover', position: 'centre' })
+      .jpeg({ quality: 90, mozjpeg: true })
+      .toFile(filePath);
+
+    const title = prompt.split(',')[0].slice(0, 60);
+    return {
+      id: `imagen-${randomUUID().slice(0, 8)}`,
+      title,
+      filePath,
+      previewUrl: `generated-images/thumb/${filename}`,
+      downloadUrl: `generated-images/${filename}`,
+      thumbnailUrl: `generated-images/thumb/${filename}`,
+      pageUrl: '',
+      author: '💎 Google Imagen',
+      license: 'AI 생성 이미지 (Google Imagen)',
+      licenseUrl: '',
+      afterHeading,
+      caption: `💎 Google Imagen: ${title}`,
+      isAiGenerated: true,
+      style,
+      autoSelected: true
+    };
   }
 
   buildCommentPrompt({ title, contentSnippet = '', imageSummary = '', tone = 'friendly' }) {

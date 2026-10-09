@@ -25,13 +25,12 @@ test('ImageModelManager manages Google Imagen and cloud FLUX options', async () 
   await manager.init();
 
   const list = await manager.list();
-  assert.ok(list.length >= 2);
+  assert.equal(list.length, 1);
   assert.equal(manager.activeModelId, 'gemini-imagen');
   assert.ok(list.some((m) => m.id === 'gemini-imagen' && m.isActive));
-  assert.ok(list.some((m) => m.id === 'pollinations'));
 
-  await manager.select('pollinations');
-  assert.equal(manager.activeModelId, 'pollinations');
+  await assert.rejects(() => manager.select('pollinations'));
+  assert.equal(manager.activeModelId, 'gemini-imagen');
 
   await rm(testConfigPath, { force: true }).catch(() => {});
 });

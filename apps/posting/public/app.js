@@ -59,7 +59,7 @@ $('#tabImagePromptBtn')?.addEventListener('click', () => switchPromptTab('image'
 
 async function loadPromptConfig(force = false) {
   if (promptConfig && !force) return promptConfig;
-  promptConfig = await api('/api/blog/prompt-template');
+  promptConfig = await api('api/blog/prompt-template');
   return promptConfig;
 }
 
@@ -255,7 +255,7 @@ fetchDealsButton?.addEventListener('click', async () => {
   fetchDealsButton.disabled = true;
   fetchDealsButton.textContent = '알구몬 긁어오는 중…';
   try {
-    const data = await api('/api/blog/deals?refresh=true&limit=5');
+    const data = await api('api/blog/deals?refresh=true&limit=5');
     state.deals = data.deals || [];
     renderDeals();
     draftButton.disabled = state.deals.length === 0;
@@ -303,7 +303,7 @@ draftForm?.addEventListener('submit', async (event) => {
   $('#llmStatus').className = 'status';
   try {
     const model = $('#dealsModelSelect')?.value || '';
-    const data = await api('/api/blog/deals/draft', {
+    const data = await api('api/blog/deals/draft', {
       method: 'POST',
       body: JSON.stringify({
         deals: state.deals,
@@ -381,7 +381,7 @@ function startGenerationProgress(generationId) {
   const pollTimer = setInterval(async () => {
     if (stopped) return;
     try {
-      const progress = await api(`/api/blog/generation-status/${generationId}`, { timeoutMs: 3000 });
+      const progress = await api(`api/blog/generation-status/${generationId}`, { timeoutMs: 3000 });
       pollFailCount = 0;
       latest = progress.message || latest;
       if (progress.status === 'error') {
@@ -638,9 +638,11 @@ function renderSeriesTabs() {
   }
 }
 
-function switchToEpisode(idx) {
+function switchToEpisode(idx, { fresh = false } = {}) {
   if (!state.seriesEpisodes || !state.seriesEpisodes[idx]) return;
-  saveCurrentEpisodeState();
+  // Save the form back into the current episode first, except when showing a freshly generated draft:
+  // the form then still holds the previous post and would overwrite the new tags and image plans.
+  if (!fresh) saveCurrentEpisodeState();
   state.currentEpisodeIdx = idx;
   const ep = state.seriesEpisodes[idx];
 
@@ -666,7 +668,6 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
   const topic = $('#autoPostTopic')?.value?.trim() || '';
   const brief = $('#autoPostBrief')?.value?.trim() || '';
   if (topic.length < 2) return toast('포스팅 주제를 2자 이상 입력해주세요.', true);
-  if ($('#autoPublishNow')?.checked && !state.connected) return toast('자동 발행을 사용하려면 먼저 네이버 계정을 연결해주세요.', true);
 
   const btn = $('#articleDraftBtn');
   btn.disabled = true;
@@ -687,7 +688,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     const imageModelId = $('#articleImageModelSelect')?.value || '';
 
     if (imageModelId && imageModelId !== activeImageModelId) {
-      await api('/api/image-models/select', { method: 'POST', body: JSON.stringify({ modelId: imageModelId }) });
+      await api('api/image-models/select', { method: 'POST', body: JSON.stringify({ modelId: imageModelId }) });
       activeImageModelId = imageModelId;
     }
 
@@ -705,7 +706,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
       imagePrompt: promptConfig?.imagePrompt || promptConfig?.imagePromptInstructions || '',
       promptConfig
     };
-    const data = await api('/api/blog/draft', {
+    const data = await api('api/blog/draft', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
@@ -714,7 +715,7 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     state.images = data.autoImages || [];
     state.seriesEpisodes = Array.isArray(data.episodes) && data.episodes.length > 0 ? data.episodes : [data];
     state.currentEpisodeIdx = 0;
-    switchToEpisode(0);
+    switchToEpisode(0, { fresh: true });
 
     const seriesBadge = data.seriesCount > 1 ? ` · [총 ${data.seriesCount}부작 전편 집필 완료]` : '';
     $('#draftModel').textContent = `${data.engineLabel || data.model || '💎 Google Gemini (agy)'}${seriesBadge}`;
@@ -755,19 +756,13 @@ $('#articleDraftForm')?.addEventListener('submit', async (e) => {
     publishForm.classList.remove('hidden');
     $('#llmStatus').className = 'status online';
     publishForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (publishConfirm) publishConfirm.checked = Boolean($('#autoPublishNow')?.checked);
+    // Generated posts are always reviewed first; publishing happens only from the review form below.
+    if (publishConfirm) publishConfirm.checked = false;
     updatePublishState();
-    if ($('#autoPublishNow')?.checked) {
-      setAutoPostProgress('3/3 생성된 글과 이미지를 네이버 블로그에 발행하고 있습니다…');
-      const result = await publishCurrentDraft();
-      if (result?.status === 'published') setAutoPostProgress('완료: 네이버 블로그에 자동 포스팅했습니다.', 'complete');
-      else setAutoPostProgress('네이버 발행 창이 열렸습니다. 화면에서 최종 상태를 확인해주세요.');
-    } else {
-      setAutoPostProgress('완료: 글과 이미지가 준비됐습니다. 아래에서 검토 후 발행할 수 있습니다.', 'complete');
-      toast(data.seriesCount > 1
-        ? `✨ [총 ${data.seriesCount}부작] 전편 글과 맞춤 이미지가 준비되었습니다! 회차별 탭을 클릭하여 확인하세요.`
-        : `✨ [${data.engineLabel || data.model}] 글과 맞춤 이미지 생성이 완료되었습니다!`);
-    }
+    setAutoPostProgress('완료: 글과 이미지가 준비됐습니다. 아래에서 검토 후 발행할 수 있습니다.', 'complete');
+    toast(data.seriesCount > 1
+      ? `✨ [총 ${data.seriesCount}부작] 전편 글과 맞춤 이미지가 준비되었습니다! 회차별 탭을 클릭하여 확인하세요.`
+      : `✨ [${data.engineLabel || data.model}] 글과 맞춤 이미지 생성이 완료되었습니다!`);
   } catch (error) {
     stopProgress();
     $('#llmStatus').className = 'status';
@@ -818,7 +813,7 @@ async function loadImages() {
   }
   try {
     const sourceUrl = state.selectedTrend?.sourceUrl || '';
-    const data = await api(`/api/blog/images?query=${encodeURIComponent(query)}&sourceUrl=${encodeURIComponent(sourceUrl)}`);
+    const data = await api(`api/blog/images?query=${encodeURIComponent(query)}&sourceUrl=${encodeURIComponent(sourceUrl)}`);
     state.images = data.items || [];
     state.selectedImages.clear();
     renderImages();
@@ -840,7 +835,7 @@ async function loadAutoImages() {
   try {
     const sourceUrl = state.selectedTrend?.sourceUrl || '';
     const topic = $('#postTitle')?.value || '핫딜';
-    const data = await api('/api/blog/images/auto', {
+    const data = await api('api/blog/images/auto', {
       method: 'POST',
       body: JSON.stringify({ topic, plans: state.imagePlans, sourceUrl })
     });
@@ -949,7 +944,7 @@ async function publishCurrentDraft() {
   publishButton.textContent = '네이버에 발행 중…';
   $('#publishedLink')?.classList.add('hidden');
   try {
-    const data = await api('/api/blog/publish', {
+    const data = await api('api/blog/publish', {
       method: 'POST',
       body: JSON.stringify({
         title: $('#postTitle')?.value || '',
@@ -1053,7 +1048,7 @@ $('#generateEpisodeImagesBtn')?.addEventListener('click', async () => {
   }
   try {
     const imageStyle = $('#articleImageStyle')?.value || 'photorealistic';
-    const res = await api('/api/blog/series/generate-images', {
+    const res = await api('api/blog/series/generate-images', {
       method: 'POST',
       body: JSON.stringify({
         episodePost: currentEp,
@@ -1094,7 +1089,7 @@ async function handleIdPwLogin(form, idInputId, pwInputId) {
   }
   toast('네이버 계정으로 로그인 중입니다. 잠시만 기다려주세요…');
   try {
-    const data = await api('/api/naver/login', {
+    const data = await api('api/naver/login', {
       method: 'POST',
       body: JSON.stringify({ id, password })
     });
@@ -1136,7 +1131,7 @@ $('#cookieForm')?.addEventListener('submit', async (e) => {
     const nidAut = $('#cookieAut')?.value?.trim() || '';
     const nidSes = $('#cookieSes')?.value?.trim() || '';
     if (!nidAut || !nidSes) return toast('NID_AUT와 NID_SES 값을 모두 입력해주세요.', true);
-    const res = await api('/api/naver/inject-cookies', {
+    const res = await api('api/naver/inject-cookies', {
       method: 'POST',
       body: JSON.stringify({ nidAut, nidSes })
     });
@@ -1158,7 +1153,7 @@ $('#cookieForm')?.addEventListener('submit', async (e) => {
 
 async function refreshDailySummary() {
   try {
-    const summary = await api('/api/neighbors/summary');
+    const summary = await api('api/neighbors/summary');
     if ($('#dailyLimitBadge')) {
       $('#dailyLimitBadge').innerHTML = `📊 오늘 누적 신청: <strong>${summary.todayCount || 0}</strong>건`;
     }
@@ -1173,7 +1168,7 @@ let sseSource = null;
 
 function initAutoNeighborEvents() {
   if (sseSource) return;
-  sseSource = new EventSource('/api/neighbors/auto/events');
+  sseSource = new EventSource('api/neighbors/auto/events');
 
   sseSource.addEventListener('status', (e) => {
     try {
@@ -1346,7 +1341,7 @@ $('#startAutoBtn')?.addEventListener('click', async () => {
   try {
     initAutoNeighborEvents();
     $('#liveDashboard')?.classList.remove('hidden');
-    const res = await api('/api/neighbors/auto/start', {
+    const res = await api('api/neighbors/auto/start', {
       method: 'POST',
       body: JSON.stringify({ keyword, targetCount, minDelay, maxDelay, message, activeWithinDays })
     });
@@ -1359,7 +1354,7 @@ $('#startAutoBtn')?.addEventListener('click', async () => {
 
 $('#pauseAutoBtn')?.addEventListener('click', async () => {
   try {
-    const res = await api('/api/neighbors/auto/pause', { method: 'POST' });
+    const res = await api('api/neighbors/auto/pause', { method: 'POST' });
     updateAutoDashboard(res);
     toast('작업을 일시정지했습니다.');
   } catch (err) {
@@ -1369,7 +1364,7 @@ $('#pauseAutoBtn')?.addEventListener('click', async () => {
 
 $('#resumeAutoBtn')?.addEventListener('click', async () => {
   try {
-    const res = await api('/api/neighbors/auto/resume', { method: 'POST' });
+    const res = await api('api/neighbors/auto/resume', { method: 'POST' });
     updateAutoDashboard(res);
     toast('작업을 재개했습니다.');
   } catch (err) {
@@ -1380,7 +1375,7 @@ $('#resumeAutoBtn')?.addEventListener('click', async () => {
 $('#stopAutoBtn')?.addEventListener('click', async () => {
   if (!confirm('정말 진행 중인 서로이웃 자동화 작업을 중단하시겠습니까?')) return;
   try {
-    const res = await api('/api/neighbors/auto/stop', { method: 'POST' });
+    const res = await api('api/neighbors/auto/stop', { method: 'POST' });
     updateAutoDashboard(res);
     toast('작업이 중단되었습니다.');
   } catch (err) {
@@ -1400,7 +1395,7 @@ async function loadHistory(query = '') {
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">이력을 불러오는 중...</td></tr>';
 
   try {
-    const data = await api(`/api/neighbors/history?limit=100&keyword=${encodeURIComponent(query)}`);
+    const data = await api(`api/neighbors/history?limit=100&keyword=${encodeURIComponent(query)}`);
     const records = data.items || [];
     if (records.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#a0aec0;">신청 이력이 없습니다.</td></tr>';
@@ -1455,13 +1450,13 @@ $('#historySearchInput')?.addEventListener('keydown', (e) => {
 });
 
 $('#exportCsvBtn')?.addEventListener('click', () => {
-  window.open('/api/neighbors/history/export', '_blank');
+  window.open('api/neighbors/history/export', '_blank');
 });
 
 $('#clearHistoryBtn')?.addEventListener('click', async () => {
   if (!confirm('정말 모든 서로이웃 신청 이력을 초기화하시겠습니까? (중복 신청 방지 기록도 함께 삭제됩니다)')) return;
   try {
-    await api('/api/neighbors/history/clear', { method: 'POST' });
+    await api('api/neighbors/history/clear', { method: 'POST' });
     toast('신청 이력이 성공적으로 초기화되었습니다.');
     loadHistory();
     refreshDailySummary();
@@ -1479,7 +1474,7 @@ async function loadEngagementHistory(query = '') {
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">소통 이력을 불러오는 중...</td></tr>';
 
   try {
-    const data = await api(`/api/engagement/history?limit=100&keyword=${encodeURIComponent(query)}`);
+    const data = await api(`api/engagement/history?limit=100&keyword=${encodeURIComponent(query)}`);
     const records = data.items || [];
     if (records.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#a0aec0;">공감/댓글 소통 이력이 없습니다.</td></tr>';
@@ -1549,13 +1544,13 @@ $('#engHistorySearchInput')?.addEventListener('keydown', (e) => {
 });
 
 $('#exportEngCsvBtn')?.addEventListener('click', () => {
-  window.open('/api/engagement/history/csv', '_blank');
+  window.open('api/engagement/history/csv', '_blank');
 });
 
 $('#clearEngHistoryBtn')?.addEventListener('click', async () => {
   if (!confirm('정말 모든 공감/댓글 소통 이력을 초기화하시겠습니까? (중복 소통 방지 기록도 함께 삭제됩니다)')) return;
   try {
-    await api('/api/engagement/history', { method: 'DELETE' });
+    await api('api/engagement/history', { method: 'DELETE' });
     toast('공감/댓글 소통 이력이 성공적으로 초기화되었습니다.');
     loadEngagementHistory();
   } catch (err) {
@@ -1566,7 +1561,7 @@ $('#clearEngHistoryBtn')?.addEventListener('click', async () => {
 // Logout
 
 $('#logoutButton')?.addEventListener('click', async () => {
-  await api('/api/naver/logout', { method: 'POST' }).catch(() => {});
+  await api('api/naver/logout', { method: 'POST' }).catch(() => {});
   setConnected(false);
   toast('연결이 해제되었습니다.');
 });
@@ -1580,7 +1575,7 @@ function escapeHtml(value) {
 let currentHardwareSpecs = null;
 let currentModelsList = [];
 let activeModelId = null;
-let activeImageModelId = 'pollinations';
+let activeImageModelId = 'gemini-imagen';
 let imageModelRefreshTimer = null;
 
 function updateLocalAiSummaryUI(activeModel, activeEndpoint, geminiInfo) {
@@ -1626,7 +1621,7 @@ function initSettingsController() {
   });
 
   $('#settingsLogoutButton')?.addEventListener('click', async () => {
-    await api('/api/naver/logout', { method: 'POST' }).catch(() => {});
+    await api('api/naver/logout', { method: 'POST' }).catch(() => {});
     setConnected(false);
     toast('네이버 계정 연결이 해제되었습니다.');
   });
@@ -1634,8 +1629,8 @@ function initSettingsController() {
 
 async function initAiHardwareAndModels() {
   try {
-    const settings = await api('/api/settings').catch(() => null);
-    const specs = await api('/api/hardware/specs').catch(() => ({}));
+    const settings = await api('api/settings').catch(() => null);
+    const specs = await api('api/hardware/specs').catch(() => ({}));
     currentHardwareSpecs = specs;
 
     const gpuNameText = 'Google Cloud TPU / GPU';
@@ -1648,7 +1643,7 @@ async function initAiHardwareAndModels() {
       $('#hardwareRecommendText').innerHTML = `구독 중인 <strong>[💎 Google Gemini (agy 연동)]</strong> 엔진을 사용합니다. PC 사양(VRAM)과 무관하게 3초 만에 글과 이미지를 완성합니다.`;
     }
 
-    const modelsRes = await api('/api/models/list').catch(() => null);
+    const modelsRes = await api('api/models/list').catch(() => null);
     if (modelsRes) {
       currentModelsList = modelsRes.models || [];
       activeModelId = modelsRes.activeModel?.id || 'gemini-3.8-flash-high';
@@ -1676,7 +1671,7 @@ async function initAiHardwareAndModels() {
 
 async function initImageModels() {
   try {
-    const result = await api('/api/image-models/list');
+    const result = await api('api/image-models/list');
     const models = result.models || [];
     activeImageModelId = result.activeModel?.id || 'gemini-imagen';
     renderImageModelCards(models);
@@ -1687,7 +1682,7 @@ async function initImageModels() {
       models.forEach((model) => {
         const option = document.createElement('option');
         option.value = model.id;
-        option.textContent = `💎 ${model.name}`;
+        option.textContent = model.name;
         option.selected = (model.id === activeImageModelId);
         select.append(option);
       });
@@ -1709,7 +1704,7 @@ function renderImageModelCards(models) {
     return `<div class="ai-model-card ${active ? 'active-model' : ''}" data-image-model="${escapeHtml(model.id)}" style="border: 2px solid ${active ? '#3b82f6' : '#e2e8f0'}; background:${active ? '#eff6ff' : '#ffffff'};">
       <div class="model-card-header">
         <div>
-          <strong style="color:#1e3a8a; font-size:14.5px;">💎 ${escapeHtml(model.name)}</strong>
+          <strong style="color:#1e3a8a; font-size:14.5px;">${escapeHtml(model.name)}</strong>
           <span class="model-badge-sub" style="color:#2563eb; font-weight:600;">클라우드 AI · 고화질 이미지</span>
         </div>
         <span class="pill ${active ? 'pill-blue' : ''}">${status}</span>
@@ -1728,7 +1723,7 @@ function renderImageModelCards(models) {
       try {
         button.disabled = true;
         button.textContent = '적용 중…';
-        await api('/api/image-models/select', { method: 'POST', body: JSON.stringify({ modelId }) });
+        await api('api/image-models/select', { method: 'POST', body: JSON.stringify({ modelId }) });
         toast(`이미지 생성 모델을 [${modelId}]로 설정했습니다.`);
         await initImageModels();
       } catch (err) {
@@ -1777,7 +1772,7 @@ function renderModelCards(models, activeId, containerSelector = '#settingsAiMode
       try {
         btn.disabled = true;
         btn.textContent = '설정 중…';
-        await api('/api/models/select', {
+        await api('api/models/select', {
           method: 'POST',
           body: JSON.stringify({ modelId })
         });
@@ -1863,7 +1858,7 @@ function initEngagementAutomation() {
       const dashboard = $('#engDashboard');
       if (dashboard) dashboard.classList.remove('hidden');
 
-      await api('/api/engagement/start', {
+      await api('api/engagement/start', {
         method: 'POST',
         body: JSON.stringify({ keyword, targetCount, doLike, doComment, doNeighbor, neighborMessage, tone, minDelay, maxDelay })
       });
@@ -1887,14 +1882,14 @@ function initEngagementAutomation() {
   // 5. Pause, Resume, Stop buttons
   $('#pauseEngBtn')?.addEventListener('click', async () => {
     try {
-      await api('/api/engagement/pause', { method: 'POST' });
+      await api('api/engagement/pause', { method: 'POST' });
       toast('작업을 일시정지했습니다.');
     } catch (err) { toast(err.message, true); }
   });
 
   $('#resumeEngBtn')?.addEventListener('click', async () => {
     try {
-      await api('/api/engagement/resume', { method: 'POST' });
+      await api('api/engagement/resume', { method: 'POST' });
       toast('작업을 재개했습니다.');
     } catch (err) { toast(err.message, true); }
   });
@@ -1902,7 +1897,7 @@ function initEngagementAutomation() {
   $('#stopEngBtn')?.addEventListener('click', async () => {
     if (!confirm('정말 진행 중인 공감/댓글 자동화 작업을 중단하시겠습니까?')) return;
     try {
-      await api('/api/engagement/stop', { method: 'POST' });
+      await api('api/engagement/stop', { method: 'POST' });
       toast('작업 중단을 요청했습니다.');
     } catch (err) { toast(err.message, true); }
   });
@@ -1916,7 +1911,7 @@ function initEngagementEvents() {
     engagementEventSource = null;
   }
 
-  engagementEventSource = new EventSource('/api/engagement/events');
+  engagementEventSource = new EventSource('api/engagement/events');
 
   engagementEventSource.addEventListener('status', (e) => {
     try {
@@ -2030,10 +2025,612 @@ function appendEngagementLog(entry) {
   }
 }
 
+// Naver QR login: scan with the Naver app. Needed where the login page cannot be shown (the web build's
+// headless browser), since a security check or 2-step verification then blocks the ID/password login.
+function initQrLogin() {
+  // On the 112 web build the ID/password forms are hidden and QR is the only way in.
+  api('api/health').then((health) => {
+    if (health?.loginMode !== 'qr') return;
+    document.documentElement.classList.add('qr-only-login');
+    document.querySelectorAll('[data-qr-login] .qr-login-row span').forEach((el) => {
+      el.textContent = '계정 보호를 위해 이 서버에서는 휴대폰 네이버 앱 QR로만 로그인합니다.';
+    });
+    document.querySelectorAll('[data-qr-login] .qr-login-open').forEach((el) => { el.textContent = 'QR로 로그인하기'; });
+  }).catch(() => {});
+  document.querySelectorAll('[data-qr-login]').forEach((root) => {
+    const box = root.querySelector('.qr-login-box');
+    const image = root.querySelector('.qr-login-image');
+    const status = root.querySelector('.qr-login-status');
+    let timer = null;
+    const stop = () => { clearInterval(timer); timer = null; };
+    // The number Naver asks for in the app (shown on the server's login page after the scan).
+    let check = root.querySelector('.qr-login-check');
+    if (!check) {
+      check = document.createElement('div');
+      check.className = 'qr-login-check hidden';
+      check.innerHTML = '<div class="qr-login-code"></div><div class="qr-login-check-text"></div><img class="qr-login-screen" alt="네이버 로그인 화면">';
+      root.querySelector('.qr-login-text')?.appendChild(check);
+    }
+    const showQrCheck = (result) => {
+      if (!result || result.connected || (!result.code && !result.screen)) return;
+      check.classList.remove('hidden');
+      check.querySelector('.qr-login-code').textContent = result.code ? `휴대폰에서 고를 숫자: ${result.code}` : '';
+      check.querySelector('.qr-login-check-text').textContent = result.code
+        ? '네이버 앱에서 QR을 스캔한 뒤, 앱에 나오는 숫자 중 이 숫자를 선택하세요.'
+        : '숫자를 찾지 못했습니다. 아래 네이버 로그인 화면을 보고 진행하세요.';
+      const screen = check.querySelector('.qr-login-screen');
+      if (result.code) screen.removeAttribute('src');
+      else if (result.screen) screen.src = result.screen;
+    };
+    const setStatus = (text, error = false) => { status.textContent = text; status.classList.toggle('error', error); };
+    const start = async () => {
+      stop();
+      box.classList.remove('hidden');
+      image.removeAttribute('src');
+      check.classList.add('hidden');
+      setStatus('QR 코드를 불러오는 중…');
+      try {
+        const data = await api('api/naver/qr');
+        if (data.connected) {
+          setConnected(true, data.accountLabel);
+          box.classList.add('hidden');
+          toast('이미 네이버에 로그인되어 있습니다.');
+          return;
+        }
+        image.src = String(data.qrImage || '').replace(/^(data:image\/\w+;base64,)\s+/, '$1');
+        setStatus('네이버 앱에서 로그인을 기다리는 중…');
+        const started = Date.now();
+        timer = setInterval(async () => {
+          const result = await api('api/naver/qr/status').catch(() => null);
+          showQrCheck(result);
+          if (result?.connected) {
+            stop();
+            box.classList.add('hidden');
+            setConnected(true, result.accountLabel);
+            toast('네이버 계정이 연결되었습니다.');
+          } else if (Date.now() - started > 180000) {
+            stop();
+            setStatus('QR 코드가 만료되었습니다. [새 QR 받기]를 눌러 주세요.', true);
+          }
+        }, 2000);
+      } catch (error) {
+        setStatus(`QR 코드를 받지 못했습니다: ${error.message}`, true);
+      }
+    };
+    root.querySelector('.qr-login-open')?.addEventListener('click', start);
+    root.querySelector('.qr-login-refresh')?.addEventListener('click', start);
+    root.querySelector('.qr-login-close')?.addEventListener('click', () => { stop(); box.classList.add('hidden'); });
+  });
+}
+
+// ✍️ / 🚀 / 📷 Three ways to post, as sub-tabs of the 포스팅 tab. Semi-auto and photo posts end in the
+// shared review form; one-shot publishes by itself, so the review form is hidden there.
+const POST_MODES = ['semi', 'oneshot', 'photo'];
+
+function setPostMode(mode) {
+  const next = POST_MODES.includes(mode) ? mode : 'semi';
+  document.querySelectorAll('.post-mode-tab').forEach((tab) => {
+    const active = tab.dataset.postMode === next;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('[data-post-mode-panel]').forEach((panel) => {
+    panel.classList.toggle('hidden', panel.dataset.postModePanel !== next);
+  });
+  $('#publishWorkspace')?.setAttribute('data-post-mode', next);
+  try { localStorage.setItem('posting.mode', next); } catch {}
+}
+
+document.querySelectorAll('.post-mode-tab').forEach((tab) => {
+  tab.addEventListener('click', () => setPostMode(tab.dataset.postMode));
+});
+let savedPostMode = 'semi';
+try { savedPostMode = localStorage.getItem('posting.mode') || 'semi'; } catch {}
+setPostMode(savedPostMode);
+
+// 📷 Photo-based posting: photos are shrunk in the browser (max 1600px, JPEG) and uploaded one by one;
+// Gemini then looks at them and writes the post, which opens in the review form like a semi-auto draft.
+function initPhotoPosting() {
+  const input = $('#photoInput');
+  const drop = $('#photoDrop');
+  const grid = $('#photoGrid');
+  const button = $('#photoPostBtn');
+  if (!input || !grid || !button) return;
+  const MAX_PHOTOS = 10;
+  const photos = [];
+  let busy = false;
+
+  function render() {
+    grid.classList.toggle('hidden', photos.length === 0);
+    grid.innerHTML = photos.map((photo, index) => `
+      <li class="photo-item ${photo.uploading ? 'uploading' : ''}" data-index="${index}">
+        <img src="${escapeHtml(photo.preview)}" alt="${escapeHtml(photo.name)}">
+        <span class="photo-num">${index + 1}</span>
+        ${photo.uploading ? '<span class="photo-uploading">올리는 중…</span>' : `<button type="button" class="photo-remove" data-remove="${index}" aria-label="${index + 1}번 사진 빼기">×</button>`}
+      </li>`).join('');
+    const ready = photos.filter((photo) => !photo.uploading && photo.id).length;
+    button.disabled = busy || ready === 0 || photos.some((photo) => photo.uploading);
+    button.innerHTML = busy
+      ? '<strong>⏳ Gemini가 사진을 보고 글을 쓰는 중...</strong>'
+      : `<strong>📷 사진 ${ready ? `${ready}장으로 ` : '으로 '}글 만들기</strong>`;
+    drop.classList.toggle('full', photos.length >= MAX_PHOTOS);
+  }
+
+  function shrink(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.88));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`${file.name}을(를) 열 수 없습니다.`)); };
+      img.src = url;
+    });
+  }
+
+  async function addFiles(fileList) {
+    const files = [...fileList].filter((file) => /^image\/(jpeg|png|webp)$/.test(file.type));
+    if (fileList.length && !files.length) {
+      toast('JPG, PNG, WEBP 사진만 올릴 수 있습니다.', true);
+      return;
+    }
+    const room = MAX_PHOTOS - photos.length;
+    if (files.length > room) toast(`사진은 최대 ${MAX_PHOTOS}장까지라 ${Math.max(room, 0)}장만 올립니다.`, true);
+    for (const file of files.slice(0, Math.max(room, 0))) {
+      const photo = { name: file.name, preview: URL.createObjectURL(file), uploading: true, id: '' };
+      photos.push(photo);
+      render();
+      try {
+        const dataUrl = await shrink(file);
+        const uploaded = await api('api/blog/photo-upload', { method: 'POST', timeoutMs: 90000, body: JSON.stringify({ dataUrl, name: file.name }) });
+        photo.id = uploaded.id;
+        photo.uploading = false;
+      } catch (err) {
+        photos.splice(photos.indexOf(photo), 1);
+        toast(`사진 올리기 실패: ${err.message}`, true);
+      }
+      render();
+    }
+  }
+
+  input.addEventListener('change', () => {
+    addFiles(input.files);
+    input.value = '';
+  });
+  ['dragenter', 'dragover'].forEach((type) => drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.add('dragging'); }));
+  ['dragleave', 'drop'].forEach((type) => drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.remove('dragging'); }));
+  drop.addEventListener('drop', (e) => addFiles(e.dataTransfer?.files || []));
+  grid.addEventListener('click', (e) => {
+    const index = e.target.closest('[data-remove]')?.dataset.remove;
+    if (index === undefined || busy) return;
+    photos.splice(Number(index), 1);
+    render();
+  });
+
+  button.addEventListener('click', async () => {
+    const ids = photos.filter((photo) => photo.id).map((photo) => photo.id);
+    if (!ids.length) return;
+    busy = true;
+    render();
+    const progress = $('#photoProgress');
+    progress.classList.remove('hidden');
+    progress.textContent = `📷 Gemini가 사진 ${ids.length}장을 하나씩 보고 글을 쓰는 중입니다. 1~2분쯤 걸립니다…`;
+    try {
+      const data = await api('api/blog/photo-post', {
+        method: 'POST',
+        timeoutMs: 300000,
+        body: JSON.stringify({ photos: ids, hint: $('#photoHint')?.value?.trim() || '', tone: $('#photoTone')?.value || 'friendly' })
+      });
+      state.sourceTopic = data.title || '';
+      state.images = data.autoImages || [];
+      state.seriesEpisodes = [data];
+      state.currentEpisodeIdx = 0;
+      switchToEpisode(0, { fresh: true });
+      $('#draftModel').textContent = `${data.engineLabel || '💎 Google Gemini'} · 📷 사진 ${ids.length}장`;
+      $('#seriesPostBanner')?.classList.add('hidden');
+      renderPostSource(null);
+      publishForm.classList.remove('hidden');
+      if (publishConfirm) publishConfirm.checked = false;
+      updatePublishState();
+      progress.textContent = '✅ 글이 준비됐습니다. 아래에서 사진 위치와 내용을 확인하고 발행하세요.';
+      publishForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast('📷 사진으로 글을 만들었습니다. 검토 후 발행하세요.');
+    } catch (err) {
+      progress.textContent = `❌ 글 만들기 실패: ${err.message}`;
+      toast(`사진 기반 글 만들기 실패: ${err.message}`, true);
+    } finally {
+      busy = false;
+      render();
+    }
+  });
+
+  render();
+}
+
+initPhotoPosting();
+
+// 🚀 One-shot auto posting. The job runs on the server; this view polls its status, so closing the
+// browser does not stop it and reopening shows where it is.
+function initOneShotPosting() {
+  const form = $('#oneshotForm');
+  if (!form) return;
+  const STEP_ICON = { pending: '○', working: '⏳', published: '✅', failed: '❌', skipped: '⏩', stopped: '⏹' };
+  let timer = null;
+  let lastLogKey = '';
+
+  function render(status) {
+    const active = status.state === 'running' || status.state === 'waiting';
+    const hasJob = status.state !== 'idle' || (status.posts || []).length > 0;
+    $('#oneshotProgress').classList.toggle('hidden', !hasJob);
+    $('#oneshotStartBtn').disabled = active;
+    $('#oneshotStartBtn').innerHTML = active ? '<strong>진행 중...</strong>' : '<strong>🚀 원샷 시작</strong>';
+    $('#oneshotStopBtn').classList.toggle('hidden', !active);
+    if (active && document.activeElement !== $('#oneshotSeed') && status.config?.seed) $('#oneshotSeed').value = status.config.seed;
+
+    const posts = status.posts || [];
+    const published = posts.filter((post) => post.status === 'published').length;
+    const seed = status.config?.seed ? `'${status.config.seed}' · ` : '';
+    let text = '대기 중';
+    if (status.state === 'running') text = `${seed}진행 중 · ${published} / ${posts.length || status.config?.count || 0}개 발행`;
+    else if (status.state === 'waiting') {
+      const left = status.nextPostAt ? Math.max(0, Math.round((new Date(status.nextPostAt) - Date.now()) / 60000)) : 0;
+      text = `${seed}다음 글까지 약 ${left}분 쉬는 중 · ${published} / ${posts.length}개 발행`;
+    } else if (status.state === 'completed') text = `${seed}완료 · ${posts.length}개 중 ${published}개 발행`;
+    else if (status.state === 'stopped') text = `${seed}중단됨 · ${published} / ${posts.length}개 발행`;
+    else if (status.state === 'error') text = `${seed}오류로 멈춤 · ${published} / ${posts.length}개 발행`;
+    $('#oneshotStatusText').textContent = text;
+
+    $('#oneshotPosts').innerHTML = posts.length
+      ? posts.map((post, index) => `
+        <li class="oneshot-post ${escapeHtml(post.status)}">
+          <span class="oneshot-post-icon">${STEP_ICON[post.status] || '○'}</span>
+          <div class="oneshot-post-body">
+            <div class="oneshot-post-top">
+              <strong>${index + 1}. ${escapeHtml(post.keyword)}</strong>
+              ${post.grade && post.grade !== '-' ? `<span class="kw-grade-badge grade-${escapeHtml(String(post.grade).toLowerCase())}">${escapeHtml(post.grade)}</span>` : ''}
+              <span class="oneshot-post-step">${escapeHtml(post.step || '')}</span>
+            </div>
+            ${post.title ? `<div class="oneshot-post-title">${post.url ? `<a href="${escapeHtml(post.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(post.title)} ↗</a>` : escapeHtml(post.title)}</div>` : ''}
+          </div>
+        </li>`).join('')
+      : '<li class="oneshot-post pending"><span class="oneshot-post-icon">⏳</span><div class="oneshot-post-body">황금 키워드를 고르는 중...</div></li>';
+
+    const logs = status.logs || [];
+    const logKey = logs.length ? `${logs.length}|${logs[0].timestamp}` : '';
+    if (logKey !== lastLogKey) {
+      lastLogKey = logKey;
+      $('#oneshotLogs').innerHTML = [...logs].reverse().map((entry) =>
+        `<div class="terminal-line ${escapeHtml(entry.type || 'info')}">[${escapeHtml(entry.time || '')}] ${escapeHtml(entry.message || '')}</div>`).join('');
+      $('#oneshotLogs').scrollTop = $('#oneshotLogs').scrollHeight;
+    }
+
+    clearTimeout(timer);
+    timer = setTimeout(refresh, active ? 3000 : 30000);
+  }
+
+  async function refresh() {
+    try {
+      render(await api('api/oneshot/status'));
+    } catch {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 10000);
+    }
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const seed = $('#oneshotSeed').value.trim();
+    if (seed.length < 2) {
+      toast('주제를 2자 이상 입력해 주세요.', true);
+      $('#oneshotSeed').focus();
+      return;
+    }
+    if (!state.connected) {
+      toast('네이버 계정이 연결되어 있지 않습니다. 설정 탭에서 QR 로그인을 먼저 해 주세요.', true);
+      setActiveTab('settings', true);
+      return;
+    }
+    const count = Number(document.querySelector('input[name="oneshotCount"]:checked')?.value || 3);
+    if (!window.confirm(`'${seed}' 주제로 글 ${count}개를 만들어 네이버에 바로 발행합니다.\n글 사이에 15~30분씩 쉬어 가며 진행합니다. 시작할까요?`)) return;
+    $('#oneshotStartBtn').disabled = true;
+    try {
+      render(await api('api/oneshot/start', { method: 'POST', body: JSON.stringify({ seed, count, tone: $('#oneshotTone').value }) }));
+      toast(`🚀 원샷 포스팅을 시작했습니다. 브라우저를 닫아도 계속 진행됩니다.`);
+    } catch (err) {
+      $('#oneshotStartBtn').disabled = false;
+      toast(`원샷 시작 실패: ${err.message}`, true);
+    }
+  });
+
+  $('#oneshotStopBtn')?.addEventListener('click', async () => {
+    if (!window.confirm('원샷 포스팅을 중단할까요? 지금 만드는 단계가 끝나면 멈춥니다.')) return;
+    try {
+      render(await api('api/oneshot/stop', { method: 'POST', body: '{}' }));
+    } catch (err) {
+      toast(`중단 실패: ${err.message}`, true);
+    }
+  });
+
+  refresh();
+}
+
+initOneShotPosting();
+
+// ✨ Brief writer: Gemini drafts the "간략한 내용" from the topic. When the topic came from the golden
+// keyword finder, that keyword's diagnosis (top posts, why it is a gap) goes along so the brief aims
+// at what the current top posts miss.
+let goldenTopicContext = null;
+
+function currentGoldenContext() {
+  const topic = $('#autoPostTopic')?.value?.trim() || '';
+  return goldenTopicContext && goldenTopicContext.keyword === topic ? goldenTopicContext : null;
+}
+
+function updateBriefGoldenHint() {
+  const hint = $('#autoBriefGoldenHint');
+  if (!hint) return;
+  const golden = currentGoldenContext();
+  hint.classList.toggle('hidden', !golden);
+  if (golden) hint.textContent = `🏆 황금 키워드 '${golden.keyword}'의 진단 결과(상위 글 ${golden.topPosts.length}개, 등급 근거)를 반영해 만듭니다.`;
+}
+
+$('#autoPostTopic')?.addEventListener('input', updateBriefGoldenHint);
+
+$('#autoBriefBtn')?.addEventListener('click', async () => {
+  const topic = $('#autoPostTopic')?.value?.trim() || '';
+  if (topic.length < 2) {
+    toast('포스팅 주제를 먼저 입력해 주세요.', true);
+    $('#autoPostTopic')?.focus();
+    return;
+  }
+  const briefInput = $('#autoPostBrief');
+  if (briefInput?.value.trim() && !window.confirm('지금 적힌 간략한 내용을 새로 만든 내용으로 바꿀까요?')) return;
+  const btn = $('#autoBriefBtn');
+  btn.disabled = true;
+  btn.textContent = '✨ 만드는 중... (10~30초)';
+  briefInput?.classList.add('brief-generating');
+  try {
+    const result = await api('api/blog/brief', {
+      method: 'POST',
+      timeoutMs: 150000,
+      body: JSON.stringify({ topic, golden: currentGoldenContext() })
+    });
+    if (briefInput) {
+      briefInput.value = result.brief || '';
+      briefInput.rows = Math.min(Math.max((result.brief || '').split('\n').length + 1, 6), 16);
+    }
+    toast('간략한 내용을 만들었습니다. 필요하면 고친 뒤 글을 만드세요.');
+  } catch (err) {
+    toast(`간략한 내용 생성 실패: ${err.message}`, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ 간략한 내용 자동 생성';
+    briefInput?.classList.remove('brief-generating');
+  }
+});
+
+// 🏆 Golden keyword finder (same engine and look as 이웃메이트 Engage). Each keyword has a ✍️ 포스팅
+// button that opens the publish tab with the keyword as the post topic.
+function initGoldenKeywordFinder() {
+  const all = (selector) => [...document.querySelectorAll(selector)];
+  const GRADE_BADGES = { S: '🏆 S 황금', A: '👍 A 추천', B: '🙂 B 보통', C: '⚠️ C 경쟁 심함', X: '❔ 확인 실패' };
+  const gradeBadge = (item) => GRADE_BADGES[item.grade] || item.grade;
+  const searchInput = $('#keywordSearchInput');
+  const loadingBox = $('#keywordLoadingBox');
+  const emptyBox = $('#keywordEmptyBox');
+  const cardsList = $('#keywordCardsList');
+  let items = [];
+  let selected = null;
+  let activeFilter = 'all';
+
+  async function discover(keyword) {
+    const clean = String(keyword || '').trim();
+    if (!clean) {
+      toast('찾아볼 주제를 입력해 주세요.', true);
+      return;
+    }
+    loadingBox?.classList.remove('hidden');
+    emptyBox?.classList.add('hidden');
+    cardsList?.classList.add('hidden');
+    const submitBtn = $('#keywordSubmitBtn');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<strong>찾는 중...</strong>';
+    }
+    try {
+      const data = await api(`api/blog/golden-keywords?keyword=${encodeURIComponent(clean)}&limit=24`);
+      items = Array.isArray(data.items) ? data.items : [];
+      $('#keywordCurrentQueryBadge').textContent = `#${data.query || clean}`;
+      const golden = data.goldenCount || 0;
+      const recommended = data.recommendedCount || 0;
+      $('#keywordResultsCount').textContent = golden + recommended > 0
+        ? `실제 검색어 ${items.length}개 진단 · 🏆 황금 ${golden}개 · 👍 추천 ${recommended}개`
+        : `실제 검색어 ${items.length}개 진단 · 황금·추천 키워드 없음 (더 구체적인 주제로 찾아 보세요)`;
+      render();
+      if (items.length) select(items[0]);
+      else toast('이 주제로는 자동완성 검색어를 찾지 못했습니다. 다른 주제로 찾아 보세요.', true);
+    } catch (err) {
+      toast(`키워드 분석 실패: ${err.message || '네트워크 오류'}`, true);
+      emptyBox?.classList.remove('hidden');
+    } finally {
+      loadingBox?.classList.add('hidden');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span class="btn-icon">⚡</span> <strong>황금 키워드 찾기</strong>';
+      }
+    }
+  }
+
+  function filtered() {
+    if (activeFilter === 'good') return items.filter((it) => it.grade === 'S' || it.grade === 'A');
+    if (activeFilter === 'niche') return items.filter((it) => it.checked && it.isNiche);
+    if (activeFilter === 'vacant') return items.filter((it) => it.checked && it.isVacant);
+    return items;
+  }
+
+  function render() {
+    if (!cardsList) return;
+    const list = filtered();
+    if (!list.length) {
+      cardsList.innerHTML = `
+        <div class="kw-filter-empty">
+          <strong>이 조건에 맞는 키워드가 없습니다.</strong>
+          <p>'전체'를 누르거나 더 구체적인 주제(예: '캠핑' 대신 '캠핑 의자')로 찾아 보세요.</p>
+        </div>`;
+      cardsList.classList.remove('hidden');
+      return;
+    }
+    cardsList.innerHTML = list.map((it) => {
+      const gradeClass = `grade-${String(it.grade || 'b').toLowerCase()}`;
+      const scoreWidth = Math.min(Math.max(Number(it.score) || 0, 4), 100);
+      const chips = it.checked
+        ? [
+          `<span class="kw-tag ${it.demand?.score >= 45 ? 'good' : ''}">🔎 수요 ${escapeHtml(it.demand?.level || '-')}</span>`,
+          `<span class="kw-tag ${it.titleMatchCount <= 3 ? 'good' : 'bad'}">🎯 노린 글 ${it.titleMatchCount}/10</span>`,
+          `<span class="kw-tag ${it.avgAgeDays >= 90 ? 'good' : it.avgAgeDays < 30 ? 'bad' : ''}">🕰️ ${escapeHtml(it.recencyText)}</span>`,
+          `<span class="kw-tag ${it.totalCapped ? '' : 'good'}">📚 ${escapeHtml(it.docCountText)}</span>`
+        ].join('')
+        : '<span class="kw-tag bad">상위 글을 확인하지 못했습니다</span>';
+      return `
+        <div class="kw-card ${selected?.keyword === it.keyword ? 'selected' : ''} ${gradeClass}" data-kw="${encodeURIComponent(it.keyword)}" tabindex="0">
+          <div class="kw-card-head">
+            <div class="kw-card-title-box">
+              <span class="kw-grade-badge ${gradeClass}">${gradeBadge(it)}</span>
+              <strong class="kw-card-title">${escapeHtml(it.keyword)}</strong>
+            </div>
+            <div class="kw-score-wrap" title="100점 만점에 ${it.score}점">
+              <span class="kw-score-text">${it.score}점</span>
+              <div class="kw-score-track"><div class="kw-score-bar" style="width: ${scoreWidth}%;"></div></div>
+            </div>
+          </div>
+          <div class="kw-tags-row">${chips}</div>
+          <div class="kw-card-foot">
+            <p class="kw-opportunity-text">${escapeHtml(it.summary || '')}</p>
+            <div class="kw-card-actions">
+              <button type="button" class="kw-btn-engage" data-action="post" title="이 키워드로 포스팅">✍️ 포스팅</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+    cardsList.classList.remove('hidden');
+  }
+
+  function select(item) {
+    selected = item;
+    all('#keywordCardsList .kw-card').forEach((card) => card.classList.toggle('selected', decodeURIComponent(card.dataset.kw) === item.keyword));
+    $('#detailKeywordTitle').textContent = item.keyword;
+    const pill = $('#detailScorePill');
+    pill.textContent = item.checked ? `${gradeBadge(item)} · ${item.score}점` : gradeBadge(item);
+    pill.className = `pill ${item.grade === 'S' || item.grade === 'A' ? 'pill-green' : item.grade === 'B' ? 'pill-yellow' : 'pill-red'}`;
+    $('#detailDemand').textContent = item.demand?.level || '-';
+    $('#detailMatchRate').textContent = item.checked ? `10개 중 ${item.titleMatchCount}개` : '-';
+    $('#detailAvgAge').textContent = item.recencyText || '-';
+    $('#detailDocCount').textContent = item.docCountText || '-';
+    const reasons = (item.reasons || []).map((r) => {
+      const mark = r.good === true ? '✅' : r.good === false ? '⚠️' : '•';
+      return `<li class="${r.good === true ? 'good' : r.good === false ? 'bad' : ''}"><span>${mark}</span>${escapeHtml(r.text)}</li>`;
+    }).join('');
+    $('#detailStrategyAdvice').innerHTML = `
+      ${item.summary ? `<p class="kw-reason-summary">${escapeHtml(item.summary)}</p>` : ''}
+      <ul class="kw-reason-list">${reasons}</ul>
+      ${item.advice ? `<p class="kw-reason-tip">✍️ <strong>글쓰기 팁</strong> ${escapeHtml(item.advice)}</p>` : ''}`;
+    const searchLink = $('#detailNaverSearchLink');
+    searchLink.href = `https://search.naver.com/search.naver?ssc=tab.blog.all&query=${encodeURIComponent(item.keyword)}`;
+    const posts = Array.isArray(item.topPosts) ? item.topPosts : [];
+    $('#detailTopPostsList').innerHTML = posts.length
+      ? posts.map((post, idx) => `
+        <div class="top-post-item">
+          <span class="post-rank-num">${idx + 1}</span>
+          <div class="post-meta-box">
+            <a href="${escapeHtml(post.url || searchLink.href)}" target="_blank" rel="noopener noreferrer" class="post-title-link" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a>
+            <div class="post-sub-meta">
+              <span>${escapeHtml(post.blogName || '네이버 블로그')}</span><span>•</span><span>${escapeHtml(post.ageText || '')}</span>
+              <span class="post-match-badge ${post.isExactMatch ? 'matched' : 'unmatched'}">${post.isExactMatch ? '키워드 노린 글' : '키워드 안 노림'}</span>
+            </div>
+          </div>
+        </div>`).join('')
+      : '<p class="empty-hint">상위 글 정보가 없습니다.</p>';
+    const postBtn = $('#detailPostBtn');
+    postBtn.disabled = false;
+  }
+
+  function postWithKeyword(keyword) {
+    const item = items.find((it) => it.keyword === keyword);
+    goldenTopicContext = item ? {
+      keyword: item.keyword,
+      demand: item.demand?.level || '',
+      summary: item.summary || '',
+      reasons: (item.reasons || []).map((r) => r.text),
+      topPosts: (item.topPosts || []).map((post) => ({ title: post.title, ageText: post.ageText }))
+    } : null;
+    const topic = $('#autoPostTopic');
+    if (topic) topic.value = keyword;
+    updateBriefGoldenHint();
+    setActiveTab('publish');
+    setPostMode('semi');
+    topic?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    topic?.focus({ preventScroll: true });
+    toast(`'${keyword}'를 포스팅 주제에 넣었습니다. 내용과 스타일을 정하고 글을 만드세요.`);
+  }
+
+  $('#keywordSearchForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    discover(searchInput?.value);
+  });
+  all('#keywordWorkspace .seed-chip').forEach((chip) => chip.addEventListener('click', () => {
+    if (searchInput) searchInput.value = chip.dataset.seed;
+    discover(chip.dataset.seed);
+  }));
+  all('#keywordFilterChips .filter-pill').forEach((pill) => pill.addEventListener('click', () => {
+    all('#keywordFilterChips .filter-pill').forEach((p) => p.classList.toggle('active', p === pill));
+    activeFilter = pill.dataset.filter;
+    render();
+  }));
+  cardsList?.addEventListener('click', (e) => {
+    const card = e.target.closest('.kw-card');
+    const item = card && items.find((it) => it.keyword === decodeURIComponent(card.dataset.kw));
+    if (!item) return;
+    if (e.target.closest('[data-action="post"]')) return postWithKeyword(item.keyword);
+    select(item);
+  });
+  cardsList?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.classList.contains('kw-card')) return;
+    const item = items.find((it) => it.keyword === decodeURIComponent(e.target.dataset.kw));
+    if (item) select(item);
+  });
+  $('#detailPostBtn')?.addEventListener('click', () => {
+    if (selected) postWithKeyword(selected.keyword);
+  });
+}
+
+initGoldenKeywordFinder();
+
+// A topic handed over from the engagement app's golden keyword finder (?topic=...): open the publish tab with it filled in.
+function applyTopicFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const topic = (params.get('topic') || '').trim().slice(0, 200);
+  if (!topic) return;
+  const input = $('#autoPostTopic');
+  if (input) input.value = topic;
+  setActiveTab('publish');
+  setPostMode('semi');
+  input?.focus();
+  history.replaceState(null, '', location.pathname);
+  toast(`황금 키워드 '${topic}'를 포스팅 주제에 넣었습니다.`);
+}
+
 // Initial health check and session restoration
 updateSeriesEpisodeOptions();
-api('/api/health').then(async (data) => {
+applyTopicFromUrl();
+api('api/health').then(async (data) => {
   initSettingsController();
+  initQrLogin();
   initAiHardwareAndModels();
   initImageModels();
   initEngagementAutomation();
@@ -2041,21 +2638,22 @@ api('/api/health').then(async (data) => {
   if (data.connected) {
     setConnected(true);
     initAutoNeighborEvents();
-    const status = await api('/api/neighbors/auto/status').catch(() => null);
+    const status = await api('api/neighbors/auto/status').catch(() => null);
     if (status) updateAutoDashboard(status);
     return;
   }
-  const restored = await api('/api/naver/restore', { method: 'POST' }).catch(() => ({ connected: false }));
+  const restored = await api('api/naver/restore', { method: 'POST' }).catch(() => ({ connected: false }));
   setConnected(restored.connected, restored.accountLabel);
   if (restored.connected) {
     initAutoNeighborEvents();
     toast('저장된 네이버 로그인 상태를 불러왔습니다.');
-    const status = await api('/api/neighbors/auto/status').catch(() => null);
+    const status = await api('api/neighbors/auto/status').catch(() => null);
     if (status) updateAutoDashboard(status);
   }
 }).catch(() => {
   setConnected(false);
   initSettingsController();
+  initQrLogin();
   initAiHardwareAndModels();
   initImageModels();
   initEngagementAutomation();

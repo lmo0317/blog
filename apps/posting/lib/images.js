@@ -175,7 +175,7 @@ export async function downloadCommonsImages(images, directory, { fetchImpl = fet
 
       // 2. Relative generated image path (/generated-images/ai-art-xxx.jpg)
       const urlStr = String(rawImage?.downloadUrl || rawImage?.previewUrl || '');
-      if (urlStr.startsWith('/generated-images/')) {
+      if (/^\/?generated-images\//.test(urlStr)) {
         const filename = path.basename(urlStr);
         const searchDirs = [
           localImagesDir,
@@ -233,14 +233,14 @@ export async function cleanupDownloadedImages(images = []) {
 
 export function appendImageAttributions(content, images = []) {
   if (!images.length) return content;
-  if (images.every((image) => image.isAiGenerated || image.license?.includes('Gemini') || image.license?.includes('Imagen') || image.license?.includes('Gemma'))) {
+  if (images.every((image) => image.isAiGenerated || image.isUserPhoto || image.license?.includes('Gemini') || image.license?.includes('Imagen') || image.license?.includes('Gemma'))) {
     return String(content).trim();
   }
   if (images.every((image) => image.license === '핫딜 상품 이미지')) {
     return `${String(content).trim()}\n\n이미지 출처 | 각 상품 및 판매 페이지`;
   }
   const lines = images
-    .filter((image) => !image.isAiGenerated && !image.license?.includes('Gemini') && !image.license?.includes('Imagen') && !image.license?.includes('Gemma'))
+    .filter((image) => !image.isAiGenerated && !image.isUserPhoto && !image.license?.includes('Gemini') && !image.license?.includes('Imagen') && !image.license?.includes('Gemma'))
     .map((image, index) => {
     const author = image.author || '상품/출처 페이지 참조';
     return `${index + 1}. ${image.title} — ${author} / ${image.license}\n출처: ${image.pageUrl}`;
