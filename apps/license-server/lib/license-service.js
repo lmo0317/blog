@@ -467,6 +467,70 @@ export class LicenseService {
     };
   }
 
+  // ---- Seller admin (크몽 판매) ----
+  adminSummary() {
+    return { ok: true, summary: this.db.countSummary() };
+  }
+
+  adminIssueVouchers({ days, count = 1, memo = '', channel = 'kmong' } = {}) {
+    const dayCount = Math.trunc(Number(days));
+    const amount = Math.trunc(Number(count));
+    if (!Number.isFinite(dayCount) || dayCount < 1 || dayCount > 730) {
+      return { ok: false, error: 'INVALID_DAYS', message: '이용 기간은 1~730일 사이여야 합니다.' };
+    }
+    if (!Number.isFinite(amount) || amount < 1 || amount > 50) {
+      return { ok: false, error: 'INVALID_COUNT', message: '한 번에 1~50개까지 발급할 수 있습니다.' };
+    }
+    const orderId = String(memo || '').trim().slice(0, 80) || null;
+    const vouchers = Array.from({ length: amount }, () => this.issueVoucher({ days: dayCount, orderId, channel }));
+    this.db.logAudit({ action: 'ADMIN_ISSUE_VOUCHER', details: `${amount} x ${dayCount}d ${orderId || ''}`.trim() });
+    return { ok: true, vouchers };
+  }
+
+  adminListVouchers({ status = 'all' } = {}) {
+    return { ok: true, vouchers: this.db.listVouchers({ status: ['unused', 'used'].includes(status) ? status : 'all' }) };
+  }
+
+  adminDeleteVoucher(id) {
+    const removed = this.db.deleteUnusedVoucher(Number(id));
+    if (!removed) return { ok: false, error: 'NOT_DELETABLE', message: '이미 사용됐거나 없는 이용권은 삭제할 수 없습니다.' };
+    this.db.logAudit({ action: 'ADMIN_DELETE_VOUCHER', details: `voucher ${id}` });
+    return { ok: true };
+  }
+
+  adminListUsers({ query = '' } = {}) {
+    const users = this.db.listUsersWithLicenses({ query: String(query || '').trim().slice(0, 80) }).map((row) => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      createdAt: row.created_at,
+      hasDevice: Boolean(row.has_device),
+      planType: row.plan_type || null,
+      expiresAt: row.expires_at || null,
+      daysLeft: row.expires_at ? this.calcDaysLeft(row.expires_at) : 0,
+      lastSeenAt: row.last_heartbeat_at || null
+    }));
+    return { ok: true, users };
+  }
+
+  adminExtendUser(id, days) {
+    const user = this.db.getUserById(Number(id));
+    const dayCount = Math.trunc(Number(days));
+    if (!user) return { ok: false, error: 'NOT_FOUND', message: '고객을 찾을 수 없습니다.' };
+    if (!Number.isFinite(dayCount) || dayCount < 1 || dayCount > 730) {
+      return { ok: false, error: 'INVALID_DAYS', message: '연장 기간은 1~730일 사이여야 합니다.' };
+    }
+    const license = this.grantDays(user.id, dayCount, { channel: 'admin' });
+    this.db.logAudit({ userId: user.id, action: 'ADMIN_EXTEND', details: `+${dayCount}d` });
+    return { ok: true, expiresAt: license.expires_at, daysLeft: this.calcDaysLeft(license.expires_at) };
+  }
+
+  adminResetDevice(id) {
+    if (!this.db.clearUserHwid(Number(id))) return { ok: false, error: 'NOT_FOUND', message: '고객을 찾을 수 없습니다.' };
+    this.db.logAudit({ userId: Number(id), action: 'ADMIN_RESET_DEVICE' });
+    return { ok: true };
+  }
+
   handleOrderSync({ provider = 'manual', orderId, email = '', months = 1, ip = '' }) {
     if (!orderId) {
       return { ok: false, error: 'MISSING_PARAMS', message: '주문번호가 필요합니다.' };

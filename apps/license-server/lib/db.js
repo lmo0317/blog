@@ -233,6 +233,50 @@ export class LicenseDatabase {
     return Number(result.changes) > 0;
   }
 
+  // ---- Seller admin ----
+  listVouchers({ status = 'all', limit = 200 } = {}) {
+    const where = status === 'unused' ? 'WHERE v.redeemed_by IS NULL' : status === 'used' ? 'WHERE v.redeemed_by IS NOT NULL' : '';
+    return this.db.prepare(`
+      SELECT v.id, v.code, v.days, v.order_id, v.channel, v.created_at, v.redeemed_at, u.email AS redeemed_email
+      FROM vouchers v LEFT JOIN users u ON u.id = v.redeemed_by
+      ${where}
+      ORDER BY v.id DESC LIMIT ?
+    `).all(limit);
+  }
+
+  // Only an unused voucher can be deleted (e.g. a refunded order).
+  deleteUnusedVoucher(id) {
+    const result = this.db.prepare('DELETE FROM vouchers WHERE id = ? AND redeemed_by IS NULL').run(id);
+    return Number(result.changes) > 0;
+  }
+
+  listUsersWithLicenses({ query = '', limit = 200 } = {}) {
+    return this.db.prepare(`
+      SELECT u.id, u.email, u.name, u.created_at, u.hwid IS NOT NULL AS has_device, u.hwid_changed_at,
+             l.id AS license_id, l.plan_type, l.status, l.expires_at, l.last_heartbeat_at
+      FROM users u
+      LEFT JOIN licenses l ON l.id = (SELECT id FROM licenses WHERE user_id = u.id ORDER BY id DESC LIMIT 1)
+      WHERE u.email LIKE ?
+      ORDER BY u.id DESC LIMIT ?
+    `).all(`%${query}%`, limit);
+  }
+
+  clearUserHwid(id) {
+    const result = this.db.prepare('UPDATE users SET hwid = NULL, hwid_updated_at = NULL WHERE id = ?').run(id);
+    return Number(result.changes) > 0;
+  }
+
+  countSummary() {
+    const now = new Date().toISOString();
+    const one = (sql, ...args) => Number(this.db.prepare(sql).get(...args)?.n || 0);
+    return {
+      users: one('SELECT COUNT(*) AS n FROM users'),
+      paidActive: one("SELECT COUNT(DISTINCT user_id) AS n FROM licenses WHERE expires_at > ? AND plan_type != 'free_trial' AND status = 'active'", now),
+      trialActive: one("SELECT COUNT(DISTINCT user_id) AS n FROM licenses WHERE expires_at > ? AND plan_type = 'free_trial' AND status = 'active'", now),
+      unusedVouchers: one('SELECT COUNT(*) AS n FROM vouchers WHERE redeemed_by IS NULL')
+    };
+  }
+
   logAudit({ userId = null, action, details = '', ip = '' }) {
     const now = new Date().toISOString();
     const stmt = this.db.prepare(`

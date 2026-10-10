@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>이웃메이트 판매자 관리</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --green: #03c75a; --green-hover: #00a94f; --green-soft: #ecfdf5; --green-border: #a7f3d0;
+    --indigo: #4f46e5; --indigo-soft: #e0e7ff;
+    --ok: #15803d; --ok-bg: #f0fdf4; --ok-border: #bbf7d0; --ok-badge: #dcfce7;
+    --danger: #dc2626; --danger-bg: #fef2f2; --danger-border: #fecaca; --danger-badge: #fee2e2;
+    --warn: #d97706; --warn-bg: #fffbeb; --warn-border: #fde68a; --warn-badge: #fef3c7;
+    --info: #2563eb; --info-bg: #eff6ff; --info-badge: #dbeafe;
+    --surface: #f8fafc; --card: #ffffff; --border: #e2e8f0; --border-strong: #cbd5e1;
+    --title: #0f172a; --body: #334155; --muted: #64748b; --hint: #94a3b8;
+    --shadow: 0 1px 3px 0 rgba(0,0,0,.05), 0 1px 2px -1px rgba(0,0,0,.05);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--body); font-family: Pretendard, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif; font-size: 14px; }
+  button, input { font: inherit; }
+  input[type="checkbox"] { width: 16px !important; height: 16px !important; margin: 0 !important; accent-color: var(--green); flex-shrink: 0; cursor: pointer; }
+  .hidden { display: none !important; }
+
+  /* Login gate */
+  .gate { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+  .gate-card { width: min(400px, 100%); background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px 28px; box-shadow: 0 20px 25px -5px rgba(0,0,0,.08), 0 8px 10px -6px rgba(0,0,0,.06); }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .brand-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--green), var(--green-hover)); color: #fff; display: grid; place-items: center; font-weight: 900; }
+  .brand h1 { font-size: 18px; margin: 0; color: var(--title); font-weight: 800; }
+  .gate-card p { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .field label { font-size: 12.5px; font-weight: 700; color: var(--title); }
+  .input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: #fff; color: var(--title); outline: none; transition: border-color .15s, box-shadow .15s; }
+  .input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(3,199,90,.15); }
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--body); margin-bottom: 18px; cursor: pointer; user-select: none; }
+  .error-text { color: var(--danger); font-size: 12.5px; margin: -6px 0 12px; min-height: 0; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--body); font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s, transform .15s, box-shadow .15s; }
+  .btn:hover { background: #f1f5f9; border-color: var(--border-strong); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-primary { height: 44px; width: 100%; border: 0; color: #fff; background: linear-gradient(135deg, var(--green) 0%, var(--green-hover) 100%); font-size: 14.5px; font-weight: 800; }
+  .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--green-hover) 0%, #008f42 100%); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(3,199,90,.25); }
+  .btn-sm { height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; }
+  .btn-danger { color: var(--danger); border-color: var(--danger-border); background: #fff; }
+  .btn-danger:hover { background: var(--danger-bg); border-color: #fca5a5; }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
+
+  /* App */
+  .topbar { position: sticky; top: 0; z-index: 5; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  .topbar-inner { max-width: 1280px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 48px; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .stat { padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--card); box-shadow: var(--shadow); }
+  .stat span { display: block; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .stat strong { display: block; margin-top: 4px; font-size: 24px; font-weight: 800; color: var(--title); font-variant-numeric: tabular-nums; }
+  .stat.ok { background: var(--ok-bg); border-color: var(--ok-border); } .stat.ok strong { color: var(--ok); }
+  .stat.info { background: var(--info-bg); border-color: #bfdbfe; } .stat.info strong { color: var(--info); }
+  .stat.warn { background: var(--warn-bg); border-color: var(--warn-border); } .stat.warn strong { color: var(--warn); }
+
+  .grid { display: grid; grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); gap: 18px; align-items: start; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); min-width: 0; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #f1f5f9; }
+  .card-head h2 { margin: 0; font-size: 15px; font-weight: 800; color: var(--title); }
+  .card-body { padding: 16px 18px 18px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { height: 34px; padding: 0 14px; border-radius: 9999px; border: 1px solid var(--border); background: #fff; color: var(--body); font-weight: 700; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .chip:hover { border-color: var(--border-strong); }
+  .chip.active { background: var(--green-soft); border-color: var(--green-border); color: var(--ok); }
+  .stepper { align-self: flex-start; display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; height: 38px; }
+  .stepper button { width: 38px; height: 100%; border: 0; background: #f8fafc; cursor: pointer; font-size: 16px; color: var(--body); }
+  .stepper button:hover { background: #f1f5f9; }
+  .stepper input { width: 52px; height: 100%; border: 0; text-align: center; font-weight: 800; color: var(--title); outline: none; }
+
+  .issued { margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--ok-bg); border: 1px solid var(--ok-border); }
+  .issued-title { font-size: 13px; font-weight: 800; color: var(--ok); margin-bottom: 10px; }
+  .code-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--ok-border); margin-bottom: 6px; }
+  .code { font-family: 'JetBrains Mono', Consolas, monospace; font-weight: 700; color: var(--title); font-size: 13.5px; letter-spacing: .02em; overflow-wrap: anywhere; }
+  .issued .btn-primary { margin-top: 6px; height: 40px; font-size: 13.5px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
+  .tabs { display: inline-flex; gap: 4px; padding: 4px; background: #f1f5f9; border: 1px solid var(--border); border-radius: 12px; }
+  .tab { height: 32px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; }
+  .tab.active { background: #fff; color: var(--title); box-shadow: var(--shadow); }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .seg { display: inline-flex; gap: 6px; }
+  .search { width: min(260px, 100%); height: 36px; }
+
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; transition: border-color .15s; }
+  .row:hover { border-color: var(--border-strong); }
+  .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--title); font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+  .row-meta { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .badge { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 9999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+  .badge.ok { background: var(--ok-badge); color: var(--ok); }
+  .badge.info { background: var(--info-badge); color: var(--info); }
+  .badge.warn { background: var(--warn-badge); color: #92400e; }
+  .badge.danger { background: var(--danger-badge); color: #b91c1c; }
+  .badge.gray { background: #f1f5f9; color: var(--muted); }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+  .empty strong { display: block; color: var(--title); margin-bottom: 4px; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 11px 16px; border-radius: 12px; background: #0f172a; color: #fff; font-weight: 600; font-size: 13px; box-shadow: 0 10px 25px rgba(0,0,0,.2); transition: all .2s; pointer-events: none; z-index: 20; max-width: calc(100% - 32px); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--danger); }
+
+  @media (max-width: 1024px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .topbar-inner, .main { padding-left: 16px; padding-right: 16px; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row { flex-direction: column; align-items: stretch; }
+    .row-actions { justify-content: flex-end; }
+    .search { width: 100%; }
+  }
+</style>
+</head>
+<body>
+  <!-- Login gate -->
+  <section class="gate" id="gate">
+    <form class="gate-card" id="gateForm" autocomplete="off">
+      <div class="brand"><div class="brand-mark">N</div><h1>이웃메이트 판매자 관리</h1></div>
+      <p>이용권 발급과 고객 관리를 하는 곳입니다. 관리자 키를 입력하세요.</p>
+      <div class="field">
+        <label for="adminKey">관리자 키</label>
+        <input class="input" id="adminKey" type="password" placeholder="관리자 키" autocomplete="current-password">
+      </div>
+      <div class="error-text hidden" id="gateError"></div>
+      <label class="check-row"><input type="checkbox" id="rememberKey"> 이 브라우저에서 기억하기</label>
+      <button class="btn btn-primary" type="submit" id="gateBtn">들어가기</button>
+    </form>
+  </section>
+
+  <!-- App -->
+  <div class="hidden" id="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand" style="margin:0"><div class="brand-mark">N</div><h1>이웃메이트 판매자 관리</h1></div>
+        <button class="btn btn-ghost" type="button" id="logoutBtn">나가기</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="stats">
+        <div class="stat"><span>👥 전체 고객</span><strong id="statUsers">-</strong></div>
+        <div class="stat ok"><span>💳 유료 이용 중</span><strong id="statPaid">-</strong></div>
+        <div class="stat info"><span>🎁 무료체험 중</span><strong id="statTrial">-</strong></div>
+        <div class="stat warn"><span>🎟️ 안 쓴 이용권</span><strong id="statUnused">-</strong></div>
+      </div>
+
+      <div class="grid">
+        <section class="card">
+          <div class="card-head"><h2>🎟️ 이용권 발급</h2></div>
+          <div class="card-body">
+            <div class="field">
+              <label>이용 기간</label>
+              <div class="chips" id="daysChips">
+                <button type="button" class="chip active" data-days="30">30일</button>
+                <button type="button" class="chip" data-days="90">90일</button>
+                <button type="button" class="chip" data-days="180">180일</button>
+                <button type="button" class="chip" data-days="365">1년</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="countInput">개수</label>
+              <div class="stepper">
+                <button type="button" id="countMinus" aria-label="하나 줄이기">−</button>
+                <input id="countInput" inputmode="numeric" value="1" aria-label="발급 개수">
+                <button type="button" id="countPlus" aria-label="하나 늘리기">+</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="memoInput">메모 <span style="color:var(--hint);font-weight:500">(선택)</span></label>
+              <input class="input" id="memoInput" placeholder="예: 크몽 주문번호, 구매자 닉네임">
+            </div>
+            <button class="btn btn-primary" type="button" id="issueBtn">🎟️ 이용권 발급</button>
+
+            <div class="issued hidden" id="issuedBox">
+              <div class="issued-title" id="issuedTitle"></div>
+              <div id="issuedCodes"></div>
+              <button class="btn btn-primary" type="button" id="copyGuideBtn">📋 구매자에게 보낼 안내문 복사</button>
+              <div class="hint">안내문에는 이용권 키와 등록 방법이 들어 있습니다. 크몽 메시지에 그대로 붙여 넣으면 됩니다.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div class="tabs" role="tablist">
+              <button type="button" class="tab active" data-tab="vouchers" role="tab">이용권</button>
+              <button type="button" class="tab" data-tab="users" role="tab">고객</button>
+            </div>
+            <button class="btn btn-sm" type="button" id="refreshBtn">새로고침</button>
+          </div>
+          <div class="card-body">
+            <div id="vouchersPanel">
+              <div class="toolbar">
+                <div class="seg chips" id="voucherFilter">
+                  <button type="button" class="chip active" data-status="unused">안 쓴 이용권</button>
+                  <button type="button" class="chip" data-status="used">사용됨</button>
+                  <button type="button" class="chip" data-status="all">전체</button>
+                </div>
+              </div>
+              <div class="list" id="voucherList"></div>
+            </div>
+            <div class="hidden" id="usersPanel">
+              <div class="toolbar">
+                <input class="input search" id="userSearch" placeholder="이메일로 찾기">
+              </div>
+              <div class="list" id="userList"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
+  const KEY_NAME = 'nm-admin-key';
+  const storage = {
+    get() { try { return sessionStorage.getItem(KEY_NAME) || localStorage.getItem(KEY_NAME) || ''; } catch { return ''; } },
+    set(value, remember) {
+      try { sessionStorage.setItem(KEY_NAME, value); if (remember) localStorage.setItem(KEY_NAME, value); } catch {}
+    },
+    clear() { try { sessionStorage.removeItem(KEY_NAME); localStorage.removeItem(KEY_NAME); } catch {} }
+  };
+  let adminKey = storage.get();
+  let voucherStatus = 'unused';
+  let lastIssued = [];
+
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = (iso) => iso ? new Date(iso).toLocaleString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+  const fmtDay = (iso) => iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' }) : '-';
+  const daysLabel = (d) => d % 365 === 0 ? `${d / 365}년` : `${d}일`;
+
+  let toastTimer = null;
+  function toast(message, error = false) {
+    const el = $('#toast');
+    el.textContent = message;
+    el.className = `toast show${error ? ' error' : ''}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = 'toast'; }, 2600);
+  }
+
+  async function api(path, { method = 'GET', body } = {}) {
+    const res = await fetch(path, { method, headers: { 'Content-Type': 'application/json', 'x-admin-secret': adminKey }, body: body ? JSON.stringify(body) : undefined });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { showGate(data.message || '관리자 키가 맞지 않습니다.'); throw new Error(data.message || '관리자 키가 맞지 않습니다.'); }
+    if (!res.ok || data.ok === false) throw new Error(data.message || `요청 실패 (${res.status})`);
+    return data;
+  }
+
+  async function copy(text, done = '복사했습니다.') {
+    try { await navigator.clipboard.writeText(text); toast(`📋 ${done}`); }
+    catch {
+      const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); toast(`📋 ${done}`); } catch { toast('복사하지 못했습니다. 직접 선택해 복사해주세요.', true); }
+      t.remove();
+    }
+  }
+
+  function showGate(message = '') {
+    $('#app').classList.add('hidden');
+    $('#gate').classList.remove('hidden');
+    $('#gateError').textContent = message;
+    $('#gateError').classList.toggle('hidden', !message);
+    $('#adminKey').focus();
+  }
+
+  async function enter() {
+    await loadSummary();
+    $('#gate').classList.add('hidden');
+    $('#app').classList.remove('hidden');
+    loadVouchers();
+  }
+
+  $('#gateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const key = $('#adminKey').value.trim();
+    if (!key) return showGate('관리자 키를 입력해주세요.');
+    adminKey = key;
+    const btn = $('#gateBtn');
+    btn.disabled = true; btn.textContent = '확인 중…';
+    try {
+      await enter();
+      storage.set(key, $('#rememberKey').checked);
+      $('#adminKey').value = '';
+    } catch (err) {
+      adminKey = '';
+      showGate(err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = '들어가기';
+    }
+  });
+  $('#logoutBtn').addEventListener('click', () => { storage.clear(); adminKey = ''; showGate(); });
+
+  async function loadSummary() {
+    const { summary } = await api('api/admin/summary');
+    $('#statUsers').textContent = summary.users.toLocaleString();
+    $('#statPaid').textContent = summary.paidActive.toLocaleString();
+    $('#statTrial').textContent = summary.trialActive.toLocaleString();
+    $('#statUnused').textContent = summary.unusedVouchers.toLocaleString();
+  }
+
+  // ---- Issue ----
+  let days = 30;
+  $('#daysChips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    days = Number(chip.dataset.days);
+    $$('#daysChips .chip').forEach((c) => c.classList.toggle('active', c === chip));
+  });
+  const clampCount = (n) => Math.max(1, Math.min(50, Math.trunc(Number(n)) || 1));
+  $('#countMinus').addEventListener('click', () => { $('#countInput').value = clampCount(Number($('#countInput').value) - 1); });
+  $('#countPlus').addEventListener('click', () => { $('#countInput').value = clampCount(Number($('#countInput').value) + 1); });
+  $('#countInput').addEventListener('change', () => { $('#countInput').value = clampCount($('#countInput').value); });
+
+  $('#issueBtn').addEventListener('click', async () => {
+    const btn = $('#issueBtn');
+    btn.disabled = true; btn.textContent = '발급 중…';
+    try {
+      const count = clampCount($('#countInput').value);
+      const { vouchers } = await api('api/admin/vouchers', { method: 'POST', body: { days, count, memo: $('#memoInput').value } });
+      lastIssued = vouchers;
+      $('#issuedTitle').textContent = `✅ ${daysLabel(days)} 이용권 ${vouchers.length}개를 발급했습니다`;
+      $('#issuedCodes').innerHTML = vouchers.map((v) => `<div class="code-row"><span class="code">${esc(v.code)}</span><button class="btn btn-sm" type="button" data-copy="${esc(v.code)}">복사</button></div>`).join('');
+      $('#issuedBox').classList.remove('hidden');
+      $('#memoInput').value = '';
+      toast('🎟️ 이용권을 발급했습니다.');
+      loadSummary().catch(() => {});
+      if (voucherStatus !== 'used') loadVouchers();
+    } catch (err) { toast(err.message, true); }
+    finally { btn.disabled = false; btn.textContent = '🎟️ 이용권 발급'; }
+  });
+
+  function guideText(vouchers) {
+    const keys = vouchers.map((v) => v.code).join('\n');
+    const period = daysLabel(vouchers[0].days);
+    return [
+      '구매해 주셔서 감사합니다! 이웃메이트 이용권을 보내드립니다.',
+      '',
+      `■ 이용권 키 (${period})`,
+      keys,
+      '',
+      '■ 등록 방법',
+      '1. 이웃메이트 앱을 실행합니다.',
+      '2. 위쪽의 [이용권 등록 필요] 배지를 눌러 이용권 관리 창을 엽니다.',
+      '3. 처음이시면 [신규 계정 생성]에서 이메일·비밀번호와 함께 위 이용권 키를 넣어주세요.',
+      '   이미 가입하셨다면 [로그인 / 키 등록]에서 로그인한 뒤 [이용권 키 등록]에 키를 넣으면 기간이 더해집니다.',
+      '',
+      '※ 이용권은 한 계정에 한 번만 등록할 수 있고, 계정은 PC 1대에서 사용할 수 있습니다.',
+      '궁금한 점은 크몽 메시지로 편하게 물어봐 주세요.'
+    ].join('\n');
+  }
+  $('#copyGuideBtn').addEventListener('click', () => { if (lastIssued.length) copy(guideText(lastIssued), '안내문을 복사했습니다.'); });
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-copy]');
+    if (btn) copy(btn.dataset.copy, '이용권 키를 복사했습니다.');
+  });
+
+  // ---- Lists ----
+  $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
+    $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
+    const users = tab.dataset.tab === 'users';
+    $('#usersPanel').classList.toggle('hidden', !users);
+    $('#vouchersPanel').classList.toggle('hidden', users);
+    users ? loadUsers() : loadVouchers();
+  }));
+  $('#refreshBtn').addEventListener('click', () => {
+    loadSummary().catch((err) => toast(err.message, true));
+    $('#usersPanel').classList.contains('hidden') ? loadVouchers() : loadUsers();
+  });
+  $('#voucherFilter').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    voucherStatus = chip.dataset.status;
+    $$('#voucherFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
+    loadVouchers();
+  });
+
+  async function loadVouchers() {
+    const list = $('#voucherList');
+    try {
+      const { vouchers } = await api(`api/admin/vouchers?status=${voucherStatus}`);
+      if (!vouchers.length) {
+        list.innerHTML = `<div class="empty"><strong>${voucherStatus === 'used' ? '아직 사용된 이용권이 없습니다' : '이용권이 없습니다'}</strong>왼쪽에서 이용권을 발급하면 여기에 나옵니다.</div>`;
+        return;
+      }
+      list.innerHTML = vouchers.map((v) => {
+        const used = Boolean(v.redeemed_at);
+        return `<div class="row">
+          <div class="row-main">
+            <div class="row-title"><span class="code">${esc(v.code)}</span><span class="badge info">${esc(daysLabel(v.days))}</span>${used ? '<span class="badge ok">사용됨</span>' : '<span class="badge warn">안 씀</span>'}</div>
+            <div class="row-meta">발급 ${esc(fmt(v.created_at))}${v.order_id ? ` · ${esc(v.order_id)}` : ''}${used ? ` · ${esc(v.redeemed_email || '')} 님이 ${esc(fmt(v.redeemed_at))}에 등록` : ''}</div>
+          </div>
+          <div class="row-actions">
+            <button class="btn btn-sm" type="button" data-copy="${esc(v.code)}">복사</button>
+            ${used ? '' : `<button class="btn btn-sm btn-danger" type="button" data-delete="${v.id}" data-code="${esc(v.code)}">삭제</button>`}
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = `<div class="empty"><strong>이용권 목록을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
+    }
+  }
+
+  $('#voucherList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-delete]'); if (!btn) return;
+    if (btn.dataset.confirm !== '1') {
+      btn.dataset.confirm = '1'; btn.textContent = '정말 삭제';
+      setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ''; btn.textContent = '삭제'; } }, 3000);
+      return;
+    }
+    try {
+      await api(`api/admin/vouchers/${btn.dataset.delete}/delete`, { method: 'POST' });
+      toast('이용권을 삭제했습니다.');
+      loadVouchers(); loadSummary().catch(() => {});
+    } catch (err) { toast(err.message, true); }
+  });
+
+  let searchTimer = null;
+  $('#userSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadUsers, 250); });
+
+  function planBadge(u) {
+    if (!u.planType) return '<span class="badge gray">이용권 없음</span>';
+    if (u.daysLeft <= 0) return '<span class="badge danger">만료</span>';
+    if (u.planType === 'free_trial') return `<span class="badge info">무료체험 · ${u.daysLeft}일 남음</span>`;
+    return `<span class="badge ok">유료 · ${u.daysLeft}일 남음</span>`;
+  }
+
+  async function loadUsers() {
+    const list = $('#userList');
+    try {
+      const { users } = await api(`api/admin/users?q=${encodeURIComponent($('#userSearch').value.trim())}`);
+      if (!users.length) {
+        list.innerHTML = '<div class="empty"><strong>고객이 없습니다</strong>앱에서 회원가입한 고객이 여기에 나옵니다.</div>';
+        return;
+      }
+      list.innerHTML = users.map((u) => `<div class="row">
+        <div class="row-main">
+          <div class="row-title">${esc(u.email)} ${planBadge(u)}</div>
+          <div class="row-meta">가입 ${esc(fmtDay(u.createdAt))} · 만료 ${esc(fmtDay(u.expiresAt))} · ${u.hasDevice ? 'PC 등록됨' : 'PC 미등록'} · 최근 사용 ${esc(fmt(u.lastSeenAt))}</div>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-sm" type="button" data-extend="${u.id}">+30일</button>
+          ${u.hasDevice ? `<button class="btn btn-sm" type="button" data-reset="${u.id}" title="고객이 PC를 바꿨을 때 눌러주세요">PC 초기화</button>` : ''}
+        </div>
+      </div>`).join('');
+    } catch (err) {
+      list.innerHTML = `<div class="empty"><strong>고객 목록을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
+    }
+  }
+
+  $('#userList').addEventListener('click', async (e) => {
+    const extend = e.target.closest('[data-extend]');
+    const reset = e.target.closest('[data-reset]');
+    const btn = extend || reset; if (!btn) return;
+    if (btn.dataset.confirm !== '1') {
+      btn.dataset.confirm = '1';
+      const original = btn.textContent;
+      btn.textContent = extend ? '30일 연장 확인' : '초기화 확인';
+      setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ''; btn.textContent = original; } }, 3000);
+      return;
+    }
+    try {
+      if (extend) {
+        const r = await api(`api/admin/users/${extend.dataset.extend}/extend`, { method: 'POST', body: { days: 30 } });
+        toast(`30일 연장했습니다. (남은 기간 ${r.daysLeft}일)`);
+      } else {
+        await api(`api/admin/users/${reset.dataset.reset}/reset-device`, { method: 'POST' });
+        toast('PC 등록을 초기화했습니다. 새 PC에서 로그인하면 등록됩니다.');
+      }
+      loadUsers(); loadSummary().catch(() => {});
+    } catch (err) { toast(err.message, true); }
+  });
+
+  // Start: try a remembered key, otherwise show the gate.
+  if (adminKey) enter().catch(() => { adminKey = ''; storage.clear(); showGate(); });
+  else showGate();
+})();
+</script>
+</body>
+</html>

@@ -364,3 +364,50 @@ test('JWT secret is generated per database instead of a shared default', () => {
   const token = a.register({ email: 'a@example.com', password: 'password123' }).token;
   assert.strictEqual(b.verifyLicense({ token }).error, 'INVALID_TOKEN');
 });
+
+test('Seller admin issues vouchers, lists customers, extends and resets devices', async () => {
+  const db = new LicenseDatabase(':memory:');
+  const { app, service } = createLicenseServer(db, { adminSecret: 'admin-test-secret' });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const call = (method, url, body, secret = 'admin-test-secret') => fetch(`${baseUrl}${url}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  try {
+    assert.strictEqual((await call('GET', '/api/admin/summary', null, 'wrong')).status, 401);
+    assert.strictEqual((await call('POST', '/api/admin/vouchers', { days: 0 })).status, 400);
+
+    const issued = await (await call('POST', '/api/admin/vouchers', { days: 30, count: 2, memo: '크몽 #1234' })).json();
+    assert.strictEqual(issued.vouchers.length, 2);
+    assert.strictEqual(issued.vouchers[0].order_id, '크몽 #1234');
+
+    // A buyer registers with one key; the other stays unused and can be deleted.
+    const reg = service.register({ email: 'buyer@test.com', password: 'pw123456', licenseKey: issued.vouchers[0].code, hwid: 'PC-1' });
+    assert.ok(reg.ok);
+    const unused = await (await call('GET', '/api/admin/vouchers?status=unused')).json();
+    assert.deepStrictEqual(unused.vouchers.map((v) => v.code), [issued.vouchers[1].code]);
+    const used = await (await call('GET', '/api/admin/vouchers?status=used')).json();
+    assert.strictEqual(used.vouchers[0].redeemed_email, 'buyer@test.com');
+    assert.strictEqual((await call('POST', `/api/admin/vouchers/${issued.vouchers[0].id}/delete`)).status, 400);
+    assert.strictEqual((await call('POST', `/api/admin/vouchers/${issued.vouchers[1].id}/delete`)).status, 200);
+
+    const users = await (await call('GET', '/api/admin/users?q=buyer')).json();
+    assert.strictEqual(users.users.length, 1);
+    assert.strictEqual(users.users[0].hasDevice, true);
+    const before = users.users[0].daysLeft;
+    const extended = await (await call('POST', `/api/admin/users/${users.users[0].id}/extend`, { days: 30 })).json();
+    assert.strictEqual(extended.daysLeft, before + 30);
+    assert.strictEqual((await call('POST', `/api/admin/users/${users.users[0].id}/reset-device`)).status, 200);
+    assert.strictEqual((await (await call('GET', '/api/admin/users')).json()).users[0].hasDevice, false);
+
+    const summary = await (await call('GET', '/api/admin/summary')).json();
+    assert.deepStrictEqual(summary.summary, { users: 1, paidActive: 1, trialActive: 0, unusedVouchers: 0 });
+    assert.strictEqual((await fetch(`${baseUrl}/admin`)).status, 200);
+  } finally {
+    server.close();
+    db.close();
+  }
+});

@@ -6,7 +6,7 @@ import { getHardwareFingerprint } from './hwid.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_CACHE_PATH = path.resolve(__dirname, '..', 'data', 'license-cache.json');
-const DEFAULT_SERVER_URL = process.env.LICENSE_SERVER_URL || 'http://127.0.0.1:3300';
+const DEFAULT_SERVER_URL = process.env.LICENSE_SERVER_URL || 'https://minohlee.mooo.com/license';
 
 export class LicenseClientManager {
   constructor(options = {}) {
