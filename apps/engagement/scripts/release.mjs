@@ -29,8 +29,9 @@ console.log('\n▶ 업데이트 서버에 올리는 중');
 execFileSync('scp', [...ssh, ...files, `${SERVER}:${REMOTE_DIR}/`], { stdio: 'inherit' });
 // latest.yml goes last, so apps never see a version whose installer is still uploading.
 execFileSync('scp', [...ssh, path.join(dist, 'latest.yml'), `${SERVER}:${REMOTE_DIR}/latest.yml.tmp`], { stdio: 'inherit' });
-// Keep the newest three installers so in-flight downloads finish.
-execFileSync('ssh', [...ssh, SERVER, `cd ${REMOTE_DIR} && mv latest.yml.tmp latest.yml && ls -t NeighborMate-Setup-*.exe | tail -n +4 | while read f; do rm -f "$f" "$f.blockmap"; done`], { stdio: 'inherit' });
+// Keep the newest three installers so in-flight downloads finish. NeighborMate-Setup.exe is the
+// promo page's download link and always points at the newest installer.
+execFileSync('ssh', [...ssh, SERVER, `cd ${REMOTE_DIR} && mv latest.yml.tmp latest.yml && ln -sfn NeighborMate-Setup-${next}.exe NeighborMate-Setup.exe && ls -t NeighborMate-Setup-*.exe | tail -n +4 | while read f; do rm -f "$f" "$f.blockmap"; done`], { stdio: 'inherit' });
 
 const published = await (await fetch('https://minohlee.mooo.com/updates/neighbormate/latest.yml', { cache: 'no-store' })).text();
 if (!published.includes(`version: ${next}`)) throw new Error('업데이트 서버의 latest.yml이 새 버전으로 바뀌지 않았습니다.');
