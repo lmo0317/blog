@@ -6873,35 +6873,7 @@ textarea.phrase-textarea:focus {
   #commentManagementWorkspace #subtabNeighborHealth .desktop-col-right { grid-column: 1; grid-row: 2; }
 }
 
-/* 활성 이웃 추리기: active / inactive split */
-.nh-result-summary .nh-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  width: 100%;
-}
-.nh-split-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1.5px solid #e2e8f0;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
-}
-.nh-split-btn span { font-size: 13px; font-weight: 600; color: #475569; }
-.nh-split-btn strong { font-size: 20px; font-weight: 800; color: #0f172a; }
-.nh-split-btn:hover { border-color: #cbd5e1; }
-.nh-split-btn.active-group.selected { border-color: #22c55e; background: #f0fdf4; box-shadow: 0 0 0 3px rgba(34,197,94,.12); }
-.nh-split-btn.active-group.selected strong { color: #15803d; }
-.nh-split-btn.inactive-group.selected { border-color: #f87171; background: #fef2f2; box-shadow: 0 0 0 3px rgba(248,113,113,.12); }
-.nh-split-btn.inactive-group.selected strong { color: #b91c1c; }
-.nh-result-criteria { display: block; margin-top: 8px; font-size: 12.5px; color: #64748b; }
-.nh-badge.active { background: #dcfce7; color: #15803d; }
-.nh-candidate.nh-candidate-readonly { cursor: default; }
-#subtabNeighborHealth .nh-result-summary { background: none; border: 0; padding: 0; gap: 0; }
+/* 비활성 이웃 정리: result headline */
+#subtabNeighborHealth .nh-result-summary { gap: 4px; padding: 14px 16px; background: #fef2f2; border-color: #fecaca; border-radius: 12px; }
+#subtabNeighborHealth .nh-result-summary strong { font-size: 18px; font-weight: 800; color: #b91c1c; }
+#subtabNeighborHealth .nh-result-summary .nh-result-criteria { font-size: 12.5px; color: #64748b; }

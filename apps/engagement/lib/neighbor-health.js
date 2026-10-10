@@ -145,9 +145,9 @@ export function parseBuddyListHtml(html) {
 export const RELATION_LABELS = Object.freeze({ all: '전체', mutual: '서로이웃', oneway: '일방 이웃' });
 export const ACTIVE_DAY_OPTIONS = Object.freeze([7, 14, 30, 60, 90]);
 
-/** Cleans the user's 활성 이웃 기준. */
+/** Cleans the user's 비활성 이웃 기준: no new post for more than `activeDays` days. */
 export function normalizeCriteria(input = {}) {
-  const activeDays = Math.max(1, Math.min(Math.round(Number(input.activeDays) || 30), 365));
+  const activeDays = Math.max(1, Math.min(Math.round(Number(input.activeDays) || 60), 365));
   const relation = input.relation === 'mutual' ? 'mutual' : 'all';
   const graceDays = Math.max(0, Math.min(Math.round(Number(input.graceDays ?? 14) || 0), 365));
   return { criteria: { activeDays, relation, graceDays, commentersActive: input.commentersActive !== false } };
@@ -155,9 +155,8 @@ export function normalizeCriteria(input = {}) {
 
 export function describeCriteria(criteria) {
   return [
-    `최근 ${criteria.activeDays}일 안에 새 글`,
-    criteria.relation === 'mutual' ? '서로이웃만' : '',
-    criteria.commentersActive ? '내 글 댓글 이웃 포함' : ''
+    `${criteria.activeDays}일 넘게 새 글 없음`,
+    criteria.relation === 'mutual' ? '서로이웃 아닌 이웃 포함' : ''
   ].filter(Boolean).join(' · ');
 }
 
@@ -292,7 +291,7 @@ export class NeighborHealthManager {
     this.logs = [];
     this.progress = { phase: '', done: 0, total: 0 };
     this.list = null; // { fetchedAt, rows } — my neighbor list, read on demand
-    this.result = null; // { queryId, criteria, description, active, inactive, activeCount, inactiveCount, watchingCount, total }
+    this.result = null; // { queryId, criteria, description, inactive, activeCount, inactiveCount, watchingCount, total }
     this.queryCount = 0;
     this.pruneLog = {}; // { 'YYYY-MM-DD': count }
     this.load();
@@ -387,7 +386,6 @@ export class NeighborHealthManager {
         queryId: this.queryCount,
         criteria,
         description: describeCriteria(criteria),
-        active: active.slice(0, 1500),
         inactive: inactive.slice(0, 1500),
         activeCount: active.length,
         inactiveCount: inactive.length,
@@ -396,7 +394,7 @@ export class NeighborHealthManager {
         total: this.list.rows.length,
         queriedAt: new Date().toISOString()
       };
-      this.log(`🔎 ${this.result.description} 기준으로 활성 이웃 ${active.length}명, 비활성 이웃 ${inactive.length}명을 추렸습니다.${watching ? ` 새로 추가한 ${watching}명은 지켜봅니다.` : ''}`, 'success');
+      this.log(`🔎 비활성 이웃 ${inactive.length}명을 찾았습니다. (${this.result.description}) 활성 이웃 ${active.length}명${watching ? `, 새로 추가한 ${watching}명` : ''}은 그대로 둡니다.`, 'success');
       this.state = this.shouldStop ? 'stopped' : 'completed';
       return this.getStatus();
     } catch (err) {

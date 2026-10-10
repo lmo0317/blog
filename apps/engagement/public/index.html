@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=38">
-  <link rel="stylesheet" href="app-mode.css?v=48">
+  <link rel="stylesheet" href="app-mode.css?v=49">
 </head>
 <body>
   <main class="shell">
@@ -121,12 +121,12 @@
                 <label class="comment-neighbor-switch-card">
                   <input type="checkbox" id="apPruneDormant">
                   <div class="switch-card-text">
-                    <span class="switch-title">🧹 활성 이웃만 남기기</span>
-                    <span class="switch-desc">하루 한 번, 아래 기간 동안 새 글이 없는 비활성 이웃을 최대 30명 삭제합니다. 내 글에 댓글을 단 이웃과 추가한 지 14일이 안 된 이웃은 지킵니다. 먼저 '이웃 관리 → 활성 이웃'에서 같은 기준으로 추려보세요.</span>
+                    <span class="switch-title">🧹 비활성 이웃 자동 정리</span>
+                    <span class="switch-desc">하루 한 번, 아래 기간보다 오래 새 글이 없는 이웃을 최대 30명 삭제합니다. 내 글에 댓글을 단 이웃과 추가한 지 14일이 안 된 이웃은 지킵니다. 먼저 '이웃 관리 → 비활성 이웃 정리'에서 같은 기준으로 찾아보세요.</span>
                   </div>
                 </label>
                 <div class="form-group hidden" id="apPruneDaysGroup">
-                  <label><strong>활성 이웃 기준 (이 기간 안에 새 글)</strong></label>
+                  <label><strong>새 글이 없는 기간</strong></label>
                   <div class="option-chip-row" id="apPruneDaysChips" data-target-input="apPruneDormantDays">
                     <button type="button" class="chip-btn active" data-value="60">60일</button>
                     <button type="button" class="chip-btn" data-value="90">90일</button>
@@ -1739,8 +1739,8 @@
           <small>미수락 신청 확인 및 회수</small>
         </button>
         <button type="button" class="cleaner-subtab-btn" data-subtab="neighbor-health">
-          <strong>활성 이웃</strong>
-          <small>활성 이웃만 추리기</small>
+          <strong>비활성 이웃 정리</strong>
+          <small>활동 없는 이웃 찾아 정리</small>
         </button>
       </div>
 
@@ -1979,7 +1979,7 @@
         </div>
       </div>
 
-      <!-- Subtab: 활성 이웃 추리기 — set what counts as active, sort, then clear out the inactive ones -->
+      <!-- Subtab: 비활성 이웃 정리 — set what counts as inactive, find them, pick and clear -->
       <div id="subtabNeighborHealth" class="cleaner-subtab-panel hidden">
         <div class="desktop-workspace-grid">
           <div class="desktop-col desktop-col-left">
@@ -1987,65 +1987,64 @@
               <div class="desktop-card-header">
                 <div class="card-title-group">
                   <span class="card-badge pulse">기준</span>
-                  <h3>활성 이웃 기준</h3>
+                  <h3>비활성 이웃 기준</h3>
                 </div>
-                <span class="status ready" id="nhStatusBadge"><i></i> 추리기 전</span>
+                <span class="status ready" id="nhStatusBadge"><i></i> 찾기 전</span>
               </div>
               <div class="desktop-card-body nh-form">
                 <div class="form-group">
-                  <label><strong>🟢 이 기간 안에 새 글을 쓴 이웃</strong></label>
+                  <label><strong>💤 이 기간보다 오래 새 글이 없는 이웃</strong></label>
                   <div class="option-chip-row" id="nhActiveChips" data-target-input="nhActiveDays">
-                    <button type="button" class="chip-btn" data-value="7">7일</button>
-                    <button type="button" class="chip-btn" data-value="14">14일</button>
-                    <button type="button" class="chip-btn active" data-value="30">30일</button>
-                    <button type="button" class="chip-btn" data-value="60">60일</button>
+                    <button type="button" class="chip-btn" data-value="30">30일</button>
+                    <button type="button" class="chip-btn active" data-value="60">60일</button>
                     <button type="button" class="chip-btn" data-value="90">90일</button>
+                    <button type="button" class="chip-btn" data-value="180">180일</button>
+                    <button type="button" class="chip-btn" data-value="365">1년</button>
                   </div>
-                  <input type="hidden" id="nhActiveDays" value="30">
+                  <input type="hidden" id="nhActiveDays" value="60">
                 </div>
 
                 <div class="form-group">
-                  <label><strong>🤝 이웃 관계</strong></label>
+                  <label><strong>🤝 서로이웃이 아닌 이웃</strong></label>
                   <div class="option-chip-row" id="nhRelationChips" data-target-input="nhRelation">
-                    <button type="button" class="chip-btn active" data-value="all">전체</button>
-                    <button type="button" class="chip-btn" data-value="mutual">서로이웃만 활성</button>
+                    <button type="button" class="chip-btn active" data-value="all">글을 쓰면 그대로 두기</button>
+                    <button type="button" class="chip-btn" data-value="mutual">비활성에 넣기</button>
                   </div>
                   <input type="hidden" id="nhRelation" value="all">
                 </div>
 
                 <div class="form-group">
-                  <label><strong>👀 새로 추가한 이웃은 지켜보기</strong></label>
+                  <label><strong>👀 새로 추가한 이웃 제외</strong></label>
                   <div class="option-chip-row" id="nhGraceChips" data-target-input="nhGraceDays">
                     <button type="button" class="chip-btn" data-value="0">안 함</button>
-                    <button type="button" class="chip-btn active" data-value="14">14일</button>
-                    <button type="button" class="chip-btn" data-value="30">30일</button>
+                    <button type="button" class="chip-btn active" data-value="14">14일 안</button>
+                    <button type="button" class="chip-btn" data-value="30">30일 안</button>
                   </div>
                   <input type="hidden" id="nhGraceDays" value="14">
-                  <span class="field-hint">추가한 지 이 기간이 안 된 이웃은 비활성으로 보지 않습니다.</span>
                 </div>
 
                 <label class="comment-neighbor-switch-card">
                   <input type="checkbox" id="nhCommentersActive" checked>
                   <div class="switch-card-text">
-                    <span class="switch-title">💬 내 글에 댓글 단 이웃은 활성으로</span>
-                    <span class="switch-desc">나와 소통하는 이웃은 글이 뜸해도 활성 이웃으로 둡니다.</span>
+                    <span class="switch-title">💬 내 글에 댓글 단 이웃은 제외</span>
+                    <span class="switch-desc">나와 소통하는 이웃은 글이 뜸해도 정리 대상에 넣지 않습니다.</span>
                   </div>
                 </label>
 
                 <div class="nh-query-actions">
-                  <button type="button" class="cleaner-cta-btn" id="nhQueryBtn"><strong>🔍 활성 이웃 추리기</strong></button>
+                  <button type="button" class="cleaner-cta-btn" id="nhQueryBtn"><strong>🔍 비활성 이웃 찾기</strong></button>
                   <button type="button" class="button danger medium full-width hidden" id="nhStopBtn">⏹️ 작업 중단</button>
                   <label class="nh-refresh-option hidden" id="nhRefreshOption">
                     <input type="checkbox" id="nhRefresh">
                     <span id="nhRefreshText">이웃 목록 새로 읽기</span>
                   </label>
-                  <span class="field-hint" id="nhProgressText">처음 추릴 때 내 이웃 목록을 읽습니다. 이웃이 1,000명이면 1분쯤 걸립니다.</span>
+                  <span class="field-hint" id="nhProgressText">처음 찾을 때 내 이웃 목록을 읽습니다. 이웃이 1,000명이면 1분쯤 걸립니다.</span>
                 </div>
 
                 <details class="nh-log-details">
                   <summary>처리 로그</summary>
                   <div class="cleaner-terminal-box" id="nhTerminalLogs">
-                    <div class="terminal-line info">[대기 중] 기준을 고르고 '활성 이웃 추리기'를 누르세요.</div>
+                    <div class="terminal-line info">[대기 중] 기준을 고르고 '비활성 이웃 찾기'를 누르세요.</div>
                   </div>
                 </details>
               </div>
@@ -2057,26 +2056,19 @@
               <div class="desktop-card-header">
                 <div class="card-title-group">
                   <span class="card-badge">결과</span>
-                  <h3>추린 결과</h3>
+                  <h3>찾은 비활성 이웃</h3>
                 </div>
                 <span class="nh-limit-badge" id="nhLimitBadge">오늘 정리 0 / 30명</span>
               </div>
               <div class="desktop-card-body">
                 <div class="nh-result-summary hidden" id="nhResultSummary">
-                  <div class="nh-split" role="tablist" aria-label="추린 결과 보기">
-                    <button type="button" class="nh-split-btn active-group" data-view="active" role="tab">
-                      <span>🟢 활성 이웃</span><strong id="nhActiveCount">0명</strong>
-                    </button>
-                    <button type="button" class="nh-split-btn inactive-group" data-view="inactive" role="tab">
-                      <span>💤 비활성 이웃</span><strong id="nhInactiveCount">0명</strong>
-                    </button>
-                  </div>
+                  <strong id="nhResultCount">비활성 이웃 0명</strong>
                   <span class="nh-result-criteria" id="nhResultCriteria"></span>
                 </div>
                 <div class="nh-candidate-toolbar hidden" id="nhResultToolbar">
                   <label class="nh-select-all"><input type="checkbox" id="nhSelectAll"><span>전체 선택</span></label>
                   <span class="nh-selected-count" id="nhSelectedCount">0명 선택</span>
-                  <button type="button" class="button danger small" id="nhPruneBtn" disabled>🧹 비활성 이웃 정리</button>
+                  <button type="button" class="button danger small" id="nhPruneBtn" disabled>🧹 선택한 이웃 정리</button>
                 </div>
                 <div class="nh-confirm-bar hidden" id="nhConfirmBar">
                   <span id="nhConfirmText">선택한 이웃을 정리할까요? 되돌릴 수 없습니다.</span>
@@ -2088,8 +2080,8 @@
                 <div class="nh-candidate-list" id="nhCandidateList">
                   <div class="empty-state cleaner-empty-state">
                     <div class="cleaner-empty-icon" aria-hidden="true"></div>
-                    <strong>기준을 정하고 활성 이웃을 추려보세요</strong>
-                    <p>왼쪽에서 활성 이웃 기준을 고르고 '활성 이웃 추리기'를 누르면 내 이웃이 활성과 비활성으로 나뉘어 여기에 나옵니다. 비활성 이웃은 골라서 하루 최대 30명까지 정리할 수 있습니다.</p>
+                    <strong>비활성 이웃을 찾아보세요</strong>
+                    <p>왼쪽에서 기준을 고르고 '비활성 이웃 찾기'를 누르면 오래 활동이 없는 이웃이 여기에 나옵니다. 정리할 이웃을 골라 하루 최대 30명까지 정리할 수 있습니다.</p>
                   </div>
                 </div>
               </div>
@@ -2527,6 +2519,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=53"></script>
+  <script type="module" src="app.js?v=54"></script>
 </body>
 </html>

@@ -5473,14 +5473,13 @@ function initAutopilot() {
 initAutopilot();
 
 // ---------------------------------------------------------------------------
-// 활성 이웃 추리기: the user sets what counts as active → 추리기 → active / inactive lists →
-// picks inactive neighbors → 정리. Nothing runs on tab open.
+// 비활성 이웃 정리: the user sets what counts as inactive → 찾기 → picks neighbors → 정리.
+// Nothing runs on tab open.
 // ---------------------------------------------------------------------------
 let nhStatus = null;
 let nhPollTimer = null;
 let nhAwaitingQuery = false;
 let nhShownQueryId = null;
-let nhView = 'active';
 const nhSelected = new Set();
 
 function nhRelationLabel(relation) {
@@ -5489,7 +5488,7 @@ function nhRelationLabel(relation) {
 
 function readNeighborCriteria() {
   return {
-    activeDays: Number($('#nhActiveDays')?.value) || 30,
+    activeDays: Number($('#nhActiveDays')?.value) || 60,
     relation: $('#nhRelation')?.value || 'all',
     graceDays: Number($('#nhGraceDays')?.value) || 0,
     commentersActive: $('#nhCommentersActive')?.checked !== false
@@ -5498,40 +5497,35 @@ function readNeighborCriteria() {
 
 function renderNeighborResult(result, running) {
   const list = $('#nhCandidateList');
-  const inactiveView = nhView === 'inactive';
-  const items = inactiveView ? result.inactive : result.active;
+  const items = result.inactive;
   $('#nhResultSummary')?.classList.remove('hidden');
-  $$('#nhResultSummary .nh-split-btn').forEach((btn) => {
-    const on = btn.dataset.view === nhView;
-    btn.classList.toggle('selected', on);
-    btn.setAttribute('aria-selected', String(on));
-  });
-  $('#nhActiveCount').textContent = `${result.activeCount.toLocaleString()}명`;
-  $('#nhInactiveCount').textContent = `${result.inactiveCount.toLocaleString()}명`;
-  $('#nhResultCriteria').textContent = `이웃 ${result.total.toLocaleString()}명 · ${result.description}${result.watchingCount ? ` · 새로 추가한 ${result.watchingCount}명은 지켜보는 중` : ''}`;
-  $('#nhResultToolbar')?.classList.toggle('hidden', !inactiveView || !items.length);
-  if (!inactiveView) $('#nhConfirmBar')?.classList.add('hidden');
+  $('#nhResultToolbar')?.classList.toggle('hidden', !items.length);
+  $('#nhResultCount').textContent = `비활성 이웃 ${result.inactiveCount.toLocaleString()}명`;
+  const kept = [
+    `활성 이웃 ${(result.activeCount - (result.commenterCount || 0)).toLocaleString()}명`,
+    result.commenterCount ? `댓글 이웃 ${result.commenterCount}명` : '',
+    result.watchingCount ? `새로 추가한 ${result.watchingCount}명` : ''
+  ].filter(Boolean).join(', ');
+  $('#nhResultCriteria').textContent = `이웃 ${result.total.toLocaleString()}명 중 · ${result.description} · ${kept}은 그대로 둡니다`;
   if (!list) return;
   if (!items.length) {
-    list.innerHTML = inactiveView
-      ? '<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>비활성 이웃이 없습니다</strong><p>지금 기준으로는 모든 이웃이 활성 이웃입니다.</p></div>'
-      : '<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>활성 이웃이 없습니다</strong><p>기간을 늘려 다시 추려보세요.</p></div>';
+    list.innerHTML = '<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>정리할 비활성 이웃이 없습니다</strong><p>지금 기준으로는 모든 이웃이 활동 중입니다. 기간을 줄여 다시 찾아보세요.</p></div>';
     return;
   }
   list.innerHTML = items.map((n) => {
-    const picked = inactiveView && nhSelected.has(n.buddyBlogNo);
-    const body = `
+    const picked = nhSelected.has(n.buddyBlogNo);
+    return `
+    <label class="nh-candidate${picked ? ' selected' : ''}">
+      <input type="checkbox" class="nh-candidate-check" value="${escapeHtml(n.buddyBlogNo)}"${picked ? ' checked' : ''}${running ? ' disabled' : ''}>
       <div class="nh-candidate-main">
         <div class="nh-candidate-title"><strong>${escapeHtml(n.nickname || n.blogId)}</strong><a href="https://blog.naver.com/${encodeURIComponent(n.blogId)}" target="_blank" rel="noopener">@${escapeHtml(n.blogId)}</a></div>
         <div class="nh-candidate-meta">
           <span class="nh-badge ${n.relation}">${nhRelationLabel(n.relation)}</span>
-          <span class="nh-badge ${inactiveView ? 'dormant' : 'active'}">${escapeHtml(n.reason)}</span>
+          <span class="nh-badge dormant">${escapeHtml(n.reason)}</span>
           <span>최근 글 ${escapeHtml(n.lastPostText || '없음')} · 추가 ${escapeHtml(n.addedText || '-')}${n.group ? ` · ${escapeHtml(n.group)}` : ''}</span>
         </div>
-      </div>`;
-    return inactiveView
-      ? `<label class="nh-candidate${picked ? ' selected' : ''}"><input type="checkbox" class="nh-candidate-check" value="${escapeHtml(n.buddyBlogNo)}"${picked ? ' checked' : ''}${running ? ' disabled' : ''}>${body}</label>`
-      : `<div class="nh-candidate nh-candidate-readonly">${body}</div>`;
+      </div>
+    </label>`;
   }).join('');
 }
 
@@ -5540,20 +5534,19 @@ function renderNeighborHealth(status) {
   const running = status.state === 'running';
   const progress = status.progress || {};
 
-  // Results appear only for a 추리기 the user started on this screen.
+  // Results appear only for a 찾기 the user started on this screen.
   const result = status.result;
   if (result && nhAwaitingQuery && !running) {
     nhAwaitingQuery = false;
     if (result.queryId !== nhShownQueryId) {
       nhShownQueryId = result.queryId;
       nhSelected.clear();
-      nhView = 'active';
     }
   }
 
   const badge = $('#nhStatusBadge');
   if (badge) {
-    const label = running ? (progress.phase === 'prune' ? '정리 중' : '추리는 중') : nhShownQueryId ? '추리기 완료' : '추리기 전';
+    const label = running ? (progress.phase === 'prune' ? '정리 중' : '찾는 중') : nhShownQueryId ? '찾기 완료' : '찾기 전';
     badge.className = `status ${running ? 'running' : nhShownQueryId ? 'online' : 'ready'}`;
     badge.innerHTML = `<i></i> ${label}`;
   }
@@ -5564,7 +5557,7 @@ function renderNeighborHealth(status) {
   if (hasList) $('#nhRefreshText').textContent = `이웃 목록 새로 읽기 (지금 목록은 ${status.listAgeMinutes}분 전에 읽은 ${Number(status.listSize || 0).toLocaleString()}명)`;
   $('#nhProgressText').textContent = running
     ? (progress.phase === 'prune' ? `비활성 이웃 정리 중… ${progress.done || 0} / ${progress.total || 0}명` : `이웃 목록 읽는 중… ${progress.done || 0} / ${progress.total || '?'}페이지 (${(progress.count || 0).toLocaleString()}명)`)
-    : (hasList ? '기준을 바꿔 다시 추리면 바로 결과가 나옵니다.' : '처음 추릴 때 내 이웃 목록을 읽습니다. 이웃이 1,000명이면 1분쯤 걸립니다.');
+    : (hasList ? '기준을 바꿔 다시 찾으면 바로 결과가 나옵니다.' : '처음 찾을 때 내 이웃 목록을 읽습니다. 이웃이 1,000명이면 1분쯤 걸립니다.');
   $('#nhLimitBadge').textContent = `오늘 정리 ${status.prunedToday || 0} / ${status.dailyLimit || 30}명`;
 
   if (result && nhShownQueryId === result.queryId) {
@@ -5609,10 +5602,6 @@ function initNeighborHealth() {
   $('#nhStopBtn')?.addEventListener('click', async () => {
     try { renderNeighborHealth(await api('api/neighbor-health/stop', { method: 'POST' })); } catch (error) { toast(error.message, true); }
   });
-  $$('#nhResultSummary .nh-split-btn').forEach((btn) => btn.addEventListener('click', () => {
-    nhView = btn.dataset.view;
-    if (nhStatus) renderNeighborHealth(nhStatus);
-  }));
   $('#nhCandidateList')?.addEventListener('change', (event) => {
     const box = event.target.closest('.nh-candidate-check');
     if (!box) return;

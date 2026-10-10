@@ -51,8 +51,8 @@ const rows = [
   { buddyBlogNo: '6', relation: 'oneway', blogId: 'ancient', nickname: '옛날', lastPostText: '19.01.01.', addedText: '25.01.01.' }
 ];
 
-test('normalizeCriteria defaults to a 30-day active period with commenters counted as active', () => {
-  assert.deepEqual(normalizeCriteria({}).criteria, { activeDays: 30, relation: 'all', graceDays: 14, commentersActive: true });
+test('normalizeCriteria defaults to 60 days without a new post, keeping commenters', () => {
+  assert.deepEqual(normalizeCriteria({}).criteria, { activeDays: 60, relation: 'all', graceDays: 14, commentersActive: true });
   assert.equal(normalizeCriteria({ activeDays: 7, relation: 'mutual' }).criteria.relation, 'mutual');
   assert.equal(normalizeCriteria({ relation: 'oneway' }).criteria.relation, 'all');
 });
@@ -93,7 +93,8 @@ test('NeighborHealthManager reads the list once, re-filters instantly, and prune
   await assert.rejects(() => manager.prune(['2']), /조회/);
 
   const first = await manager.query({ activeDays: 60 });
-  assert.deepEqual(first.result.active.map((n) => n.blogId), ['fresh']);
+  assert.equal(first.result.activeCount, 1);
+  assert.equal(first.result.active, undefined);
   assert.deepEqual(first.result.inactive.map((n) => n.blogId), ['sleepy']);
   const readsAfterFirst = reads;
   const second = await manager.query({ activeDays: 7 });
