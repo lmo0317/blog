@@ -215,7 +215,29 @@ export async function fetchBuddyListPage(page, blogId, pageNo = 1) {
   return { rows, maxPage };
 }
 
-export async function fetchAllBuddies(page, blogId, { maxPages = 120, onPage = () => {}, shouldStop = () => false } = {}) {
+/** Highest page number the list's pager links to (it shows about ten pages at a time). */
+export function parseMaxPage(html, fallback = 1) {
+  const numbers = [...String(html).matchAll(/(?:goPage\(|currentPage=)(\d+)/g)].map((m) => Number(m[1]));
+  return numbers.length ? Math.max(fallback, ...numbers) : fallback;
+}
+
+const buddyListUrl = (blogId, pageNo) => `https://admin.blog.naver.com/BuddyListManage.naver?blogId=${encodeURIComponent(blogId)}&currentPage=${pageNo}`;
+
+/** Fetches one list page as HTML over the logged-in session, without rendering it in a tab. */
+async function requestBuddyListPage(context, blogId, pageNo) {
+  const response = await context.request.get(buddyListUrl(blogId, pageNo), {
+    timeout: 15000,
+    headers: { Referer: 'https://admin.blog.naver.com/' }
+  });
+  if (/nidlogin/.test(response.url())) throw new Error('네이버 로그인이 필요합니다.');
+  if (!response.ok()) throw new Error(`이웃 목록 ${pageNo}페이지를 읽지 못했습니다. (${response.status()})`);
+  const charset = (response.headers()['content-type'] || '').match(/charset=([\w-]+)/i)?.[1] || 'utf-8';
+  const html = new TextDecoder(charset).decode(await response.body());
+  return { rows: parseBuddyListHtml(html).map((row) => ({ ...row, sourcePage: pageNo })), maxPage: parseMaxPage(html, pageNo) };
+}
+
+/** Page-by-page in a tab; the fallback when direct requests do not return the list. */
+async function fetchAllBuddiesInTab(page, blogId, { maxPages, onPage, shouldStop }) {
   const rows = [];
   let pageNo = 1;
   let lastPage = 1;
@@ -229,6 +251,46 @@ export async function fetchAllBuddies(page, blogId, { maxPages = 120, onPage = (
     await page.waitForTimeout(600 + Math.floor(Math.random() * 700));
   }
   return rows;
+}
+
+/**
+ * Reads my whole neighbor list. Pages are fetched as plain HTML a few at a time, which takes seconds
+ * instead of the minute a rendered tab needs for 1,000 neighbors.
+ */
+export async function fetchAllBuddies(page, blogId, { maxPages = 120, concurrency = 3, onPage = () => {}, shouldStop = () => false } = {}) {
+  const context = typeof page.context === 'function' ? page.context() : null;
+  let first = null;
+  if (context?.request) {
+    try {
+      first = await requestBuddyListPage(context, blogId, 1);
+    } catch (error) {
+      if (/로그인/.test(error.message)) throw error;
+      first = null;
+    }
+  }
+  if (!first?.rows.length) return fetchAllBuddiesInTab(page, blogId, { maxPages, onPage, shouldStop });
+
+  const byPage = new Map([[1, first.rows]]);
+  let lastPage = Math.min(maxPages, first.maxPage);
+  let next = 2;
+  let ended = false;
+  let count = first.rows.length;
+  onPage(1, lastPage, count);
+  const worker = async () => {
+    while (!ended && !shouldStop() && next <= lastPage) {
+      const pageNo = next++;
+      await new Promise((resolve) => setTimeout(resolve, 150 + Math.floor(Math.random() * 250)));
+      const data = await requestBuddyListPage(context, blogId, pageNo);
+      if (!data.rows.length) { ended = true; break; }
+      byPage.set(pageNo, data.rows);
+      count += data.rows.length;
+      // The pager only links ahead about ten pages, so the end moves as later pages arrive.
+      lastPage = Math.min(maxPages, Math.max(lastPage, data.maxPage));
+      onPage(byPage.size, lastPage, count);
+    }
+  };
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return [...byPage.keys()].sort((a, b) => a - b).flatMap((no) => byPage.get(no));
 }
 
 /**
@@ -351,12 +413,13 @@ export class NeighborHealthManager {
   async readList(page) {
     const blogId = await this.browserSession.resolveMyBlogId(page);
     this.log('📖 내 이웃 목록을 읽고 있습니다...', 'info');
+    const startedAt = Date.now();
     const rows = await fetchAllBuddies(page, blogId, {
       shouldStop: () => this.shouldStop,
       onPage: (done, total, count) => { this.progress = { phase: 'read', done, total, count }; }
     });
     this.list = { fetchedAt: Date.now(), rows };
-    this.log(`📖 이웃 ${rows.length}명의 목록을 읽었습니다.`, 'info');
+    this.log(`📖 이웃 ${rows.length}명의 목록을 읽었습니다. (${Math.max(1, Math.round((Date.now() - startedAt) / 1000))}초)`, 'info');
     return rows;
   }
 

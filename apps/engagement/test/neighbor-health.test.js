@@ -7,7 +7,9 @@ import {
   gradeByLastPost,
   NeighborHealthManager,
   normalizeCriteria,
+  fetchAllBuddies,
   parseBuddyListHtml,
+  parseMaxPage,
   parseNaverDate
 } from '../lib/neighbor-health.js';
 import { returnVisitCommenter } from '../lib/return-visit.js';
@@ -149,4 +151,29 @@ test('received-request screening rejects ad blogs and holds dormant ones (dry ru
   });
   const result = await manager.startCleanReceived({ dryRun: true });
   assert.deepEqual({ accepted: result.stats.accepted, rejected: result.stats.rejected, skipped: result.stats.skipped }, { accepted: 1, rejected: 1, skipped: 1 });
+});
+
+test('fetchAllBuddies reads list pages as HTML a few at a time and keeps page order', async () => {
+  const pager = (upto) => Array.from({ length: upto }, (_, i) => `<a href="#" onclick="goPage(${i + 1})">${i + 1}</a>`).join('');
+  // 14 pages; the pager on page n links up to page min(n + 9, 14), like Naver's ten-page window.
+  const pageHtml = (n) => `<table><tbody>${row(String(n), 'mutual', `id${n}`, '26.10.01.', '26.01.01.')}</tbody></table><div class="paginate">${pager(Math.min(n + 9, 14))}</div>`;
+  let inFlight = 0;
+  let peak = 0;
+  const context = {
+    request: {
+      get: async (url) => {
+        const n = Number(url.match(/currentPage=(\d+)/)[1]);
+        inFlight += 1; peak = Math.max(peak, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+        const html = n <= 14 ? pageHtml(n) : '<table><tbody></tbody></table>';
+        return { url: () => url, ok: () => true, status: () => 200, headers: () => ({ 'content-type': 'text/html;charset=UTF-8' }), body: async () => Buffer.from(html) };
+      }
+    }
+  };
+  const rows = await fetchAllBuddies({ context: () => context }, 'me');
+  assert.deepEqual(rows.map((r) => r.blogId), Array.from({ length: 14 }, (_, i) => `id${i + 1}`));
+  assert.equal(rows[13].sourcePage, 14);
+  assert.ok(peak > 1 && peak <= 3);
+  assert.equal(parseMaxPage('<a href="?currentPage=7">7</a> goPage(12)'), 12);
 });
