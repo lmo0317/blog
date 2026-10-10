@@ -164,14 +164,14 @@ test('fetchAllBuddies reads list pages as HTML a few at a time and keeps page or
       get: async (url) => {
         const n = Number(url.match(/currentPage=(\d+)/)[1]);
         inFlight += 1; peak = Math.max(peak, inFlight);
-        await new Promise((r) => setTimeout(r, 5));
+        await new Promise((r) => setTimeout(r, 20));
         inFlight -= 1;
         const html = n <= 14 ? pageHtml(n) : '<table><tbody></tbody></table>';
         return { url: () => url, ok: () => true, status: () => 200, headers: () => ({ 'content-type': 'text/html;charset=UTF-8' }), body: async () => Buffer.from(html) };
       }
     }
   };
-  const rows = await fetchAllBuddies({ context: () => context }, 'me');
+  const rows = await fetchAllBuddies({ context: () => context }, 'me', { pauseMs: () => 0 });
   assert.deepEqual(rows.map((r) => r.blogId), Array.from({ length: 14 }, (_, i) => `id${i + 1}`));
   assert.equal(rows[13].sourcePage, 14);
   assert.ok(peak > 1 && peak <= 3);

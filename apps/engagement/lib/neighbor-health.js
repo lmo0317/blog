@@ -257,7 +257,7 @@ async function fetchAllBuddiesInTab(page, blogId, { maxPages, onPage, shouldStop
  * Reads my whole neighbor list. Pages are fetched as plain HTML a few at a time, which takes seconds
  * instead of the minute a rendered tab needs for 1,000 neighbors.
  */
-export async function fetchAllBuddies(page, blogId, { maxPages = 120, concurrency = 3, onPage = () => {}, shouldStop = () => false } = {}) {
+export async function fetchAllBuddies(page, blogId, { maxPages = 120, concurrency = 3, pauseMs = () => 150 + Math.floor(Math.random() * 250), onPage = () => {}, shouldStop = () => false } = {}) {
   const context = typeof page.context === 'function' ? page.context() : null;
   let first = null;
   if (context?.request) {
@@ -279,7 +279,7 @@ export async function fetchAllBuddies(page, blogId, { maxPages = 120, concurrenc
   const worker = async () => {
     while (!ended && !shouldStop() && next <= lastPage) {
       const pageNo = next++;
-      await new Promise((resolve) => setTimeout(resolve, 150 + Math.floor(Math.random() * 250)));
+      await new Promise((resolve) => setTimeout(resolve, pauseMs()));
       const data = await requestBuddyListPage(context, blogId, pageNo);
       if (!data.rows.length) { ended = true; break; }
       byPage.set(pageNo, data.rows);
