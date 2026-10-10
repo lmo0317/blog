@@ -1676,7 +1676,9 @@ async function findVisibleLocator(page, selectors, exactText = '') {
 }
 
 async function selectPublishCategory(editorFrame, categoryName) {
-  const trigger = editorFrame.locator('button[data-click-area="tpb*i.category"], button.selectbox_button__jb1Dt').first();
+  // Naver renames its hashed CSS classes (selectbox_button__xxxx, item__xxxx) from time to time,
+  // so match on the stable data attributes and class prefixes instead.
+  const trigger = editorFrame.locator('button[data-click-area="tpb*i.category"], button[class*="selectbox_button__"]').first();
   if (await trigger.count().catch(() => 0) === 0) {
     throw new Error(`네이버 발행 설정에서 ${categoryName} 카테고리 선택기를 찾지 못했습니다.`);
   }
@@ -1685,7 +1687,7 @@ async function selectPublishCategory(editorFrame, categoryName) {
   if (current !== categoryName) {
     await trigger.click({ force: true });
     await editorFrame.page().waitForTimeout(300);
-    const options = editorFrame.locator('li.item__sAGX9');
+    const options = editorFrame.locator('label:has([data-testid^="categoryItemText_"])');
     const count = await options.count().catch(() => 0);
     let selected = false;
     for (let index = 0; index < count; index++) {
