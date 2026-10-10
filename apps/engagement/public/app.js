@@ -5807,14 +5807,30 @@ initNeighborHealth();
 function initAppUpdate() {
   const pill = $('#appUpdatePill');
   const text = $('#appUpdateText');
+  const badge = $('#appVersionBadge');
   if (!pill) return;
   let timer = null;
   let announced = '';
   let last = {};
   const schedule = (ms) => { clearTimeout(timer); timer = setTimeout(refresh, ms); };
 
+  function renderBadge(update) {
+    if (!badge || !update?.currentVersion) return;
+    badge.classList.remove('hidden');
+    badge.textContent = `v${update.currentVersion}`;
+    badge.classList.toggle('checking', update.status === 'checking');
+    badge.title = {
+      latest: `최신 버전입니다 (v${update.currentVersion}). 눌러서 다시 확인`,
+      checking: '새 버전 확인 중…',
+      downloading: `새 버전 ${update.version} 받는 중`,
+      ready: `새 버전 ${update.version} 준비 완료`,
+      error: '업데이트 서버에 연결하지 못했습니다. 눌러서 다시 확인'
+    }[update.status] || '눌러서 새 버전 확인';
+  }
+
   function render(update) {
     last = update || {};
+    renderBadge(update);
     const status = update?.status;
     pill.classList.remove('ready', 'busy');
     if (status === 'downloading') {
@@ -5847,6 +5863,22 @@ function initAppUpdate() {
   async function refresh() {
     try { render(await api('api/app-update')); } catch { schedule(10 * 60 * 1000); }
   }
+
+  badge?.addEventListener('click', async () => {
+    if (badge.classList.contains('checking')) return;
+    badge.classList.add('checking');
+    badge.title = '새 버전 확인 중…';
+    try {
+      const update = await api('api/app-update/check', { method: 'POST' });
+      render(update);
+      if (update.status === 'latest') toast(`✅ 최신 버전입니다 (v${update.currentVersion}).`);
+      else if (update.status === 'error') toast('업데이트 서버에 연결하지 못했습니다. 잠시 후 다시 눌러 주세요.', true);
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      badge.classList.remove('checking');
+    }
+  });
 
   pill.addEventListener('click', async () => {
     if (!pill.classList.contains('ready')) return;

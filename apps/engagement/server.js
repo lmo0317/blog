@@ -185,6 +185,9 @@ let appUpdater = null;
 app.get('/api/app-update', (_req, res) => {
   res.json(appUpdater ? appUpdater.getState() : { status: 'unavailable' });
 });
+app.post('/api/app-update/check', async (_req, res) => {
+  res.json(appUpdater ? await appUpdater.check() : { status: 'unavailable' });
+});
 app.post('/api/app-update/install', async (_req, res) => {
   const started = appUpdater ? await appUpdater.install() : false;
   if (!started) return res.status(409).json({ error: '설치할 업데이트가 아직 준비되지 않았습니다.' });
