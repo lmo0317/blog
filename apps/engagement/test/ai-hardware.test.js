@@ -15,7 +15,7 @@ test('detectGpuSpecs and getSystemHardwareSummary return valid system metrics an
   assert.ok(summary.ram.totalGb > 0);
   assert.ok(summary.recommendedModel.id in MODEL_CATALOG);
   assert.ok(Array.isArray(summary.catalog));
-  assert.equal(summary.catalog.length, 4);
+  assert.equal(summary.catalog.length, 3);
 });
 
 test('ModelManager handles local models catalog and active model selection', async () => {
@@ -28,10 +28,15 @@ test('ModelManager handles local models catalog and active model selection', asy
   await manager.init();
 
   const installed = await manager.getInstalledModels();
-  assert.equal(installed.length, 4);
+  assert.equal(installed.length, 3);
   assert.equal(installed.every((m) => m.isInstalled === false), true);
 
-  const trained = MODEL_CATALOG['gemma-4-e2b-blog-comment-v2'];
+  // Adapter models (a LoRA on top of a base model) are still supported; none ships right now.
+  const trained = {
+    id: 'test-adapter', name: 'Test adapter', category: 'trained', minVramMb: 4096, sizeBytes: 1,
+    filename: 'test-adapter-lora.gguf', downloadUrl: '', requiresModelId: 'gemma-4-e2b-it-qat-q4-0', adapter: true
+  };
+  MODEL_CATALOG[trained.id] = trained;
   const base = MODEL_CATALOG[trained.requiresModelId];
   await mkdir(testModelsDir, { recursive: true });
   await writeFile(path.join(testModelsDir, trained.filename), 'adapter');
@@ -46,6 +51,7 @@ test('ModelManager handles local models catalog and active model selection', asy
   await manager.setActiveModel(trained.id);
   assert.equal((await manager.getActiveModel()).id, trained.id);
 
+  delete MODEL_CATALOG[trained.id];
   await rm(testModelsDir, { recursive: true, force: true }).catch(() => {});
   await rm(testConfigPath, { force: true }).catch(() => {});
 });

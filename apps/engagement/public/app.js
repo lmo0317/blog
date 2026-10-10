@@ -1701,12 +1701,11 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
       statusPill = '<span class="pill" style="font-size:11px; background:#edf2f7; color:#4a5568;">설치됨</span>';
     } else {
       btnHtml = `<button type="button" class="button small ghost model-select-btn" data-action="download" data-id="${escapeHtml(m.id)}">다운로드 (${escapeHtml(m.sizeFormatted)})</button>`;
-      statusPill = `<span class="pill" style="font-size:11px; background:#fffaf0; color:#dd6b20; border:1px solid #feebc8;">미설치 (다운로드 필요)</span>`;
+      statusPill = `<span class="pill" style="font-size:11px; background:#fffaf0; color:#dd6b20; border:1px solid #feebc8;">미설치</span>`;
     }
 
     const tierPills = {
       'gemma-4-e2b-it-qat-q4-0': '<span class="model-tier-pill">경량</span>',
-      'gemma-4-e2b-blog-comment-v2': '<span class="model-tier-pill pill-trained">댓글 학습</span>',
       'gemma-4-e4b-it-qat-q4-0': '<span class="model-tier-pill pill-gold">균형</span>',
       'gemma-4-12b-it-qat-q4-0': '<span class="model-tier-pill pill-purple">고성능</span>'
     };
@@ -1724,7 +1723,6 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
           </div>
         </div>
         <p class="model-card-desc">${escapeHtml(m.description || '')}</p>
-        ${m.researchOnly ? '<div class="model-research-note">연구용 v2 · 댓글 검증과 함께 사용합니다.</div>' : ''}
         <div class="model-card-footer">
           <span class="model-vram-hint">최소 VRAM ${(m.minVramMb / 1024).toFixed(1)}GB</span>
           ${btnHtml}
