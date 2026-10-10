@@ -94,7 +94,7 @@ export class LicenseDatabase {
         value TEXT NOT NULL
       );
 
-      -- One free trial per PC (and a few per IP), whatever email is used. Kept apart from users so a
+      -- One free trial per PC, whatever email is used (the IP is kept for the record only). Kept apart from users so a
       -- device reset or a deleted account does not hand out another trial.
       CREATE TABLE IF NOT EXISTS trial_claims (
         hwid TEXT PRIMARY KEY,
@@ -122,11 +122,6 @@ export class LicenseDatabase {
   getTrialClaim(hwid) {
     if (!hwid) return null;
     return this.db.prepare('SELECT * FROM trial_claims WHERE hwid = ?').get(hwid) || null;
-  }
-
-  countTrialClaimsByIp(ip, sinceIso) {
-    if (!ip) return 0;
-    return this.db.prepare('SELECT COUNT(*) AS n FROM trial_claims WHERE ip = ? AND created_at >= ?').get(ip, sinceIso).n;
   }
 
   addTrialClaim({ hwid, userId, ip = '' }) {

@@ -412,9 +412,9 @@ test('Seller admin issues vouchers, lists customers, extends and resets devices'
   }
 });
 
-test('free trial is one per PC and a few per IP, whatever email is used', () => {
+test('free trial is one per PC whatever email is used, and the IP does not matter', () => {
   const db = new LicenseDatabase(':memory:');
-  const service = new LicenseService(db, { defaultTrialDays: 3, maxTrialsPerIp: 2 });
+  const service = new LicenseService(db, { defaultTrialDays: 3 });
   const first = service.register({ email: 'a@example.com', password: 'password123', hwid: 'pc-1', ip: '1.1.1.1' });
   assert.strictEqual(first.license.planType, 'free_trial');
 
@@ -429,8 +429,9 @@ test('free trial is one per PC and a few per IP, whatever email is used', () => 
 
   assert.strictEqual(service.register({ email: 'd@example.com', password: 'password123', ip: '4.4.4.4' }).error, 'TRIAL_NEEDS_DEVICE');
 
+  // Other PCs behind the same (shared or dynamic) IP each get their own trial.
   assert.strictEqual(service.register({ email: 'e@example.com', password: 'password123', hwid: 'pc-2', ip: '1.1.1.1' }).ok, true);
-  assert.strictEqual(service.register({ email: 'f@example.com', password: 'password123', hwid: 'pc-3', ip: '1.1.1.1' }).error, 'TRIAL_ALREADY_USED');
+  assert.strictEqual(service.register({ email: 'f@example.com', password: 'password123', hwid: 'pc-3', ip: '1.1.1.1' }).ok, true);
 
   // A paid key still signs up on a PC that used its trial.
   const [code] = service.adminIssueVouchers({ days: 30, count: 1 }).vouchers.map((v) => v.code);
