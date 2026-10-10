@@ -143,3 +143,10 @@ test('engagement start validates each target source and builds an ID-list queue 
     globalThis.fetch = originalFetch;
   }
 });
+
+test('cloud CLI JSON is read whether pretty-printed or on one line after logs', async () => {
+  const { lastJsonLine } = await import('../lib/cloud-llm.js');
+  assert.equal(lastJsonLine('{\n  "loggedIn": true,\n  "email": "a@b.c"\n}\n').loggedIn, true);
+  assert.equal(lastJsonLine('warming up\n{"result":"hi"}\n').result, 'hi');
+  assert.equal(lastJsonLine('no json here'), null);
+});

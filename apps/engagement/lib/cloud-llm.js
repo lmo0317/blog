@@ -53,8 +53,15 @@ function run(bin, args, { cwd, input = '', timeoutMs = 120000 } = {}) {
   });
 }
 
-function lastJsonLine(text) {
-  const line = String(text || '').trim().split('\n').filter((l) => l.trim().startsWith('{')).pop();
+// CLI output is one JSON object, either pretty-printed over many lines (newer `claude auth status --json`)
+// or on its own line after log lines; try the whole output first, then the last single-line object.
+export function lastJsonLine(text) {
+  const trimmed = String(text || '').trim();
+  const start = trimmed.indexOf('{');
+  if (start >= 0) {
+    try { return JSON.parse(trimmed.slice(start)); } catch {}
+  }
+  const line = trimmed.split('\n').filter((l) => l.trim().startsWith('{')).pop();
   try { return line ? JSON.parse(line) : null; } catch { return null; }
 }
 
