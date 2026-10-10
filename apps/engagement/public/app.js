@@ -5893,3 +5893,75 @@ function initAppUpdate() {
 }
 
 initAppUpdate();
+
+// Usage guide: a live first-run checklist (license → Naver → AI → autopilot) and how each menu works.
+// Opens from the header, and once by itself the first time the app has an active license.
+function initGuide() {
+  const modal = $('#guideModal');
+  if (!modal) return;
+  const SEEN_KEY = 'nm.guideSeen';
+  const show = (name) => {
+    $$('#guideModal .guide-nav-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.guide === name));
+    $$('#guideModal .guide-section').forEach((section) => section.classList.toggle('hidden', section.dataset.guideSection !== name));
+    modal.querySelector('.guide-content')?.scrollTo?.(0, 0);
+  };
+  const setCheck = (key, done, text) => {
+    const item = modal.querySelector(`[data-check="${key}"]`);
+    if (!item) return;
+    item.classList.toggle('done', done);
+    item.querySelector('.guide-check-state').textContent = text;
+  };
+
+  async function refreshChecklist() {
+    const [license, health, engine, runtime, autopilot] = await Promise.all([
+      api('api/license/status').catch(() => null),
+      api('api/health').catch(() => null),
+      api('api/ai-engine').catch(() => null),
+      api('api/models/runtime').catch(() => null),
+      api('api/autopilot/status').catch(() => null)
+    ]);
+    const licensed = ['valid', 'offline_grace'].includes(license?.status);
+    setCheck('license', licensed, licensed ? `✅ 사용 중 · D-${license.daysLeft}일 남음` : '아직 등록 전입니다');
+    setCheck('naver', Boolean(health?.connected), health?.connected ? '✅ 네이버 연결됨' : '아직 연결 전입니다');
+    const engineId = engine?.settings?.engine || 'local';
+    const cloudReady = engineId !== 'local' && engine?.[engineId]?.connected;
+    const localReady = engineId === 'local' && ['running', 'starting'].includes(runtime?.status);
+    const aiLabel = cloudReady ? `✅ ${engineId === 'claude' ? 'Claude' : 'Gemini'} 구독으로 댓글 작성` : localReady ? '✅ 로컬 AI 준비됨' : '아직 준비 전입니다';
+    setCheck('ai', Boolean(cloudReady || localReady), aiLabel);
+    setCheck('autopilot', Boolean(autopilot?.enabled), autopilot?.enabled ? '✅ 자율 주행 켜짐' : '아직 꺼져 있습니다');
+    return licensed;
+  }
+
+  const open = (section = 'start') => {
+    show(section);
+    modal.classList.remove('hidden');
+    try { localStorage.setItem(SEEN_KEY, '1'); } catch {}
+    refreshChecklist();
+  };
+  const close = () => modal.classList.add('hidden');
+
+  $('#openGuideBtn')?.addEventListener('click', () => open());
+  $('#guideClose')?.addEventListener('click', close);
+  modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
+  $$('#guideModal .guide-nav-btn').forEach((btn) => btn.addEventListener('click', () => show(btn.dataset.guide)));
+  modal.querySelectorAll('[data-guide-tab]').forEach((btn) => btn.addEventListener('click', () => {
+    close();
+    document.getElementById(btn.dataset.guideTab)?.click();
+  }));
+  modal.querySelector('[data-guide-action="license"]')?.addEventListener('click', () => { close(); openLicenseModal(); });
+
+  // First run: once a license is active (the license window comes first otherwise), show the checklist.
+  let seen = false;
+  try { seen = localStorage.getItem(SEEN_KEY) === '1'; } catch {}
+  if (seen) return;
+  const firstRun = async () => {
+    const license = await api('api/license/status').catch(() => null);
+    if (!['valid', 'offline_grace'].includes(license?.status)) return setTimeout(firstRun, 15000);
+    if ($('#licenseModal') && !$('#licenseModal').classList.contains('hidden')) return setTimeout(firstRun, 3000);
+    open();
+  };
+  setTimeout(firstRun, 1500);
+}
+
+initGuide();

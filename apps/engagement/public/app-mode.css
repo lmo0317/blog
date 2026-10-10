@@ -7147,3 +7147,166 @@ button.ap-step-text:disabled { cursor: default; }
 #settingsWorkspace .model-card-header > div:last-child { flex-shrink: 0; }
 #settingsWorkspace .model-card-header .pill,
 #settingsWorkspace .model-tier-pill { white-space: nowrap; }
+
+/* Header: usage guide button next to the subscription badge */
+.header-guide-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  border: 1px solid #c7d2fe;
+  background: #fff;
+  color: #3730a3;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.header-guide-btn:hover { background: #eef2ff; border-color: #a5b4fc; transform: translateY(-1px); }
+.header-guide-btn:focus-visible { outline: 3px solid rgba(99, 102, 241, .3); outline-offset: 2px; }
+
+/* Usage guide modal */
+.guide-card {
+  width: min(920px, calc(100vw - 32px));
+  height: min(680px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, .22);
+}
+.guide-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #eef2f7;
+}
+.guide-head h2 { margin: 0; font-size: 19px; font-weight: 800; color: #0f172a; }
+.guide-head p { margin: 4px 0 0; font-size: 13px; color: #64748b; }
+.guide-close {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.guide-close:hover { background: #f1f5f9; }
+.guide-body { flex: 1; min-height: 0; display: flex; }
+.guide-nav {
+  flex: 0 0 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 10px;
+  border-right: 1px solid #eef2f7;
+  background: #f8fafc;
+  overflow-y: auto;
+}
+.guide-nav-btn {
+  text-align: left;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: #334155;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.guide-nav-btn:hover { background: #eef2f7; }
+.guide-nav-btn.active { background: #03c75a; color: #fff; }
+.guide-content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 24px 24px; }
+.guide-section { display: flex; flex-direction: column; gap: 14px; }
+.guide-section h3 { margin: 0; font-size: 17px; font-weight: 800; color: #0f172a; }
+.guide-lead { margin: 0; font-size: 13.5px; line-height: 1.6; color: #475569; }
+.guide-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.guide-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  transition: border-color .2s ease, background .2s ease;
+}
+.guide-checklist li.done { border-color: #a7f3d0; background: #f0fdf4; }
+.guide-checklist li > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.guide-checklist strong { font-size: 14px; color: #0f172a; }
+.guide-checklist strong small { font-size: 12px; font-weight: 600; color: #64748b; }
+.guide-checklist span { font-size: 12.5px; line-height: 1.6; color: #475569; }
+.guide-check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e1;
+  background: #fff;
+}
+.guide-checklist li.done .guide-check {
+  border-color: #03c75a;
+  background: #03c75a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+.guide-check-state { font-style: normal; font-size: 12px; font-weight: 700; color: #b45309; }
+.guide-checklist li.done .guide-check-state { color: #15803d; }
+.guide-go {
+  flex-shrink: 0;
+  align-self: center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #03c75a;
+  background: #03c75a;
+  color: #fff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+.guide-go:hover { background: #02b351; transform: translateY(-1px); }
+.guide-checklist li.done .guide-go { background: #fff; color: #15803d; border-color: #a7f3d0; }
+.guide-go.wide { align-self: flex-start; }
+.guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.guide-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.guide-tile strong { font-size: 13.5px; color: #0f172a; }
+.guide-tile span { font-size: 12.5px; line-height: 1.6; color: #475569; }
+.guide-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.6; color: #334155; }
+.guide-steps.plain { list-style: none; padding-left: 0; }
+.guide-steps.plain li { padding: 10px 14px; border-radius: 10px; background: #f8fafc; border: 1px solid #eef2f7; }
+.guide-tip { margin: 0; padding: 10px 14px; border-radius: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 12.5px; line-height: 1.6; }
+
+@media (max-width: 760px) {
+  .guide-body { flex-direction: column; }
+  .guide-nav { flex: 0 0 auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid #eef2f7; padding: 10px; }
+  .guide-nav-btn { padding: 8px 12px; }
+  .guide-content { padding: 16px; }
+  .guide-grid { grid-template-columns: minmax(0, 1fr); }
+  .guide-checklist li { flex-wrap: wrap; }
+  .guide-checklist li .guide-go { margin-left: 34px; }
+}

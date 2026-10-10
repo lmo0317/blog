@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css?v=2">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=39">
-  <link rel="stylesheet" href="app-mode.css?v=58">
+  <link rel="stylesheet" href="app-mode.css?v=59">
 </head>
 <body>
   <main class="shell">
@@ -31,6 +31,7 @@
         <div class="header-license-badge" id="topLicenseBadge" title="클릭하여 정품 라이선스 및 구독 관리 확인" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 9999px; font-size: 12px; font-weight: 700; background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; transition: all 0.2s ease;">
           <span id="topLicenseBadgeText">구독 확인 중...</span>
         </div>
+        <button type="button" class="header-guide-btn" id="openGuideBtn" title="처음 준비부터 메뉴별 사용법까지">📖 사용 방법</button>
         <div class="header-account-badge offline" id="topAccountBadge" title="네이버 계정 연결 상태 (클릭 시 설정으로 이동)">
           <span class="status-dot"></span>
           <span id="topAccountStatusText">네이버 로그인 필요</span>
@@ -2501,6 +2502,150 @@
       </section>
     </section>
 
+    <!-- Usage guide: first-run checklist + how each menu works (header [📖 사용 방법]) -->
+    <div class="modal-overlay hidden" id="guideModal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+      <div class="guide-card">
+        <div class="guide-head">
+          <div>
+            <h2 id="guideTitle">📖 이웃메이트 사용 방법</h2>
+            <p>처음이라면 '시작하기' 4단계만 끝내면 됩니다. 나머지는 자율 주행이 알아서 합니다.</p>
+          </div>
+          <button type="button" class="guide-close" id="guideClose" aria-label="닫기">✕</button>
+        </div>
+        <div class="guide-body">
+          <nav class="guide-nav" aria-label="사용 방법 목차">
+            <button type="button" class="guide-nav-btn active" data-guide="start">🚀 시작하기</button>
+            <button type="button" class="guide-nav-btn" data-guide="autopilot">🚗 자율 주행</button>
+            <button type="button" class="guide-nav-btn" data-guide="engagement">💬 소통</button>
+            <button type="button" class="guide-nav-btn" data-guide="keyword">🏆 키워드</button>
+            <button type="button" class="guide-nav-btn" data-guide="comments">📰 댓글</button>
+            <button type="button" class="guide-nav-btn" data-guide="neighbors">🤝 이웃 관리</button>
+            <button type="button" class="guide-nav-btn" data-guide="safety">🛡️ 계정 안전</button>
+          </nav>
+
+          <div class="guide-content">
+            <section class="guide-section" data-guide-section="start">
+              <h3>처음 한 번만 하면 되는 준비</h3>
+              <p class="guide-lead">초록 체크가 모두 켜지면 준비 끝입니다. 각 단계의 버튼을 누르면 바로 그 화면으로 이동합니다.</p>
+              <ol class="guide-checklist">
+                <li data-check="license">
+                  <span class="guide-check" aria-hidden="true"></span>
+                  <div>
+                    <strong>1. 이용권 등록</strong>
+                    <span>구매 후 받은 이용권 키(MATE-…)를 등록하거나, 3일 무료 체험 계정을 만드세요. 이용권은 이 PC 한 대에 연결됩니다.</span>
+                    <em class="guide-check-state"></em>
+                  </div>
+                  <button type="button" class="guide-go" data-guide-action="license">이용권 관리</button>
+                </li>
+                <li data-check="naver">
+                  <span class="guide-check" aria-hidden="true"></span>
+                  <div>
+                    <strong>2. 네이버 계정 연결</strong>
+                    <span>설정 → [QR로 로그인하기]를 누르고 휴대폰 네이버 앱으로 QR을 스캔하세요. 비밀번호를 입력하지 않아 계정이 안전하고, 한 번 연결하면 계속 유지됩니다.</span>
+                    <em class="guide-check-state"></em>
+                  </div>
+                  <button type="button" class="guide-go" data-guide-tab="settingsTab">계정 연결</button>
+                </li>
+                <li data-check="ai">
+                  <span class="guide-check" aria-hidden="true"></span>
+                  <div>
+                    <strong>3. 댓글 쓸 AI 준비 <small>(둘 중 하나)</small></strong>
+                    <span><b>Claude·Gemini 구독이 있다면</b> 설정 → AI 엔진에서 [계정 연결] 후 그 카드를 선택하세요. PC에 부담이 없습니다.<br>
+                    <b>구독이 없다면</b> 설정 → 로컬 AI 모델에서 하나를 [다운로드]하세요. 처음엔 가벼운 <b>Gemma 4 E2B</b>를, 그래픽 메모리(VRAM)가 8GB 이상이면 <b>Gemma 4 12B</b>를 추천합니다. 다 받으면 자동으로 켜집니다.</span>
+                    <em class="guide-check-state"></em>
+                  </div>
+                  <button type="button" class="guide-go" data-guide-tab="settingsTab">AI 설정</button>
+                </li>
+                <li data-check="autopilot">
+                  <span class="guide-check" aria-hidden="true"></span>
+                  <div>
+                    <strong>4. 자율 주행 켜기</strong>
+                    <span>자율 주행 → 서이추 '설정'에서 내 블로그 주제를 넣고 [자율 주행 시작]을 누르면 끝입니다. 앱을 켜 두는 동안 알아서 반복합니다.</span>
+                    <em class="guide-check-state"></em>
+                  </div>
+                  <button type="button" class="guide-go" data-guide-tab="autopilotTab">자율 주행</button>
+                </li>
+              </ol>
+            </section>
+
+            <section class="guide-section hidden" data-guide-section="autopilot">
+              <h3>🚗 자율 주행 — 켜두면 블로그 관리를 알아서 반복</h3>
+              <p class="guide-lead">정해 둔 할 일을 회차마다 순서대로 하고, 쉬는 시간이 지나면 다음 회차를 시작합니다. 앱을 껐다 켜도 이어서 진행합니다.</p>
+              <div class="guide-grid">
+                <div class="guide-tile"><strong>🤝 이웃 관리</strong><span>받은 서로이웃 신청 수락(AI가 광고·매크로 거절), 오래 안 받아준 보낸 신청 회수, 비활성 이웃 정리(선택).</span></div>
+                <div class="guide-tile"><strong>👥 서이추</strong><span>키워드로 글을 찾아 공감·AI 댓글·서로이웃 신청. 키워드는 <b>황금 키워드 자동 찾기</b>(내 블로그 주제 입력) 또는 <b>정해둔 키워드</b> 중에서 고릅니다.</span></div>
+                <div class="guide-tile"><strong>💬 댓글</strong><span>내 글 새 댓글에 대댓글, 이웃 새글에 댓글, 내 글에 댓글 단 이웃의 최신 글에 공감·댓글(답방).</span></div>
+                <div class="guide-tile"><strong>⏱️ 일정</strong><span>회차 사이 쉬는 시간(1~3시간)과 운영 시간(예: 9시~23시)을 정합니다.</span></div>
+              </div>
+              <ol class="guide-steps">
+                <li>각 항목의 스위치로 켜고 끕니다. <b>설정 ▾</b>을 누르면 그 항목의 세팅(건수 등)과 옵션(공감·댓글 등)이 열립니다.</li>
+                <li>서이추 설정에서 키워드 방식을 고르고 주제나 키워드를 입력합니다.</li>
+                <li>[자율 주행 시작]을 누릅니다. 오른쪽에서 지금 하는 일과 회차별 결과를 볼 수 있습니다.</li>
+              </ol>
+              <p class="guide-tip">💡 PC와 앱이 켜져 있어야 동작합니다. 창을 최소화해도 계속 진행됩니다.</p>
+              <button type="button" class="guide-go wide" data-guide-tab="autopilotTab">자율 주행 화면으로 →</button>
+            </section>
+
+            <section class="guide-section hidden" data-guide-section="engagement">
+              <h3>💬 소통 — 원하는 블로그에 한 번에 공감·댓글·서로이웃</h3>
+              <p class="guide-lead">자율 주행과 별개로, 지금 바로 원하는 대상과 한 번 소통하고 싶을 때 씁니다.</p>
+              <ol class="guide-steps">
+                <li><b>대상 찾는 방법</b>을 고릅니다: 🔍 주제로 검색 · 👥 인기 블로그의 댓글 이웃 · 📋 블로그 ID 직접 입력(파일 불러오기 가능).</li>
+                <li><b>댓글 말투</b>와 <b>실행할 작업</b>(공감 · AI 댓글 · 서로이웃 신청)을 고르고 목표 글 수를 정합니다.</li>
+                <li>[소통 시작]을 누릅니다. 진행 중에 일시정지·정지할 수 있고, 결과는 '소통 이력'에 남습니다.</li>
+              </ol>
+              <p class="guide-tip">💡 '주제 추천'을 누르면 소통하기 좋은 주제를 골라 줍니다. 댓글은 AI 맞춤, 내 문구, 섞어 쓰기 중에서 고를 수 있습니다.</p>
+              <button type="button" class="guide-go wide" data-guide-tab="engagementTab">소통 화면으로 →</button>
+            </section>
+
+            <section class="guide-section hidden" data-guide-section="keyword">
+              <h3>🏆 키워드 — 글감과 소통할 키워드 찾기</h3>
+              <div class="guide-grid">
+                <div class="guide-tile"><strong>🏆 황금 키워드 발굴</strong><span>관심 주제를 넣으면 검색은 많고 경쟁은 적은 키워드를 등급(S·A·B)으로 찾아 줍니다.</span></div>
+                <div class="guide-tile"><strong>🎯 내 블로그 AI 맞춤 분석</strong><span>내 블로그 글을 보고 잘 맞는 키워드를 추천합니다.</span></div>
+                <div class="guide-tile"><strong>🔥 실시간 급상승 트렌드</strong><span>지금 뜨는 검색어를 보여 줍니다.</span></div>
+              </div>
+              <p class="guide-tip">💡 찾은 키워드는 글감으로 쓰거나, 자율 주행 서이추의 '정해둔 키워드'에 넣어 그 키워드 글에 소통할 수 있습니다.</p>
+              <button type="button" class="guide-go wide" data-guide-tab="keywordTab">키워드 화면으로 →</button>
+            </section>
+
+            <section class="guide-section hidden" data-guide-section="comments">
+              <h3>📰 댓글 — 이웃 새글 댓글과 내 글 대댓글</h3>
+              <div class="guide-grid">
+                <div class="guide-tile"><strong>이웃 새글에 댓글</strong><span>이웃이 새로 올린 글 목록을 불러와, 고른 글에 공감과 AI 댓글을 남깁니다. [전체 선택] 후 한 번에 진행할 수 있습니다.</span></div>
+                <div class="guide-tile"><strong>내 글 댓글에 대댓글</strong><span>내 글에 달린 댓글을 모아, 고른 댓글에 AI가 자연스러운 답글을 답니다. 이미 답한 댓글은 다시 하지 않습니다.</span></div>
+              </div>
+              <p class="guide-tip">💡 매번 직접 하기 번거롭다면 자율 주행의 '댓글' 그룹을 켜 두세요. 같은 일을 회차마다 알아서 합니다.</p>
+              <button type="button" class="guide-go wide" data-guide-tab="feedTab">댓글 화면으로 →</button>
+            </section>
+
+            <section class="guide-section hidden" data-guide-section="neighbors">
+              <h3>🤝 이웃 관리 — 서로이웃 신청과 이웃 목록 정리</h3>
+              <div class="guide-grid">
+                <div class="guide-tile"><strong>받은 서로이웃 요청</strong><span>전부 수락하거나, AI가 진짜 블로거만 수락하고 광고·매크로 신청은 거절합니다.</span></div>
+                <div class="guide-tile"><strong>내가 보낸 신청</strong><span>상대가 오래 받아주지 않은 신청을 찾아 회수합니다.</span></div>
+                <div class="guide-tile"><strong>비활성 이웃 정리</strong><span>기간(예: 60일)을 고르고 [비활성 이웃 찾기] → 정리할 이웃을 골라 [선택한 이웃 정리]. 내 글에 댓글 단 이웃과 추가한 지 얼마 안 된 이웃은 지켜 줍니다.</span></div>
+              </div>
+              <p class="guide-tip">💡 이웃 정리는 내가 고르고 확인한 이웃만 정리합니다. 마음대로 지우지 않습니다.</p>
+              <button type="button" class="guide-go wide" data-guide-tab="commentManagementTab">이웃 관리 화면으로 →</button>
+            </section>
+
+            <section class="guide-section hidden" data-guide-section="safety">
+              <h3>🛡️ 계정 안전 — 앱이 알아서 지키는 것</h3>
+              <ul class="guide-steps plain">
+                <li><b>일일 한도:</b> 공감 200 · 댓글 100 · 서로이웃 신청 100을 넘지 않습니다.</li>
+                <li><b>사람 같은 속도:</b> 작업 사이에 무작위로 쉬고, 묶음마다 휴식합니다.</li>
+                <li><b>보호조치 감지:</b> 네이버가 보안 확인을 요구하면 즉시 멈춥니다.</li>
+                <li><b>비밀번호 저장 안 함:</b> QR 로그인이라 비밀번호가 앱을 거치지 않습니다.</li>
+                <li><b>백그라운드 실행:</b> 작업용 브라우저는 화면에 뜨지 않고 뒤에서 돌아갑니다.</li>
+                <li><b>자동 업데이트:</b> 새 버전은 알아서 받고, 상단 [지금 업데이트]나 앱을 닫을 때 설치됩니다.</li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- License & Subscription Auth Modal -->
     <div class="modal-overlay hidden" id="licenseModal" role="dialog" aria-modal="true" aria-labelledby="licenseModalTitle">
       <div class="modal-card license-modal-card">
@@ -2613,6 +2758,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=63"></script>
+  <script type="module" src="app.js?v=64"></script>
 </body>
 </html>
