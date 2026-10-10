@@ -300,6 +300,11 @@ export class AutopilotManager {
     return this.getStatus();
   }
 
+  // App shutdown: start nothing new, but keep `enabled` saved so the next start resumes.
+  halt() {
+    this.halted = true;
+  }
+
   // Interruptible wait: stop() wakes it immediately.
   wait(ms) {
     if (this.customSleep) return this.customSleep(ms);
@@ -311,7 +316,7 @@ export class AutopilotManager {
   }
 
   async runLoop() {
-    while (this.enabled) {
+    while (this.enabled && !this.halted) {
       const stopReason = this.getStopReason();
       if (stopReason) {
         this.stop(stopReason);
@@ -349,6 +354,7 @@ export class AutopilotManager {
         continue;
       }
 
+      if (this.halted) break;
       const outcome = await this.runCycle();
       if (!this.enabled) break;
       if (outcome.protectionTriggered) {

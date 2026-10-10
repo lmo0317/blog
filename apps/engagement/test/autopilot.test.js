@@ -237,3 +237,25 @@ test('each step keeps its own 공감·댓글·서이추 options, carried over fr
   assert.equal(split.repliesPerCycle, 30);
   assert.equal(normalizeAutopilotSettings({}).keywordMode, 'golden');
 });
+
+test('halting for app shutdown starts no new cycle and keeps autopilot switched on', async () => {
+  let release;
+  const calls = [];
+  const manager = new AutopilotManager({
+    steps: {
+      acceptNeighbors: async () => { calls.push('accept'); return {}; },
+      replies: async () => ({}), returnVisit: async () => ({}), feed: async () => ({}),
+      findKeywords: async () => ({ items: [{ keyword: '캠핑 추천', grade: 'S' }] }),
+      engage: async () => ({ summary: 'ok' })
+    },
+    sleep: () => new Promise((resolve) => { release = resolve; })
+  });
+  manager.start({ seedTopics: '캠핑' });
+  while (!release) await new Promise((r) => setTimeout(r, 5));
+  manager.halt();
+  release();
+  await manager.loopPromise;
+  assert.equal(calls.length, 1);
+  assert.equal(manager.cycle, 1);
+  assert.equal(manager.enabled, true);
+});

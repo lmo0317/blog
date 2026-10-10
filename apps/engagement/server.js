@@ -2048,7 +2048,8 @@ export function startServer(customPort = port, { enforceLicense = false } = {}) 
 export async function shutdown() {
   try {
     licenseClient.stopHeartbeat();
-    autopilot.wakeUp?.();
+    // Waking the rest timer here would start a fresh cycle just to cut it off.
+    autopilot.halt();
     await browserSession.close();
     await embeddedLlama.stop();
   } catch {}
