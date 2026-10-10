@@ -1321,7 +1321,7 @@ app.post('/api/neighbor-health/query', (req, res) => {
   if (neighborHealthManager.state === 'running') return res.status(409).json({ error: '이웃 조회·정리 작업이 이미 진행 중입니다.' });
   const { criteria = {}, refresh = false } = req.body || {};
   if (!browserSession.connected && (refresh || neighborHealthManager.listAgeMinutes() === null)) {
-    return res.status(400).json({ error: '먼저 네이버 계정을 연결해주세요.' });
+    return res.status(400).json({ error: '네이버 계정이 연결되어 있지 않아 이웃 목록을 읽을 수 없습니다. 먼저 네이버 계정을 연결해주세요.' });
   }
   // Runs in the background when the list has to be read; the UI polls status.
   neighborHealthManager.query(criteria, { refresh: refresh === true }).catch(() => {});

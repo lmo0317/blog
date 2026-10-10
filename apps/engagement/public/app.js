@@ -5529,6 +5529,33 @@ function renderNeighborResult(result, running) {
   }).join('');
 }
 
+function renderNeighborProgress(progress) {
+  $('#nhResultSummary')?.classList.add('hidden');
+  $('#nhResultToolbar')?.classList.add('hidden');
+  const reading = progress.phase === 'read';
+  const percent = reading && progress.total ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : null;
+  const list = $('#nhCandidateList');
+  if (!list) return;
+  list.innerHTML = `
+    <div class="nh-progress-card" role="status" aria-live="polite">
+      <div class="nh-progress-spinner" aria-hidden="true"></div>
+      <strong>${reading ? '내 이웃 목록을 읽고 있습니다' : '비활성 이웃을 고르고 있습니다'}</strong>
+      <p>${reading
+        ? (progress.total ? `${progress.done} / ${progress.total}페이지 · 지금까지 ${(progress.count || 0).toLocaleString()}명` : '첫 페이지를 여는 중입니다…')
+        : '잠시만 기다려주세요.'}</p>
+      <div class="nh-progress-track"><div class="nh-progress-fill${percent === null ? ' indeterminate' : ''}" style="width:${percent === null ? 35 : Math.max(4, percent)}%"></div></div>
+      <small>이웃이 1,000명이면 1분쯤 걸립니다. 목록은 30분 동안 다시 쓰여서 다음 찾기는 바로 끝납니다.</small>
+    </div>`;
+}
+
+function renderNeighborError(message) {
+  $('#nhResultSummary')?.classList.add('hidden');
+  $('#nhResultToolbar')?.classList.add('hidden');
+  const list = $('#nhCandidateList');
+  if (list) list.innerHTML = `<div class="empty-state cleaner-empty-state"><div class="cleaner-empty-icon" aria-hidden="true"></div><strong>비활성 이웃을 찾지 못했습니다</strong><p>${escapeHtml(message.replace(/^❌\s*/, ''))}</p></div>`;
+  toast(`⚠️ ${message.replace(/^❌\s*/, '')}`, true);
+}
+
 function renderNeighborHealth(status) {
   nhStatus = status;
   const running = status.state === 'running';
@@ -5550,7 +5577,10 @@ function renderNeighborHealth(status) {
     badge.className = `status ${running ? 'running' : nhShownQueryId ? 'online' : 'ready'}`;
     badge.innerHTML = `<i></i> ${label}`;
   }
-  $('#nhQueryBtn').disabled = running;
+  const queryBtn = $('#nhQueryBtn');
+  queryBtn.disabled = running;
+  queryBtn.classList.toggle('is-busy', running);
+  queryBtn.innerHTML = `<strong>${running ? (progress.phase === 'prune' ? '⏳ 정리하는 중…' : '⏳ 비활성 이웃 찾는 중…') : '🔍 비활성 이웃 찾기'}</strong>`;
   $('#nhStopBtn')?.classList.toggle('hidden', !running);
   const hasList = status.listAgeMinutes !== null && status.listAgeMinutes !== undefined;
   $('#nhRefreshOption')?.classList.toggle('hidden', !hasList || running);
@@ -5560,7 +5590,12 @@ function renderNeighborHealth(status) {
     : (hasList ? '기준을 바꿔 다시 찾으면 바로 결과가 나옵니다.' : '처음 찾을 때 내 이웃 목록을 읽습니다. 이웃이 1,000명이면 1분쯤 걸립니다.');
   $('#nhLimitBadge').textContent = `오늘 정리 ${status.prunedToday || 0} / ${status.dailyLimit || 30}명`;
 
-  if (result && nhShownQueryId === result.queryId) {
+  if (nhAwaitingQuery && running) {
+    renderNeighborProgress(progress);
+  } else if (nhAwaitingQuery && status.state === 'error') {
+    nhAwaitingQuery = false;
+    renderNeighborError(status.logs?.[0]?.message || '이웃 목록을 읽지 못했습니다.');
+  } else if (result && nhShownQueryId === result.queryId) {
     const valid = new Set(result.inactive.map((n) => n.buddyBlogNo));
     [...nhSelected].forEach((no) => { if (!valid.has(no)) nhSelected.delete(no); });
     renderNeighborResult(result, running);
@@ -5588,6 +5623,11 @@ function initNeighborHealth() {
   $('#nhQueryBtn')?.addEventListener('click', async () => {
     if (!state.connected && nhStatus?.listAgeMinutes == null) return toast('⚠️ 네이버 계정을 먼저 연결해주세요.', true);
     $('#nhConfirmBar')?.classList.add('hidden');
+    const btn = $('#nhQueryBtn');
+    btn.disabled = true;
+    btn.classList.add('is-busy');
+    btn.innerHTML = '<strong>⏳ 비활성 이웃 찾는 중…</strong>';
+    renderNeighborProgress({ phase: 'read', done: 0, total: 0 });
     try {
       nhAwaitingQuery = true;
       const refresh = $('#nhRefresh')?.checked === true;
@@ -5596,7 +5636,9 @@ function initNeighborHealth() {
       if (!nhPollTimer) nhPollTimer = setInterval(refreshNeighborHealth, 1500);
     } catch (error) {
       nhAwaitingQuery = false;
-      toast(error.message, true);
+      renderNeighborError(error.message);
+      if (nhStatus) renderNeighborHealth(nhStatus);
+      else { btn.disabled = false; btn.classList.remove('is-busy'); btn.innerHTML = '<strong>🔍 비활성 이웃 찾기</strong>'; }
     }
   });
   $('#nhStopBtn')?.addEventListener('click', async () => {

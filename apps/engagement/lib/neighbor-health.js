@@ -367,8 +367,10 @@ export class NeighborHealthManager {
   async query(input = {}, { refresh = false } = {}) {
     if (this.state === 'running') throw new Error('이웃 조회·정리 작업이 이미 진행 중입니다.');
     const { criteria } = normalizeCriteria(input);
-    const needsRead = refresh || !this.list || Date.now() - this.list.fetchedAt > LIST_CACHE_MS;
-    if (needsRead && !this.browserSession?.connected) throw new Error('네이버 계정이 연결되어 있지 않습니다.');
+    const connected = Boolean(this.browserSession?.connected);
+    if (!connected && (!this.list || refresh)) throw new Error('네이버 계정이 연결되어 있지 않아 이웃 목록을 읽을 수 없습니다.');
+    // Without a session an older list is still better than nothing.
+    const needsRead = connected && (refresh || !this.list || Date.now() - this.list.fetchedAt > LIST_CACHE_MS);
 
     this.state = 'running';
     this.shouldStop = false;

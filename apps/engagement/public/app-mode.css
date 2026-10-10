@@ -6877,3 +6877,33 @@ textarea.phrase-textarea:focus {
 #subtabNeighborHealth .nh-result-summary { gap: 4px; padding: 14px 16px; background: #fef2f2; border-color: #fecaca; border-radius: 12px; }
 #subtabNeighborHealth .nh-result-summary strong { font-size: 18px; font-weight: 800; color: #b91c1c; }
 #subtabNeighborHealth .nh-result-summary .nh-result-criteria { font-size: 12.5px; color: #64748b; }
+
+/* 비활성 이웃 찾기: progress while the neighbor list is read */
+#nhQueryBtn.is-busy { opacity: 1; cursor: progress; filter: saturate(.85); }
+.nh-progress-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.nh-progress-card strong { font-size: 16px; color: #0f172a; }
+.nh-progress-card p { margin: 0; font-size: 13.5px; color: #334155; font-variant-numeric: tabular-nums; }
+.nh-progress-card small { font-size: 12px; color: #94a3b8; }
+.nh-progress-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid #dcfce7;
+  border-top-color: #16a34a;
+  animation: nh-spin .8s linear infinite;
+}
+.nh-progress-track { width: min(360px, 100%); height: 8px; border-radius: 999px; background: #f1f5f9; overflow: hidden; }
+.nh-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #22c55e, #16a34a); transition: width .4s ease; }
+.nh-progress-fill.indeterminate { animation: nh-slide 1.2s ease-in-out infinite; }
+@keyframes nh-spin { to { transform: rotate(360deg); } }
+@keyframes nh-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) {
+  .nh-progress-spinner, .nh-progress-fill.indeterminate { animation: none; }
+}
