@@ -7310,3 +7310,20 @@ button.ap-step-text:disabled { cursor: default; }
   .guide-checklist li { flex-wrap: wrap; }
   .guide-checklist li .guide-go { margin-left: 34px; }
 }
+.guide-section h4 { margin: 6px 0 -4px; font-size: 14px; font-weight: 800; color: #15803d; }
+.guide-checklist li > div > span + span { margin-top: -2px; }
+.guide-defs { margin: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+.guide-defs dt, .guide-defs dd { margin: 0; padding: 10px 14px; font-size: 12.5px; line-height: 1.6; border-top: 1px solid #eef2f7; }
+.guide-defs dt { background: #f8fafc; font-weight: 700; color: #0f172a; }
+.guide-defs dd { color: #475569; }
+.guide-defs dt:first-of-type, .guide-defs dt:first-of-type + dd { border-top: 0; }
+.guide-defs.faq { grid-template-columns: minmax(0, 1fr); }
+.guide-defs.faq dt { padding-bottom: 4px; }
+.guide-defs.faq dd { border-top: 0; padding-top: 0; background: #f8fafc; }
+.guide-defs.faq dt { border-top: 1px solid #e2e8f0; }
+.guide-defs.faq dt:first-of-type { border-top: 0; }
+@media (max-width: 760px) {
+  .guide-defs { grid-template-columns: minmax(0, 1fr); }
+  .guide-defs dd { border-top: 0; padding-top: 0; background: #f8fafc; }
+  .guide-defs dt { padding-bottom: 4px; }
+}

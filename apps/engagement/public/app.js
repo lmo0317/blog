@@ -5894,7 +5894,7 @@ function initAppUpdate() {
 
 initAppUpdate();
 
-// Usage guide: a live first-run checklist (license → Naver → AI → autopilot) and how each menu works.
+// Usage guide: a live first-run checklist (license → Naver → AI) and how each menu works.
 // Opens from the header, and once by itself the first time the app has an active license.
 function initGuide() {
   const modal = $('#guideModal');
@@ -5913,12 +5913,11 @@ function initGuide() {
   };
 
   async function refreshChecklist() {
-    const [license, health, engine, runtime, autopilot] = await Promise.all([
+    const [license, health, engine, runtime] = await Promise.all([
       api('api/license/status').catch(() => null),
       api('api/health').catch(() => null),
       api('api/ai-engine').catch(() => null),
-      api('api/models/runtime').catch(() => null),
-      api('api/autopilot/status').catch(() => null)
+      api('api/models/runtime').catch(() => null)
     ]);
     const licensed = ['valid', 'offline_grace'].includes(license?.status);
     setCheck('license', licensed, licensed ? `✅ 사용 중 · D-${license.daysLeft}일 남음` : '아직 등록 전입니다');
@@ -5928,7 +5927,6 @@ function initGuide() {
     const localReady = engineId === 'local' && ['running', 'starting'].includes(runtime?.status);
     const aiLabel = cloudReady ? `✅ ${engineId === 'claude' ? 'Claude' : 'Gemini'} 구독으로 댓글 작성` : localReady ? '✅ 로컬 AI 준비됨' : '아직 준비 전입니다';
     setCheck('ai', Boolean(cloudReady || localReady), aiLabel);
-    setCheck('autopilot', Boolean(autopilot?.enabled), autopilot?.enabled ? '✅ 자율 주행 켜짐' : '아직 꺼져 있습니다');
     return licensed;
   }
 
