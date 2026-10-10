@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=38">
-  <link rel="stylesheet" href="app-mode.css?v=52">
+  <link rel="stylesheet" href="app-mode.css?v=53">
 </head>
 <body>
   <main class="shell">
@@ -91,129 +91,141 @@
               </div>
             </div>
             <div class="desktop-card-body ap-steps-body">
-              <label class="comment-neighbor-switch-card ap-step-card">
-                <input type="checkbox" id="apStepAcceptNeighbors" checked>
-                <div class="switch-card-text">
-                  <span class="switch-title">🤝 이웃 관리</span>
-                  <span class="switch-desc">받은 서로이웃 신청을 처리하고, 오래 수락되지 않은 보낸 신청을 회수합니다.</span>
+              <div class="ap-step">
+                <div class="ap-step-head">
+                  <label class="ap-switch" title="켜기/끄기"><input type="checkbox" id="apStepAcceptNeighbors" checked aria-label="이웃 관리 켜기"><span class="ap-switch-track" aria-hidden="true"></span></label>
+                  <button type="button" class="ap-step-text" data-panel="apNeighborPanel">
+                    <strong>🤝 이웃 관리</strong>
+                    <span class="ap-step-summary" id="apSumNeighbors"></span>
+                  </button>
+                  <button type="button" class="ap-step-more" data-panel="apNeighborPanel" aria-expanded="false" aria-controls="apNeighborPanel">설정<i aria-hidden="true">▾</i></button>
                 </div>
-              </label>
-              <div class="ap-sub-panel" id="apNeighborPanel">
-                <div class="form-group">
-                  <label><strong>받은 신청 처리</strong></label>
-                  <div class="option-chip-row" id="apAcceptModeChips" data-target-input="apAcceptMode">
-                    <button type="button" class="chip-btn active" data-value="screen">🛡️ AI 선별 (진성 수락·광고 거절)</button>
-                    <button type="button" class="chip-btn" data-value="all">✅ 전부 수락</button>
+                <div class="ap-sub-panel hidden" id="apNeighborPanel">
+                  <div class="form-group">
+                    <label><strong>받은 서로이웃 신청</strong></label>
+                    <div class="option-chip-row" id="apAcceptModeChips" data-target-input="apAcceptMode">
+                      <button type="button" class="chip-btn active" data-value="screen">🛡️ AI 선별 수락</button>
+                      <button type="button" class="chip-btn" data-value="all">✅ 전부 수락</button>
+                    </div>
+                    <input type="hidden" id="apAcceptMode" value="screen">
+                    <span class="field-hint">AI 선별은 진성 블로거만 수락하고 광고·매크로 신청은 거절합니다.</span>
                   </div>
-                  <input type="hidden" id="apAcceptMode" value="screen">
-                </div>
-                <div class="form-group">
-                  <label><strong>오래된 보낸 신청 회수</strong></label>
-                  <div class="option-chip-row" id="apCancelSentChips" data-target-input="apCancelSentDays">
-                    <button type="button" class="chip-btn" data-value="0">끔</button>
-                    <button type="button" class="chip-btn" data-value="7">7일 지나면</button>
-                    <button type="button" class="chip-btn active" data-value="14">14일 지나면</button>
-                    <button type="button" class="chip-btn" data-value="30">30일 지나면</button>
+                  <div class="form-group">
+                    <label><strong>수락 안 된 보낸 신청 회수</strong></label>
+                    <div class="option-chip-row" id="apCancelSentChips" data-target-input="apCancelSentDays">
+                      <button type="button" class="chip-btn" data-value="0">안 함</button>
+                      <button type="button" class="chip-btn" data-value="7">7일 뒤</button>
+                      <button type="button" class="chip-btn active" data-value="14">14일 뒤</button>
+                      <button type="button" class="chip-btn" data-value="30">30일 뒤</button>
+                    </div>
+                    <input type="hidden" id="apCancelSentDays" value="14">
                   </div>
-                  <input type="hidden" id="apCancelSentDays" value="14">
-                  <span class="field-hint">하루 한 번, 이 기간이 지나도 수락되지 않은 신청을 최대 30건 취소합니다.</span>
-                </div>
-                <label class="comment-neighbor-switch-card">
-                  <input type="checkbox" id="apPruneDormant">
-                  <div class="switch-card-text">
-                    <span class="switch-title">🧹 비활성 이웃 자동 정리</span>
-                    <span class="switch-desc">하루 한 번, 아래 기간보다 오래 새 글이 없는 이웃을 최대 30명 삭제합니다. 내 글에 댓글을 단 이웃과 추가한 지 14일이 안 된 이웃은 지킵니다. 먼저 '이웃 관리 → 비활성 이웃 정리'에서 같은 기준으로 찾아보세요.</span>
+                  <label class="ap-inline-check">
+                    <input type="checkbox" id="apPruneDormant">
+                    <span><strong>🧹 비활성 이웃 자동 정리</strong><small>내 글 댓글 이웃과 추가한 지 14일 안 된 이웃은 지킵니다.</small></span>
+                  </label>
+                  <div class="form-group hidden" id="apPruneDaysGroup">
+                    <label><strong>이 기간보다 오래 새 글이 없으면 정리</strong></label>
+                    <div class="option-chip-row" id="apPruneDaysChips" data-target-input="apPruneDormantDays">
+                      <button type="button" class="chip-btn active" data-value="60">60일</button>
+                      <button type="button" class="chip-btn" data-value="90">90일</button>
+                      <button type="button" class="chip-btn" data-value="180">180일</button>
+                    </div>
+                    <input type="hidden" id="apPruneDormantDays" value="60">
                   </div>
-                </label>
-                <div class="form-group hidden" id="apPruneDaysGroup">
-                  <label><strong>새 글이 없는 기간</strong></label>
-                  <div class="option-chip-row" id="apPruneDaysChips" data-target-input="apPruneDormantDays">
-                    <button type="button" class="chip-btn active" data-value="60">60일</button>
-                    <button type="button" class="chip-btn" data-value="90">90일</button>
-                    <button type="button" class="chip-btn" data-value="180">180일</button>
-                  </div>
-                  <input type="hidden" id="apPruneDormantDays" value="60">
+                  <span class="field-hint">회수와 정리는 하루 한 번, 각각 최대 30건입니다.</span>
                 </div>
               </div>
 
-              <label class="comment-neighbor-switch-card ap-step-card">
-                <input type="checkbox" id="apStepReplies" checked>
-                <div class="switch-card-text">
-                  <span class="switch-title">💬 내 글 새 댓글에 대댓글</span>
-                  <span class="switch-desc">최근 글 10개에서 아직 답하지 않은 댓글에 AI 대댓글을 답니다. (회차당 최대 10건)</span>
-                </div>
-              </label>
-
-              <label class="comment-neighbor-switch-card ap-step-card">
-                <input type="checkbox" id="apStepReturnVisit" checked>
-                <div class="switch-card-text">
-                  <span class="switch-title">🏃 댓글 단 이웃 답방</span>
-                  <span class="switch-desc">내 글에 댓글을 남긴 이웃의 최신 글에 찾아가 공감과 AI 댓글을 남깁니다. 대댓글과 따로 켜고 끌 수 있고, 이미 답방한 글은 다시 가지 않습니다.</span>
-                </div>
-              </label>
-              <div class="ap-sub-panel" id="apReturnVisitPanel">
-                <div class="form-group">
-                  <label><strong>회차당 답방할 이웃</strong></label>
-                  <div class="option-chip-row" id="apReturnVisitChips" data-target-input="apReturnVisitPerCycle">
-                    <button type="button" class="chip-btn" data-value="5">5명</button>
-                    <button type="button" class="chip-btn active" data-value="10">10명</button>
-                    <button type="button" class="chip-btn" data-value="20">20명</button>
-                  </div>
-                  <input type="hidden" id="apReturnVisitPerCycle" value="10">
-                  <span class="field-hint">한 명당 20~40초씩 쉬어가며, 공감·댓글 일일 한도를 함께 지킵니다.</span>
-                </div>
-              </div>
-
-              <label class="comment-neighbor-switch-card ap-step-card">
-                <input type="checkbox" id="apStepEngage" checked>
-                <div class="switch-card-text">
-                  <span class="switch-title">🔥 황금 키워드 찾아 소통</span>
-                  <span class="switch-desc">내 주제에서 아직 안 쓴 S·A등급 키워드를 골라 그 글들에 소통합니다. 주제는 회차마다 돌아가며 씁니다.</span>
-                </div>
-              </label>
-              <div class="ap-sub-panel" id="apEngagePanel">
-                <div class="form-group">
-                  <label for="apSeedTopics"><strong>내 블로그 주제</strong> <small>(쉼표로 최대 10개)</small></label>
-                  <input id="apSeedTopics" class="desktop-input" placeholder="예: 캠핑, 다이어트 식단, 아이폰">
-                </div>
-                <div class="form-group">
-                  <label><strong>회차당 소통할 글</strong></label>
-                  <div class="option-chip-row" id="apPostsChips" data-target-input="apPostsPerCycle">
-                    <button type="button" class="chip-btn" data-value="10">10개</button>
-                    <button type="button" class="chip-btn active" data-value="20">20개</button>
-                    <button type="button" class="chip-btn" data-value="30">30개</button>
-                    <button type="button" class="chip-btn" data-value="50">50개</button>
-                  </div>
-                  <input type="hidden" id="apPostsPerCycle" value="20">
-                </div>
-                <div class="form-group">
-                  <label><strong>할 작업</strong></label>
-                  <div class="ap-inline-toggles">
-                    <label class="ap-mini-toggle"><input type="checkbox" id="apDoLike" checked><span>❤️ 공감</span></label>
-                    <label class="ap-mini-toggle"><input type="checkbox" id="apDoComment" checked><span>💬 AI 댓글</span></label>
-                    <label class="ap-mini-toggle"><input type="checkbox" id="apDoNeighbor" checked><span>👥 서로이웃</span></label>
-                    <label class="ap-mini-toggle"><input type="checkbox" id="apAllowGradeB"><span>B등급 키워드도 사용</span></label>
+              <div class="ap-step">
+                <div class="ap-step-head">
+                  <label class="ap-switch" title="켜기/끄기"><input type="checkbox" id="apStepReplies" checked aria-label="대댓글 켜기"><span class="ap-switch-track" aria-hidden="true"></span></label>
+                  <div class="ap-step-text">
+                    <strong>💬 내 글 새 댓글에 대댓글</strong>
+                    <span class="ap-step-summary" id="apSumReplies"></span>
                   </div>
                 </div>
               </div>
 
-              <label class="comment-neighbor-switch-card ap-step-card">
-                <input type="checkbox" id="apStepFeed" checked>
-                <div class="switch-card-text">
-                  <span class="switch-title">📰 이웃 새글 댓글</span>
-                  <span class="switch-desc">내 이웃이 새로 올린 글에 공감과 AI 댓글을 남깁니다.</span>
+              <div class="ap-step">
+                <div class="ap-step-head">
+                  <label class="ap-switch" title="켜기/끄기"><input type="checkbox" id="apStepReturnVisit" checked aria-label="답방 켜기"><span class="ap-switch-track" aria-hidden="true"></span></label>
+                  <button type="button" class="ap-step-text" data-panel="apReturnVisitPanel">
+                    <strong>🏃 댓글 단 이웃 답방</strong>
+                    <span class="ap-step-summary" id="apSumReturnVisit"></span>
+                  </button>
+                  <button type="button" class="ap-step-more" data-panel="apReturnVisitPanel" aria-expanded="false" aria-controls="apReturnVisitPanel">설정<i aria-hidden="true">▾</i></button>
                 </div>
-              </label>
-              <div class="ap-sub-panel" id="apFeedPanel">
-                <div class="form-group">
-                  <label><strong>회차당 이웃 새글</strong></label>
-                  <div class="option-chip-row" id="apFeedChips" data-target-input="apFeedPerCycle">
-                    <button type="button" class="chip-btn" data-value="5">5건</button>
-                    <button type="button" class="chip-btn active" data-value="10">10건</button>
-                    <button type="button" class="chip-btn" data-value="20">20건</button>
-                    <button type="button" class="chip-btn" data-value="30">30건</button>
+                <div class="ap-sub-panel hidden" id="apReturnVisitPanel">
+                  <div class="form-group">
+                    <label><strong>회차당 답방할 이웃</strong></label>
+                    <div class="option-chip-row" id="apReturnVisitChips" data-target-input="apReturnVisitPerCycle">
+                      <button type="button" class="chip-btn" data-value="5">5명</button>
+                      <button type="button" class="chip-btn active" data-value="10">10명</button>
+                      <button type="button" class="chip-btn" data-value="20">20명</button>
+                    </div>
+                    <input type="hidden" id="apReturnVisitPerCycle" value="10">
+                    <span class="field-hint">내 글에 댓글 단 이웃의 최신 글에 공감과 AI 댓글을 남깁니다. 이미 답방한 글은 다시 가지 않습니다.</span>
                   </div>
-                  <input type="hidden" id="apFeedPerCycle" value="10">
+                </div>
+              </div>
+
+              <div class="ap-step">
+                <div class="ap-step-head">
+                  <label class="ap-switch" title="켜기/끄기"><input type="checkbox" id="apStepEngage" checked aria-label="황금 키워드 소통 켜기"><span class="ap-switch-track" aria-hidden="true"></span></label>
+                  <button type="button" class="ap-step-text" data-panel="apEngagePanel">
+                    <strong>🔥 황금 키워드 찾아 소통</strong>
+                    <span class="ap-step-summary" id="apSumEngage"></span>
+                  </button>
+                  <button type="button" class="ap-step-more" data-panel="apEngagePanel" aria-expanded="false" aria-controls="apEngagePanel">설정<i aria-hidden="true">▾</i></button>
+                </div>
+                <div class="ap-sub-panel hidden" id="apEngagePanel">
+                  <div class="form-group">
+                    <label for="apSeedTopics"><strong>내 블로그 주제</strong> <small>(쉼표로 최대 10개, 회차마다 돌아가며 사용)</small></label>
+                    <input id="apSeedTopics" class="desktop-input" placeholder="예: 캠핑, 다이어트 식단, 아이폰">
+                  </div>
+                  <div class="form-group">
+                    <label><strong>회차당 소통할 글</strong></label>
+                    <div class="option-chip-row" id="apPostsChips" data-target-input="apPostsPerCycle">
+                      <button type="button" class="chip-btn" data-value="10">10개</button>
+                      <button type="button" class="chip-btn active" data-value="20">20개</button>
+                      <button type="button" class="chip-btn" data-value="30">30개</button>
+                      <button type="button" class="chip-btn" data-value="50">50개</button>
+                    </div>
+                    <input type="hidden" id="apPostsPerCycle" value="20">
+                  </div>
+                  <div class="form-group">
+                    <label><strong>할 작업</strong></label>
+                    <div class="ap-inline-toggles">
+                      <label class="ap-mini-toggle"><input type="checkbox" id="apDoLike" checked><span>❤️ 공감</span></label>
+                      <label class="ap-mini-toggle"><input type="checkbox" id="apDoComment" checked><span>💬 AI 댓글</span></label>
+                      <label class="ap-mini-toggle"><input type="checkbox" id="apDoNeighbor" checked><span>👥 서로이웃</span></label>
+                      <label class="ap-mini-toggle"><input type="checkbox" id="apAllowGradeB"><span>B등급 키워드도 사용</span></label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ap-step">
+                <div class="ap-step-head">
+                  <label class="ap-switch" title="켜기/끄기"><input type="checkbox" id="apStepFeed" checked aria-label="이웃 새글 댓글 켜기"><span class="ap-switch-track" aria-hidden="true"></span></label>
+                  <button type="button" class="ap-step-text" data-panel="apFeedPanel">
+                    <strong>📰 이웃 새글 댓글</strong>
+                    <span class="ap-step-summary" id="apSumFeed"></span>
+                  </button>
+                  <button type="button" class="ap-step-more" data-panel="apFeedPanel" aria-expanded="false" aria-controls="apFeedPanel">설정<i aria-hidden="true">▾</i></button>
+                </div>
+                <div class="ap-sub-panel hidden" id="apFeedPanel">
+                  <div class="form-group">
+                    <label><strong>회차당 이웃 새글</strong></label>
+                    <div class="option-chip-row" id="apFeedChips" data-target-input="apFeedPerCycle">
+                      <button type="button" class="chip-btn" data-value="5">5건</button>
+                      <button type="button" class="chip-btn active" data-value="10">10건</button>
+                      <button type="button" class="chip-btn" data-value="20">20건</button>
+                      <button type="button" class="chip-btn" data-value="30">30건</button>
+                    </div>
+                    <input type="hidden" id="apFeedPerCycle" value="10">
+                  </div>
                 </div>
               </div>
             </div>
@@ -226,7 +238,7 @@
                 <h3>반복 간격과 운영 시간</h3>
               </div>
             </div>
-            <div class="desktop-card-body">
+            <div class="desktop-card-body ap-schedule-body">
               <div class="form-group">
                 <label><strong>회차 사이 쉬는 시간</strong> <small>(매번 ±15% 무작위)</small></label>
                 <div class="option-chip-row" id="apIntervalChips" data-target-input="apIntervalMinutes">
@@ -237,8 +249,8 @@
                 </div>
                 <input type="hidden" id="apIntervalMinutes" value="90">
               </div>
-              <div class="form-group" style="margin-top: 14px;">
-                <label><strong>운영 시간</strong> <small>(이 시간에만 작업, 한국 시간)</small></label>
+              <div class="form-group">
+                <label><strong>운영 시간</strong> <small>(한국 시간)</small></label>
                 <div class="ap-hours-row">
                   <select id="apActiveStart" class="desktop-select ap-hour-select" aria-label="시작 시각"></select>
                   <span>부터</span>
@@ -246,7 +258,7 @@
                   <span>까지</span>
                 </div>
               </div>
-              <p class="ap-safety-note">🛡️ 공감 200·댓글 100·서로이웃 100 일일 한도와 작업 간 대기, 묶음 휴식은 그대로 지킵니다. 네이버 보호조치가 감지되면 자율 주행을 즉시 멈춥니다.</p>
+              <p class="ap-safety-note">🛡️ 공감 200·댓글 100·서로이웃 100 일일 한도와 작업 간 대기를 지키고, 네이버 보호조치가 보이면 바로 멈춥니다.</p>
             </div>
           </div>
         </div>
@@ -2519,6 +2531,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=56"></script>
+  <script type="module" src="app.js?v=57"></script>
 </body>
 </html>

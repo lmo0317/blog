@@ -5307,12 +5307,54 @@ function applyAutopilotSettings(settings) {
   apApplyingSettings = false;
 }
 
+// Each step is one row: switch + one-line summary of its settings; '설정' opens the details.
+const AP_STEP_PANELS = [
+  ['#apStepAcceptNeighbors', 'apNeighborPanel'],
+  ['#apStepReturnVisit', 'apReturnVisitPanel'],
+  ['#apStepEngage', 'apEngagePanel'],
+  ['#apStepFeed', 'apFeedPanel']
+];
+let apOpenPanel = null;
+
+function autopilotStepSummaries() {
+  const s = readAutopilotSettings();
+  const actions = [s.doLike && '공감', s.doComment && '댓글', s.doNeighbor && '서로이웃'].filter(Boolean).join('·') || '작업 없음';
+  const topics = s.seedTopics.split(',').map((t) => t.trim()).filter(Boolean);
+  return {
+    apSumNeighbors: [
+      s.acceptMode === 'all' ? '받은 신청 전부 수락' : '받은 신청 AI 선별',
+      s.cancelSentDays ? `${s.cancelSentDays}일 지난 신청 회수` : '',
+      s.pruneDormant ? `${s.pruneDormantDays}일 넘은 비활성 정리` : ''
+    ].filter(Boolean).join(' · '),
+    apSumReplies: '최근 글 10개의 새 댓글에 AI 대댓글 · 회차당 최대 10건',
+    apSumReturnVisit: `댓글 단 이웃 최신 글에 공감·댓글 · 회차당 ${s.returnVisitPerCycle}명`,
+    apSumEngage: topics.length ? `${topics.slice(0, 3).join(', ')}${topics.length > 3 ? ` 외 ${topics.length - 3}개` : ''} · 회차당 ${s.postsPerCycle}개 · ${actions}` : '⚠️ 내 블로그 주제를 입력해주세요',
+    apSumFeed: `이웃이 새로 올린 글에 공감·댓글 · 회차당 ${s.feedPerCycle}건`
+  };
+}
+
 function syncAutopilotSubPanels() {
-  $('#apNeighborPanel')?.classList.toggle('hidden', !$('#apStepAcceptNeighbors')?.checked);
+  const stepInputs = { apSumNeighbors: '#apStepAcceptNeighbors', apSumReplies: '#apStepReplies', apSumReturnVisit: '#apStepReturnVisit', apSumEngage: '#apStepEngage', apSumFeed: '#apStepFeed' };
+  Object.entries(autopilotStepSummaries()).forEach(([id, text]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const on = $(stepInputs[id])?.checked;
+    el.textContent = on ? text : '꺼짐';
+    el.classList.toggle('warn', on && text.startsWith('⚠️'));
+    el.closest('.ap-step')?.classList.toggle('off', !on);
+  });
+  AP_STEP_PANELS.forEach(([input, panelId]) => {
+    const on = $(input)?.checked;
+    if (!on && apOpenPanel === panelId) apOpenPanel = null;
+    const open = on && apOpenPanel === panelId;
+    $(`#${panelId}`)?.classList.toggle('hidden', !open);
+    $$(`#autopilotWorkspace [data-panel="${panelId}"]`).forEach((btn) => {
+      btn.disabled = !on;
+      if (btn.classList.contains('ap-step-more')) btn.setAttribute('aria-expanded', String(open));
+    });
+    $(`#${panelId}`)?.closest('.ap-step')?.classList.toggle('open', open);
+  });
   $('#apPruneDaysGroup')?.classList.toggle('hidden', !$('#apPruneDormant')?.checked);
-  $('#apEngagePanel')?.classList.toggle('hidden', !$('#apStepEngage')?.checked);
-  $('#apFeedPanel')?.classList.toggle('hidden', !$('#apStepFeed')?.checked);
-  $('#apReturnVisitPanel')?.classList.toggle('hidden', !$('#apStepReturnVisit')?.checked);
 }
 
 function scheduleAutopilotSave() {
@@ -5443,6 +5485,8 @@ function initAutopilot() {
       } else {
         const settings = readAutopilotSettings();
         if (settings.steps.engage && !settings.seedTopics.trim()) {
+          apOpenPanel = 'apEngagePanel';
+          syncAutopilotSubPanels();
           $('#apSeedTopics')?.focus();
           throw new Error('황금 키워드를 찾을 내 블로그 주제를 입력해주세요.');
         }
@@ -5465,6 +5509,11 @@ function initAutopilot() {
     const text = (apStatus?.logs || []).map((entry) => `[${entry.time}] ${entry.message}`).join('\n');
     navigator.clipboard.writeText(text).then(() => toast('자율 주행 로그를 복사했습니다.')).catch(() => toast('로그를 복사하지 못했습니다.', true));
   });
+
+  $$('#autopilotWorkspace [data-panel]').forEach((btn) => btn.addEventListener('click', () => {
+    apOpenPanel = apOpenPanel === btn.dataset.panel ? null : btn.dataset.panel;
+    syncAutopilotSubPanels();
+  }));
 
   $('#autopilotTab')?.addEventListener('click', refreshAutopilot);
   syncAutopilotSubPanels();
