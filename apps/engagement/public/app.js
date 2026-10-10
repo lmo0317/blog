@@ -4860,14 +4860,21 @@ function initKeywordWorkspaceController() {
 // Naver QR login: scan with the Naver app. Needed where the login page cannot be shown (the web build's
 // headless browser), since a security check or 2-step verification then blocks the ID/password login.
 function initQrLogin() {
-  // On the 112 web build the ID/password forms are hidden and QR is the only way in.
+  // The program never types the ID/password (Naver locks accounts for that): QR first, and in the
+  // desktop app a login window the user types into. The 112 web build has QR only.
   api('api/health').then((health) => {
     if (health?.loginMode !== 'qr') return;
     document.documentElement.classList.add('qr-only-login');
     document.querySelectorAll('[data-qr-login] .qr-login-row span').forEach((el) => {
-      el.textContent = '계정 보호를 위해 이 서버에서는 휴대폰 네이버 앱 QR로만 로그인합니다.';
+      el.textContent = health.loginWindow
+        ? '🔒 비밀번호 없이 휴대폰 네이버 앱으로 로그인합니다. 프로그램이 비밀번호를 입력하지 않아 계정이 안전합니다.'
+        : '계정 보호를 위해 이 서버에서는 휴대폰 네이버 앱 QR로만 로그인합니다.';
     });
-    document.querySelectorAll('[data-qr-login] .qr-login-open').forEach((el) => { el.textContent = 'QR로 로그인하기'; });
+    document.querySelectorAll('[data-qr-login] .qr-login-open').forEach((el) => {
+      el.textContent = 'QR로 로그인하기';
+      el.classList.replace('ghost', 'primary');
+    });
+    if (health.loginWindow) document.querySelectorAll('[data-qr-login]').forEach(addLoginWindowFallback);
   }).catch(() => {});
   document.querySelectorAll('[data-qr-login]').forEach((root) => {
     const box = root.querySelector('.qr-login-box');
@@ -4932,6 +4939,31 @@ function initQrLogin() {
     root.querySelector('.qr-login-open')?.addEventListener('click', start);
     root.querySelector('.qr-login-refresh')?.addEventListener('click', start);
     root.querySelector('.qr-login-close')?.addEventListener('click', () => { stop(); box.classList.add('hidden'); });
+  });
+}
+
+// No Naver app at hand: open Naver's own login page in a window and let the user type there.
+function addLoginWindowFallback(root) {
+  if (root.querySelector('.qr-login-window')) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'qr-login-window';
+  button.textContent = 'QR이 어렵다면 → 네이버 로그인 창을 열고 직접 입력하기';
+  root.querySelector('.qr-login-row')?.after(button);
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = '⏳ 열린 네이버 로그인 창에서 아이디·비밀번호를 직접 입력해 주세요 (3분 안에)';
+    try {
+      const result = await api('api/naver/open-login-window', { method: 'POST' });
+      if (!result.success) throw new Error(result.message || '로그인이 완료되지 않았습니다.');
+      setConnected(true, '네이버 로그인됨');
+      toast('네이버 계정이 연결되었습니다.');
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'QR이 어렵다면 → 네이버 로그인 창을 열고 직접 입력하기';
+    }
   });
 }
 

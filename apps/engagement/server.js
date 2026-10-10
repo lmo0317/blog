@@ -193,15 +193,24 @@ app.post('/api/app-update/install', async (_req, res) => {
 app.use(createLicenseGuard(licenseClient, () => licenseEnforced));
 app.use('/generated-images', express.static(imagesDir, { etag: false, maxAge: 0 }));
 
-// NAVER_LOGIN_MODE=qr (the 112 web build): only Naver QR login is allowed. A program typing the ID and password
-// on a server browser looks like credential stuffing to Naver and gets the account locked (보호조치).
-const qrOnlyLogin = String(process.env.NAVER_LOGIN_MODE || '').toLowerCase() === 'qr';
+// The program never types a Naver ID and password itself: that looks like credential stuffing to Naver
+// and got an account locked (보호조치). Everyone logs in with the Naver app QR; the desktop app can also
+// open a login window the user types into. NAVER_LOGIN_MODE=qr (the 112 web build) leaves only QR, since
+// its browser window is not on the user's screen; NAVER_LOGIN_MODE=password brings the old form back for dev.
+const loginModeSetting = String(process.env.NAVER_LOGIN_MODE || '').toLowerCase();
+const qrOnlyLogin = loginModeSetting === 'qr';
+const passwordLogin = loginModeSetting === 'password';
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, connected: browserSession.connected, loginMode: qrOnlyLogin ? 'qr' : 'all' });
+  res.json({ ok: true, connected: browserSession.connected, loginMode: passwordLogin ? 'all' : 'qr', loginWindow: !qrOnlyLogin });
 });
 
-app.post(['/api/naver/login', '/api/naver/open-login', '/api/naver/open-login-window'], (_req, res, next) => {
+app.post('/api/naver/login', (_req, res, next) => {
+  if (passwordLogin) return next();
+  res.status(403).json({ error: '계정 보호를 위해 아이디·비밀번호 자동 입력은 쓰지 않습니다. [QR로 로그인하기]를 눌러 휴대폰 네이버 앱으로 로그인해 주세요.' });
+});
+
+app.post(['/api/naver/open-login', '/api/naver/open-login-window'], (_req, res, next) => {
   if (!qrOnlyLogin) return next();
   res.status(403).json({ error: '이 서버에서는 계정 보호를 위해 QR 로그인만 사용합니다. [QR로 로그인]을 눌러 휴대폰 네이버 앱으로 로그인해 주세요.' });
 });

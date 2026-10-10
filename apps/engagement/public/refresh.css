@@ -1779,6 +1779,24 @@ html.qr-only-login .qr-login-row span {
   font-weight: 600;
 }
 
+/* Desktop fallback under the QR row: Naver's own login window, typed by the user */
+.qr-login-window {
+  display: block;
+  margin: 8px 2px 0 auto;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.qr-login-window:hover:not(:disabled) { color: #15803d; }
+.qr-login-window:disabled { color: #b45309; text-decoration: none; cursor: progress; }
+
 /* QR login: number Naver asks for after the scan */
 .qr-login-check { margin-top: 10px; padding: 12px; background: #fff; border: 1px solid #a7f3d0; border-radius: 12px; }
 .qr-login-code { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: 1px; }
