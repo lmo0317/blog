@@ -64,3 +64,40 @@ test('fetchExpandedLongtailKeywords returns real searched keywords for a seed', 
   assert.ok(result.some((keyword) => keyword.includes('다이어트')));
   assert.ok(result.every((keyword) => !/\s[ㄱ-ㅎ]$/.test(keyword)));
 });
+
+test('topic ideas: shopping ranks ask DataLab for the last 7 days in Korea time', async () => {
+  const { fetchShoppingKeywordRanks } = await import('../lib/trends.js');
+  let sent;
+  const fetchImpl = async (url, init) => {
+    sent = { url, body: String(init.body), referer: init.headers.Referer };
+    return { ok: true, json: async () => ({ range: '2026.10.03. ~ 2026.10.10.', ranks: [{ rank: 1, keyword: '등산화' }, { rank: 2, keyword: ' ' }, { rank: 3, keyword: '경량패딩' }] }) };
+  };
+  // 2026-10-11 01:00 KST is still 10-10 in UTC; the range must follow Korea's date.
+  const result = await fetchShoppingKeywordRanks({ categoryId: '50000007', fetchImpl, now: new Date('2026-10-10T16:00:00Z') });
+  const body = new URLSearchParams(sent.body);
+  assert.equal(body.get('cid'), '50000007');
+  assert.equal(body.get('startDate'), '2026-10-03');
+  assert.equal(body.get('endDate'), '2026-10-10');
+  assert.match(sent.referer, /datalab\.naver\.com/);
+  assert.equal(result.category.label, '스포츠·레저');
+  assert.deepEqual(result.items.map((i) => i.keyword), ['등산화', '경량패딩']);
+});
+
+test('topic ideas: unknown category falls back, empty ranks and HTTP errors throw', async () => {
+  const { fetchShoppingKeywordRanks, SHOPPING_CATEGORIES } = await import('../lib/trends.js');
+  let cid;
+  const empty = async (_url, init) => { cid = new URLSearchParams(String(init.body)).get('cid'); return { ok: true, json: async () => ({ ranks: [] }) }; };
+  await assert.rejects(fetchShoppingKeywordRanks({ categoryId: 'nope', fetchImpl: empty }), /인기 키워드/);
+  assert.equal(cid, SHOPPING_CATEGORIES[0].id);
+  await assert.rejects(fetchShoppingKeywordRanks({ fetchImpl: async () => ({ ok: false, status: 403 }) }), /403/);
+});
+
+test('topic ideas: only Korean live trends, and topics for the Korean month', async () => {
+  const { koreanTrendsOnly, seasonTopics } = await import('../lib/trends.js');
+  const kept = koreanTrendsOnly([{ topic: 'lafc' }, { topic: '天気' }, { topic: '몽산포해수욕장' }, { topic: '아이폰 17' }]);
+  assert.deepEqual(kept.map((t) => t.topic), ['몽산포해수욕장', '아이폰 17']);
+  // 2026-09-30 20:00 UTC is already October 1st in Korea.
+  const season = seasonTopics(new Date('2026-09-30T20:00:00Z'));
+  assert.equal(season.month, 10);
+  assert.ok(season.topics.includes('단풍 여행 코스'));
+});

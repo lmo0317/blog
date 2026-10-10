@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css?v=2">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=39">
-  <link rel="stylesheet" href="app-mode.css?v=60">
+  <link rel="stylesheet" href="app-mode.css?v=61">
 </head>
 <body>
   <main class="shell">
@@ -1384,6 +1384,9 @@
             <button type="button" class="seed-chip" data-seed="아이폰 꿀팁 모음">아이폰 꿀팁</button>
             <button type="button" class="seed-chip" data-seed="캠핑 장비 추천">캠핑 장비</button>
           </div>
+          <button type="button" class="topic-ideas-btn" id="openTopicIdeasBtn">
+            <span aria-hidden="true">🔥</span> 실시간 주제 추천
+          </button>
         </div>
 
         <!-- Sub Segment Tabs -->
@@ -2502,6 +2505,49 @@
       </section>
     </section>
 
+    <!-- Topic ideas for the golden keyword search: live trends, Naver shopping ranks, this month's topics -->
+    <div class="modal-overlay hidden" id="topicIdeasModal" role="dialog" aria-modal="true" aria-labelledby="topicIdeasTitle">
+      <div class="topic-card">
+        <div class="topic-head">
+          <div>
+            <h2 id="topicIdeasTitle">🔥 오늘의 주제 추천</h2>
+            <p>지금 사람들이 찾는 주제입니다. 누르면 바로 황금 키워드를 찾아 드려요.</p>
+          </div>
+          <div class="topic-head-actions">
+            <button type="button" class="topic-refresh" id="topicIdeasRefresh">↻ 새로고침</button>
+            <button type="button" class="guide-close" id="topicIdeasClose" aria-label="닫기">✕</button>
+          </div>
+        </div>
+        <div class="topic-body">
+          <section class="topic-section">
+            <div class="topic-section-head">
+              <h3>📈 지금 뜨는 검색어</h3>
+              <span class="topic-meta" id="topicTrendsMeta">불러오는 중…</span>
+            </div>
+            <div class="topic-chips" id="topicTrends"></div>
+          </section>
+
+          <section class="topic-section">
+            <div class="topic-section-head">
+              <h3>🛍️ 네이버 쇼핑 인기 키워드</h3>
+              <span class="topic-meta" id="topicShoppingMeta">최근 7일</span>
+            </div>
+            <p class="topic-hint">리뷰·추천 글감으로 좋은, 지난 7일간 네이버 쇼핑에서 가장 많이 찾은 키워드입니다.</p>
+            <div class="topic-cats" id="topicShoppingCats" role="tablist" aria-label="쇼핑 분야"></div>
+            <ol class="topic-ranks" id="topicShopping"></ol>
+          </section>
+
+          <section class="topic-section">
+            <div class="topic-section-head">
+              <h3 id="topicSeasonTitle">📅 이번 달에 많이 찾는 주제</h3>
+              <span class="topic-meta">매년 이맘때 검색이 느는 주제</span>
+            </div>
+            <div class="topic-chips" id="topicSeason"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
     <!-- Usage guide: first-run checklist + how each menu works (header [📖 사용 방법]) -->
     <div class="modal-overlay hidden" id="guideModal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
       <div class="guide-card">
@@ -2857,6 +2903,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=66"></script>
+  <script type="module" src="app.js?v=67"></script>
 </body>
 </html>

@@ -7,7 +7,7 @@ import { loadEnvFile } from 'node:process';
 import { NaverBrowserSession, normalizeAutocompleteKeywords } from './lib/naver.js';
 import { discoverGoldenKeywords, analyzeSingleKeyword } from './lib/golden-keyword.js';
 import { LocalLlmClient } from './lib/llm.js';
-import { fetchKoreanTrends } from './lib/trends.js';
+import { fetchKoreanTrends, fetchShoppingKeywordRanks, koreanTrendsOnly, seasonTopics, SHOPPING_CATEGORIES } from './lib/trends.js';
 import { fetchAlgumonRankDeals, isDirectProductUrl, unwrapKnownRedirectUrl } from './lib/algumon.js';
 import { appendImageAttributions, cleanupDownloadedImages, downloadCommonsImages, searchOpenImages } from './lib/images.js';
 import { extractArticleContent } from './lib/article-scraper.js';
@@ -1617,6 +1617,34 @@ app.get('/api/blog/trends', async (_req, res, next) => {
       trendCache = { loadedAt: Date.now(), items: await fetchKoreanTrends({ limit: 12 }) };
     }
     res.json({ items: trendCache.items, trends: trendCache.items, refreshedAt: new Date(trendCache.loadedAt).toISOString() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Topic ideas for the golden keyword popup: live trends, Naver shopping ranks per category, this month's topics.
+const shoppingRankCache = new Map();
+app.get('/api/blog/topic-ideas', async (req, res, next) => {
+  try {
+    const categoryId = SHOPPING_CATEGORIES.some((c) => c.id === String(req.query?.category)) ? String(req.query.category) : SHOPPING_CATEGORIES[0].id;
+    const refresh = String(req.query?.refresh || '').toLowerCase() === 'true';
+    if (refresh || !trendCache.items.length || Date.now() - trendCache.loadedAt > 5 * 60 * 1000) {
+      trendCache = { loadedAt: Date.now(), items: await fetchKoreanTrends({ limit: 20 }) };
+    }
+    let shopping = shoppingRankCache.get(categoryId);
+    if (refresh || !shopping || Date.now() - shopping.loadedAt > 60 * 60 * 1000) {
+      shopping = await fetchShoppingKeywordRanks({ categoryId })
+        .then((result) => ({ ...result, loadedAt: Date.now() }))
+        .catch((error) => ({ error: error.message, loadedAt: 0 }));
+      if (!shopping.error) shoppingRankCache.set(categoryId, shopping);
+    }
+    res.json({
+      trends: koreanTrendsOnly(trendCache.items).slice(0, 12),
+      trendsRefreshedAt: new Date(trendCache.loadedAt).toISOString(),
+      categories: SHOPPING_CATEGORIES,
+      shopping: { categoryId, range: shopping.range || '', items: shopping.items || [], error: shopping.error || '' },
+      season: seasonTopics()
+    });
   } catch (error) {
     next(error);
   }

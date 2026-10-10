@@ -4422,6 +4422,11 @@ function initKeywordWorkspaceController() {
     });
   });
 
+  initTopicIdeas((keyword) => {
+    if (searchInput) searchInput.value = keyword;
+    runGoldenKeywordDiscovery(keyword);
+  });
+
   // Search Submit
   searchForm?.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -5965,3 +5970,94 @@ function initGuide() {
 }
 
 initGuide();
+
+// Golden keyword topic ideas: live trends, Naver shopping ranks by category, this month's topics.
+// Clicking any of them runs the golden keyword search for it.
+function initTopicIdeas(onPick) {
+  const modal = $('#topicIdeasModal');
+  if (!modal) return;
+  let categoryId = '';
+  let loading = false;
+
+  const el = (tag, className, text = '') => Object.assign(document.createElement(tag), { className, textContent: text });
+  const close = () => modal.classList.add('hidden');
+  const pick = (keyword) => {
+    close();
+    onPick(keyword);
+  };
+  const chip = (keyword, badge = '') => {
+    const button = el('button', 'topic-chip', keyword);
+    button.type = 'button';
+    if (badge) button.append(el('span', 'topic-traffic', badge));
+    button.addEventListener('click', () => pick(keyword));
+    return button;
+  };
+  const minutesAgo = (iso) => {
+    const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    return minutes < 1 ? '방금 갱신' : `${minutes}분 전 갱신`;
+  };
+
+  function renderShopping(data) {
+    $('#topicShoppingCats').replaceChildren(...data.categories.map((c) => {
+      const active = c.id === data.shopping.categoryId;
+      const button = el('button', `topic-cat${active ? ' active' : ''}`, `${c.icon} ${c.label}`);
+      button.type = 'button';
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', String(active));
+      button.addEventListener('click', () => { if (!loading && c.id !== categoryId) load(c.id); });
+      return button;
+    }));
+    $('#topicShoppingMeta').textContent = data.shopping.range ? `${data.shopping.range} 기준` : '최근 7일';
+    if (!data.shopping.items.length) {
+      $('#topicShopping').replaceChildren(el('li', 'topic-empty', data.shopping.error
+        ? '지금은 네이버 쇼핑 순위를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.'
+        : '이 분야의 인기 키워드가 아직 없습니다.'));
+      return;
+    }
+    $('#topicShopping').replaceChildren(...data.shopping.items.map((item) => {
+      const button = el('button', `topic-rank-btn${item.rank <= 3 ? ' top' : ''}`);
+      button.type = 'button';
+      button.title = `'${item.keyword}' 황금 키워드 찾기`;
+      button.append(el('span', 'topic-rank-num', String(item.rank)), el('span', 'topic-rank-word', item.keyword));
+      button.addEventListener('click', () => pick(item.keyword));
+      const li = document.createElement('li');
+      li.append(button);
+      return li;
+    }));
+  }
+
+  async function load(nextCategory = categoryId, { refresh = false } = {}) {
+    loading = true;
+    $('#topicIdeasRefresh').disabled = true;
+    if (refresh || !categoryId) $('#topicTrends').replaceChildren(el('span', 'topic-loading', '지금 뜨는 검색어를 불러오는 중…'));
+    $('#topicShopping').replaceChildren(el('li', 'topic-loading', '인기 키워드를 불러오는 중…'));
+    try {
+      const query = new URLSearchParams();
+      if (nextCategory) query.set('category', nextCategory);
+      if (refresh) query.set('refresh', 'true');
+      const data = await api(`api/blog/topic-ideas?${query}`);
+      categoryId = data.shopping.categoryId;
+      $('#topicTrends').replaceChildren(...(data.trends.length
+        ? data.trends.map((t) => chip(t.keyword || t.topic, t.traffic ? `🔥 ${t.traffic}` : ''))
+        : [el('p', 'topic-empty', '지금은 급상승 검색어를 불러오지 못했습니다.')]));
+      $('#topicTrendsMeta').textContent = `구글 실시간 · ${minutesAgo(data.trendsRefreshedAt)}`;
+      renderShopping(data);
+      $('#topicSeasonTitle').textContent = `📅 ${data.season.month}월에 많이 찾는 주제`;
+      $('#topicSeason').replaceChildren(...data.season.topics.map((topic) => chip(topic)));
+    } catch (error) {
+      $('#topicShopping').replaceChildren(el('li', 'topic-empty', `주제를 불러오지 못했습니다: ${error.message}`));
+    } finally {
+      loading = false;
+      $('#topicIdeasRefresh').disabled = false;
+    }
+  }
+
+  $('#openTopicIdeasBtn')?.addEventListener('click', () => {
+    modal.classList.remove('hidden');
+    load(categoryId);
+  });
+  $('#topicIdeasClose')?.addEventListener('click', close);
+  $('#topicIdeasRefresh')?.addEventListener('click', () => { if (!loading) load(categoryId, { refresh: true }); });
+  modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
+}
