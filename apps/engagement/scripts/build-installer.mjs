@@ -37,9 +37,14 @@ const OBFUSCATE = {
   selfDefending: false,
   sourceMap: false
 };
+// Server code hands functions to Playwright (page.evaluate, addInitScript, ...), which sends their source
+// text into the browser. The string array would make those functions call a decoder that only exists in
+// Node ("_0x18fff4 is not defined"), so Node files only get renamed identifiers and compacted code.
+const NODE_SAFE = { stringArray: false, stringArrayEncoding: [] };
+
 async function obfuscate(file, target) {
   const source = await readFile(file, 'utf8');
-  const result = JavaScriptObfuscator.obfuscate(source, { ...OBFUSCATE, target });
+  const result = JavaScriptObfuscator.obfuscate(source, { ...OBFUSCATE, ...(target === 'node' ? NODE_SAFE : {}), target });
   await writeFile(file, result.getObfuscatedCode());
 }
 await obfuscate(path.join(stage, 'main.js'), 'node');
