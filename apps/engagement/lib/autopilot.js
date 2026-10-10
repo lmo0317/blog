@@ -148,6 +148,11 @@ export class AutopilotManager {
       this.seedCursor = Number(saved.seedCursor) || 0;
       this.history = Array.isArray(saved.history) ? saved.history.slice(0, 20) : [];
       this.logs = Array.isArray(saved.logs) ? saved.logs.slice(0, MAX_LOGS) : [];
+      // A cycle cut off by an app restart keeps what it finished, marked as interrupted.
+      const unfinished = saved.currentCycle;
+      if (unfinished?.number && !unfinished.finishedAt && !this.history.some((c) => c.number === unfinished.number)) {
+        this.addToHistory({ ...unfinished, finishedAt: unfinished.updatedAt || unfinished.startedAt, interrupted: true });
+      }
     } catch {
       // A broken state file just starts fresh.
     }
@@ -164,11 +169,18 @@ export class AutopilotManager {
         usedKeywords: this.usedKeywords,
         seedCursor: this.seedCursor,
         history: this.history.slice(0, 20),
+        currentCycle: this.currentCycle && !this.currentCycle.finishedAt ? this.currentCycle : null,
         logs: this.logs.slice(0, MAX_LOGS)
       }, null, 2), 'utf8');
     } catch (error) {
       console.warn('[Autopilot] Could not save state:', error.message);
     }
+  }
+
+  addToHistory(cycle) {
+    this.history = [cycle, ...this.history.filter((c) => c.number !== cycle.number)]
+      .sort((a, b) => b.number - a.number)
+      .slice(0, 20);
   }
 
   log(message, type = 'info') {
@@ -363,12 +375,13 @@ export class AutopilotManager {
         this.log(`❌ ${step.label} 실패: ${error.message}`, 'error');
       }
       cycle.results.push(result);
+      cycle.updatedAt = this.now().toISOString();
       this.save();
     }
 
     cycle.finishedAt = this.now().toISOString();
-    this.history.unshift(cycle);
-    this.history = this.history.slice(0, 20);
+    if (!this.enabled) cycle.stopped = true;
+    this.addToHistory(cycle);
     this.currentStep = null;
     this.save();
     return { protectionTriggered };

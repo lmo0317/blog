@@ -190,3 +190,19 @@ test('dormant-neighbor pruning in autopilot is off by default and only accepts 6
   assert.equal(normalizeAutopilotSettings({ pruneDormant: true, pruneDormantDays: 90 }).pruneDormantDays, 90);
   assert.equal(normalizeAutopilotSettings({ pruneDormantDays: 5 }).pruneDormantDays, 60);
 });
+
+test('a cycle cut off by a restart stays in the history as interrupted', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const statePath = join(mkdtempSync(join(tmpdir(), 'ap-')), 'autopilot.json');
+  writeFileSync(statePath, JSON.stringify({
+    cycle: 5,
+    history: [{ number: 3, startedAt: '2026-10-10T03:00:00Z', finishedAt: '2026-10-10T05:00:00Z', results: [] }],
+    currentCycle: { number: 5, startedAt: '2026-10-10T07:00:00Z', updatedAt: '2026-10-10T07:10:00Z', finishedAt: null, results: [{ step: 'replies', label: '대댓글', status: 'done', summary: '2건' }] }
+  }));
+  const manager = new AutopilotManager({ statePath });
+  assert.deepEqual(manager.history.map((c) => c.number), [5, 3]);
+  assert.equal(manager.history[0].interrupted, true);
+  assert.equal(manager.history[0].results.length, 1);
+});

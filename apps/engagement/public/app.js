@@ -5385,13 +5385,19 @@ function renderAutopilot(status) {
 
   const historyList = $('#apHistoryList');
   if (historyList) {
-    const items = status.history || [];
-    historyList.innerHTML = items.length ? items.slice(0, 5).map((cycle) => {
+    const current = status.currentCycle;
+    const live = current && !current.finishedAt && !(status.history || []).some((c) => c.number === current.number) ? [{ ...current, live: true }] : [];
+    const items = [...live, ...(status.history || [])];
+    historyList.innerHTML = items.length ? items.slice(0, 6).map((cycle) => {
       const time = new Date(cycle.startedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
       const chips = (cycle.results || []).map((item) => `<span class="ap-result-chip ${item.status}" title="${escapeHtml(item.summary || '')}">${escapeHtml(item.label)} · ${escapeHtml(item.summary || item.status)}</span>`).join('');
-      return `<div class="ap-history-item">
-        <div class="ap-history-head"><strong>${cycle.number}회차</strong><span>${time}</span>${cycle.keyword ? `<span class="ap-keyword-badge">🏆 ${escapeHtml(cycle.keyword)}</span>` : ''}</div>
-        <div class="ap-history-results">${chips || '<span class="ap-result-chip">진행 중</span>'}</div>
+      const state = cycle.live ? '<span class="ap-cycle-state live">진행 중</span>'
+        : cycle.interrupted ? '<span class="ap-cycle-state cut" title="앱이 다시 켜지면서 이 회차가 중간에 끝났습니다.">중단됨 · 앱 재시작</span>'
+        : cycle.stopped ? '<span class="ap-cycle-state cut">중단됨 · 자율 주행 끔</span>' : '';
+      const empty = cycle.live ? '첫 단계를 진행하고 있습니다.' : '마친 단계가 없습니다.';
+      return `<div class="ap-history-item${cycle.interrupted || cycle.stopped ? ' cut' : ''}">
+        <div class="ap-history-head"><strong>${cycle.number}회차</strong><span>${time}</span>${state}${cycle.keyword ? `<span class="ap-keyword-badge">🏆 ${escapeHtml(cycle.keyword)}</span>` : ''}</div>
+        <div class="ap-history-results">${chips || `<span class="ap-result-chip">${empty}</span>`}</div>
       </div>`;
     }).join('') : '<div class="ap-empty">아직 진행한 회차가 없습니다.</div>';
   }
