@@ -57,7 +57,9 @@ const llmClient = new LocalLlmClient({
 });
 
 const browserSession = new NaverBrowserSession({
-  headless: String(process.env.NAVER_HEADLESS).toLowerCase() === 'true',
+  // The work browser runs in the background (no Chrome window), as on the 112 server; QR login and its
+  // number check are shown inside the app. NAVER_HEADLESS=false shows the window for debugging.
+  headless: String(process.env.NAVER_HEADLESS ?? 'true').toLowerCase() !== 'false',
   profileDir: playwrightPath('naver-profile'),
   sessionStatePath: playwrightPath('naver-session.json'),
   groupStorePath: dataPath('neighbor-group-state.json')

@@ -502,6 +502,9 @@ export class NaverBrowserSession {
       '--start-maximized',
       '--lang=ko-KR'
     ];
+    // A background browser has no screen to maximize into and opens at ~780x500; use a normal monitor size
+    // so Naver serves the same desktop layout as in a visible window.
+    if (this.headless) baseArgs.push('--window-size=1600,1000');
 
     const launchOptions = {
       headless: this.headless,
