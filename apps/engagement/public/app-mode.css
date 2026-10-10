@@ -6917,7 +6917,7 @@ textarea.phrase-textarea:focus {
 /* Autopilot layout: compact settings on the left, a full-height monitor on the right */
 @media (min-width: 1025px) {
   #autopilotWorkspace > .desktop-workspace-grid {
-    grid-template-columns: minmax(400px, 520px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   #autopilotWorkspace .desktop-col-monitor {
     position: sticky;
@@ -7062,3 +7062,23 @@ button.ap-step-text:disabled { cursor: default; }
 @media (max-width: 1024px) {
   #autopilotWorkspace > .desktop-workspace-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Autopilot groups: 이웃 관리 / 댓글 / 일정, each item with 세팅 and 옵션 */
+.ap-group .desktop-card-header { justify-content: space-between; }
+.ap-group-icon { font-size: 18px; line-height: 1; }
+.ap-group .card-title-group h3 { font-size: 15px; font-weight: 800; }
+.ap-group-count { font-size: 12px; font-weight: 700; color: #64748b; background: #f1f5f9; border-radius: 9999px; padding: 3px 10px; }
+.ap-step .ap-sub-panel { gap: 0; padding: 0; overflow: hidden; }
+.ap-panel-section { display: flex; flex-direction: column; gap: 12px; padding: 12px 14px 14px; }
+.ap-panel-section + .ap-panel-section { border-top: 1px dashed #e2e8f0; }
+.ap-panel-label {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: #475569;
+  background: #e2e8f0;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+.ap-panel-section .form-group { margin: 0; }

@@ -5264,7 +5264,15 @@ let apApplyingSettings = false;
 
 function readAutopilotSettings() {
   return {
+    keywordMode: $('#apKeywordMode')?.value === 'fixed' ? 'fixed' : 'golden',
     seedTopics: $('#apSeedTopics')?.value || '',
+    fixedKeywords: $('#apFixedKeywords')?.value || '',
+    repliesPerCycle: Number($('#apRepliesPerCycle')?.value) || 10,
+    replyNeighbor: $('#apReplyNeighbor')?.checked !== false,
+    feedLike: $('#apFeedLike')?.checked !== false,
+    feedComment: $('#apFeedComment')?.checked !== false,
+    returnVisitLike: $('#apReturnVisitLike')?.checked !== false,
+    returnVisitComment: $('#apReturnVisitComment')?.checked !== false,
     postsPerCycle: Number($('#apPostsPerCycle')?.value) || 20,
     feedPerCycle: Number($('#apFeedPerCycle')?.value) || 10,
     intervalMinutes: Number($('#apIntervalMinutes')?.value) || 90,
@@ -5288,6 +5296,14 @@ function applyAutopilotSettings(settings) {
   apApplyingSettings = true;
   const setChecked = (selector, value) => { const el = $(selector); if (el) el.checked = Boolean(value); };
   if ($('#apSeedTopics') && document.activeElement !== $('#apSeedTopics')) $('#apSeedTopics').value = settings.seedTopics || '';
+  if ($('#apFixedKeywords') && document.activeElement !== $('#apFixedKeywords')) $('#apFixedKeywords').value = settings.fixedKeywords || '';
+  setOptionChipValue('apKeywordModeChips', settings.keywordMode || 'golden');
+  setOptionChipValue('apRepliesChips', String(settings.repliesPerCycle ?? 10));
+  setChecked('#apReplyNeighbor', settings.replyNeighbor !== false);
+  setChecked('#apFeedLike', settings.feedLike !== false);
+  setChecked('#apFeedComment', settings.feedComment !== false);
+  setChecked('#apReturnVisitLike', settings.returnVisitLike !== false);
+  setChecked('#apReturnVisitComment', settings.returnVisitComment !== false);
   setOptionChipValue('apPostsChips', String(settings.postsPerCycle));
   setOptionChipValue('apFeedChips', String(settings.feedPerCycle));
   setOptionChipValue('apIntervalChips', String(settings.intervalMinutes));
@@ -5310,6 +5326,7 @@ function applyAutopilotSettings(settings) {
 // Each step is one row: switch + one-line summary of its settings; '설정' opens the details.
 const AP_STEP_PANELS = [
   ['#apStepAcceptNeighbors', 'apNeighborPanel'],
+  ['#apStepReplies', 'apRepliesPanel'],
   ['#apStepReturnVisit', 'apReturnVisitPanel'],
   ['#apStepEngage', 'apEngagePanel'],
   ['#apStepFeed', 'apFeedPanel']
@@ -5318,18 +5335,24 @@ let apOpenPanel = null;
 
 function autopilotStepSummaries() {
   const s = readAutopilotSettings();
-  const actions = [s.doLike && '공감', s.doComment && '댓글', s.doNeighbor && '서로이웃'].filter(Boolean).join('·') || '작업 없음';
-  const topics = s.seedTopics.split(',').map((t) => t.trim()).filter(Boolean);
+  const join = (items, empty) => items.filter(Boolean).join('·') || empty;
+  const list = (value) => value.split(',').map((t) => t.trim()).filter(Boolean);
+  const short = (items) => `${items.slice(0, 3).join(', ')}${items.length > 3 ? ` 외 ${items.length - 3}개` : ''}`;
+  const topics = list(s.seedTopics);
+  const fixed = list(s.fixedKeywords);
+  const source = s.keywordMode === 'fixed'
+    ? (fixed.length ? `📌 ${short(fixed)}` : '⚠️ 정해둔 키워드를 입력해주세요')
+    : (topics.length ? `🏆 ${short(topics)} 주제의 황금 키워드` : '⚠️ 황금 키워드를 찾을 내 블로그 주제를 입력해주세요');
   return {
     apSumNeighbors: [
       s.acceptMode === 'all' ? '받은 신청 전부 수락' : '받은 신청 AI 선별',
       s.cancelSentDays ? `${s.cancelSentDays}일 지난 신청 회수` : '',
       s.pruneDormant ? `${s.pruneDormantDays}일 넘은 비활성 정리` : ''
     ].filter(Boolean).join(' · '),
-    apSumReplies: '최근 글 10개의 새 댓글에 AI 대댓글 · 회차당 최대 10건',
-    apSumReturnVisit: `댓글 단 이웃 최신 글에 공감·댓글 · 회차당 ${s.returnVisitPerCycle}명`,
-    apSumEngage: topics.length ? `${topics.slice(0, 3).join(', ')}${topics.length > 3 ? ` 외 ${topics.length - 3}개` : ''} · 회차당 ${s.postsPerCycle}개 · ${actions}` : '⚠️ 내 블로그 주제를 입력해주세요',
-    apSumFeed: `이웃이 새로 올린 글에 공감·댓글 · 회차당 ${s.feedPerCycle}건`
+    apSumEngage: source.startsWith('⚠️') ? source : `${source} · 회차당 ${s.postsPerCycle}개 · ${join([s.doNeighbor && '서이추', s.doLike && '공감', s.doComment && '댓글'], '작업 없음')}`,
+    apSumReplies: `회차당 ${s.repliesPerCycle}건${s.replyNeighbor ? ' · 댓글 단 이웃 서이추' : ''}`,
+    apSumFeed: `회차당 ${s.feedPerCycle}건 · ${join([s.feedLike && '공감', s.feedComment && '댓글'], '⚠️ 공감·댓글이 모두 꺼져 있음')}`,
+    apSumReturnVisit: `회차당 ${s.returnVisitPerCycle}명 · ${join([s.returnVisitLike && '공감', s.returnVisitComment && '댓글'], '⚠️ 공감·댓글이 모두 꺼져 있음')}`
   };
 }
 
@@ -5340,7 +5363,7 @@ function syncAutopilotSubPanels() {
     if (!el) return;
     const on = $(stepInputs[id])?.checked;
     el.textContent = on ? text : '꺼짐';
-    el.classList.toggle('warn', on && text.startsWith('⚠️'));
+    el.classList.toggle('warn', Boolean(on && text.includes('⚠️')));
     el.closest('.ap-step')?.classList.toggle('off', !on);
   });
   AP_STEP_PANELS.forEach(([input, panelId]) => {
@@ -5355,6 +5378,16 @@ function syncAutopilotSubPanels() {
     $(`#${panelId}`)?.closest('.ap-step')?.classList.toggle('open', open);
   });
   $('#apPruneDaysGroup')?.classList.toggle('hidden', !$('#apPruneDormant')?.checked);
+  const fixedMode = $('#apKeywordMode')?.value === 'fixed';
+  $('#apGoldenGroup')?.classList.toggle('hidden', fixedMode);
+  $('#apFixedGroup')?.classList.toggle('hidden', !fixedMode);
+  $('#apGradeBToggle')?.classList.toggle('hidden', fixedMode);
+  const countOn = (selectors, el) => {
+    const on = selectors.filter((sel) => $(sel)?.checked).length;
+    if ($(el)) $(el).textContent = `${on} / ${selectors.length} 켜짐`;
+  };
+  countOn(['#apStepAcceptNeighbors', '#apStepEngage'], '#apGroupNeighborCount');
+  countOn(['#apStepReplies', '#apStepFeed', '#apStepReturnVisit'], '#apGroupCommentCount');
 }
 
 function scheduleAutopilotSave() {
@@ -5484,11 +5517,12 @@ function initAutopilot() {
         toast('⏹️ 자율 주행을 껐습니다. 진행 중이던 작업도 안전하게 멈춥니다.');
       } else {
         const settings = readAutopilotSettings();
-        if (settings.steps.engage && !settings.seedTopics.trim()) {
+        const fixedMode = settings.keywordMode === 'fixed';
+        if (settings.steps.engage && !(fixedMode ? settings.fixedKeywords : settings.seedTopics).trim()) {
           apOpenPanel = 'apEngagePanel';
           syncAutopilotSubPanels();
-          $('#apSeedTopics')?.focus();
-          throw new Error('황금 키워드를 찾을 내 블로그 주제를 입력해주세요.');
+          $(fixedMode ? '#apFixedKeywords' : '#apSeedTopics')?.focus();
+          throw new Error(fixedMode ? '서이추에 쓸 키워드를 입력해주세요.' : '황금 키워드를 찾을 내 블로그 주제를 입력해주세요.');
         }
         if (!state.connected) {
           setActiveTab('settings', true);

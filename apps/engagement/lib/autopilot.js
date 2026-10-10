@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 // 자율 주행 모드: once switched on, it keeps the blog running by itself in repeating cycles.
-// Each cycle: accept good neighbor requests → reply to new comments on my posts → find a golden
-// keyword and engage with posts found for it → engage with the neighbor feed. Then it rests for
+// Each cycle: manage neighbor requests → reply to new comments on my posts → visit commenters →
+// 서이추 on posts found for a golden or fixed keyword → comment on the neighbor feed. Then it rests for
 // the chosen interval and goes again, only inside the chosen active hours.
 // The real work is done by the existing managers, passed in as `steps`, so this file only decides
 // order, timing and safety stops.
@@ -12,12 +12,15 @@ export const AUTOPILOT_STEPS = Object.freeze([
   { id: 'acceptNeighbors', label: '이웃 관리 (신청 수락·회수)', icon: '🤝' },
   { id: 'replies', label: '내 글 새 댓글에 대댓글', icon: '💬' },
   { id: 'returnVisit', label: '댓글 단 이웃 답방', icon: '🏃' },
-  { id: 'engage', label: '황금 키워드 찾아 소통', icon: '🔥' },
+  { id: 'engage', label: '서이추 (키워드 글 소통)', icon: '👥' },
   { id: 'feed', label: '이웃 새글 댓글', icon: '📰' }
 ]);
 
 export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
+  // 서이추: 'golden' finds a fresh golden keyword from seedTopics; 'fixed' rotates fixedKeywords.
+  keywordMode: 'golden',
   seedTopics: '',
+  fixedKeywords: '',
   postsPerCycle: 20,
   feedPerCycle: 10,
   intervalMinutes: 90,
@@ -28,6 +31,12 @@ export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
   doNeighbor: true,
   allowGradeB: false,
   returnVisitPerCycle: 10,
+  returnVisitLike: true,
+  returnVisitComment: true,
+  repliesPerCycle: 10,
+  replyNeighbor: true,
+  feedLike: true,
+  feedComment: true,
   acceptMode: 'screen',
   cancelSentDays: 14,
   pruneDormant: false,
@@ -47,9 +56,16 @@ const clampInt = (value, min, max, fallback) => {
 
 export function normalizeAutopilotSettings(input = {}, base = DEFAULT_AUTOPILOT_SETTINGS) {
   const merged = { ...base, ...input, steps: { ...base.steps, ...(input.steps || {}) } };
-  const seeds = [...new Set(String(merged.seedTopics || '').split(/[,，\n]+/).map((value) => value.trim()).filter(Boolean))].slice(0, 10);
+  const list = (value, max) => [...new Set(String(value || '').split(/[,，\n]+/).map((item) => item.trim()).filter(Boolean))].slice(0, max).join(', ');
+  // Older saves shared one set of 공감/댓글/서이추 switches across steps; carry them over.
+  const flag = (key, legacyKey) => {
+    const own = key in input ? input[key] : base !== DEFAULT_AUTOPILOT_SETTINGS ? base[key] : undefined;
+    return own === undefined ? merged[legacyKey] !== false : own !== false;
+  };
   return {
-    seedTopics: seeds.join(', '),
+    keywordMode: merged.keywordMode === 'fixed' ? 'fixed' : 'golden',
+    seedTopics: list(merged.seedTopics, 10),
+    fixedKeywords: list(merged.fixedKeywords, 20),
     postsPerCycle: clampInt(merged.postsPerCycle, 5, 50, 20),
     feedPerCycle: clampInt(merged.feedPerCycle, 0, 30, 10),
     intervalMinutes: clampInt(merged.intervalMinutes, 30, 360, 90),
@@ -60,6 +76,12 @@ export function normalizeAutopilotSettings(input = {}, base = DEFAULT_AUTOPILOT_
     doNeighbor: merged.doNeighbor !== false,
     allowGradeB: merged.allowGradeB === true,
     returnVisitPerCycle: clampInt(merged.returnVisitPerCycle, 1, 30, 10),
+    returnVisitLike: flag('returnVisitLike', 'doLike'),
+    returnVisitComment: flag('returnVisitComment', 'doComment'),
+    repliesPerCycle: clampInt(merged.repliesPerCycle, 1, 30, 10),
+    replyNeighbor: flag('replyNeighbor', 'doNeighbor'),
+    feedLike: flag('feedLike', 'doLike'),
+    feedComment: flag('feedComment', 'doComment'),
     // 'screen': accept genuine bloggers and reject ads/macros; 'all': accept every request.
     acceptMode: merged.acceptMode === 'all' ? 'all' : 'screen',
     // Withdraw sent requests still pending after this many days (0 = off), once a day.
@@ -129,6 +151,7 @@ export class AutopilotManager {
     this.nextRunAt = null;
     this.usedKeywords = {};
     this.seedCursor = 0;
+    this.keywordCursor = 0;
     this.history = [];
     this.currentCycle = null;
     this.logs = [];
@@ -146,6 +169,7 @@ export class AutopilotManager {
       this.cycle = Number(saved.cycle) || 0;
       this.usedKeywords = saved.usedKeywords && typeof saved.usedKeywords === 'object' ? saved.usedKeywords : {};
       this.seedCursor = Number(saved.seedCursor) || 0;
+      this.keywordCursor = Number(saved.keywordCursor) || 0;
       this.history = Array.isArray(saved.history) ? saved.history.slice(0, 20) : [];
       this.logs = Array.isArray(saved.logs) ? saved.logs.slice(0, MAX_LOGS) : [];
       // A cycle cut off by an app restart keeps what it finished, marked as interrupted.
@@ -168,6 +192,7 @@ export class AutopilotManager {
         cycle: this.cycle,
         usedKeywords: this.usedKeywords,
         seedCursor: this.seedCursor,
+        keywordCursor: this.keywordCursor,
         history: this.history.slice(0, 20),
         currentCycle: this.currentCycle && !this.currentCycle.finishedAt ? this.currentCycle : null,
         logs: this.logs.slice(0, MAX_LOGS)
@@ -214,8 +239,9 @@ export class AutopilotManager {
   validate(settings = this.settings) {
     const enabledSteps = AUTOPILOT_STEPS.filter(({ id }) => settings.steps[id]);
     if (!enabledSteps.length) return '자율 주행에서 할 일을 하나 이상 켜주세요.';
-    if (settings.steps.engage && !settings.seedTopics) return '황금 키워드를 찾을 내 블로그 주제를 하나 이상 입력해주세요.';
-    if (settings.steps.engage && !settings.doLike && !settings.doComment && !settings.doNeighbor) return '키워드 소통에서 공감·댓글·서로이웃 중 하나 이상을 켜주세요.';
+    if (settings.steps.engage && settings.keywordMode === 'golden' && !settings.seedTopics) return '서이추: 황금 키워드를 찾을 내 블로그 주제를 하나 이상 입력해주세요.';
+    if (settings.steps.engage && settings.keywordMode === 'fixed' && !settings.fixedKeywords) return '서이추: 소통할 키워드를 하나 이상 입력해주세요.';
+    if (settings.steps.engage && !settings.doLike && !settings.doComment && !settings.doNeighbor) return '서이추에서 공감·댓글·서로이웃 신청 중 하나 이상을 켜주세요.';
     return '';
   }
 
@@ -389,6 +415,17 @@ export class AutopilotManager {
 
   // Picks the next seed topic in rotation, finds its best unused golden keyword, then engages.
   async runEngageStep(cycle) {
+    if (this.settings.keywordMode === 'fixed') {
+      const keywords = this.settings.fixedKeywords.split(/,\s*/).filter(Boolean);
+      if (!keywords.length) return { skipped: true, summary: '정해둔 키워드가 없어 이번 회차 서이추는 건너뜁니다.' };
+      const keyword = keywords[this.keywordCursor % keywords.length];
+      this.keywordCursor += 1;
+      cycle.keyword = keyword;
+      this.log(`📌 정해둔 키워드 '${keyword}'로 서이추를 진행합니다.`, 'success');
+      this.message = `👥 '${keyword}' 키워드로 서이추 중...`;
+      const output = await this.steps.engage({ keyword, settings: this.settings });
+      return { ...output, summary: `'${keyword}' · ${output?.summary || '완료'}` };
+    }
     const seeds = this.settings.seedTopics.split(/,\s*/).filter(Boolean);
     let picked = null;
     for (let tries = 0; tries < seeds.length && !picked && this.enabled; tries += 1) {
@@ -400,12 +437,12 @@ export class AutopilotManager {
       picked = pickGoldenKeyword(found?.items, { usedKeywords: this.usedKeywords, allowGradeB: this.settings.allowGradeB, now: this.now().getTime() });
       if (!picked) this.log(`⚠️ '${seed}'에서 최근 7일 안에 안 쓴 ${this.settings.allowGradeB ? 'S·A·B' : 'S·A'}등급 키워드를 찾지 못했습니다.`, 'warn');
     }
-    if (!picked) return { skipped: true, summary: '쓸 만한 황금 키워드가 없어 이번 회차 키워드 소통은 건너뜁니다.' };
+    if (!picked) return { skipped: true, summary: '쓸 만한 황금 키워드가 없어 이번 회차 서이추는 건너뜁니다.' };
 
     this.usedKeywords[picked.keyword.toLowerCase()] = this.now().toISOString();
     cycle.keyword = picked.keyword;
-    this.log(`🏆 '${picked.keyword}' (${picked.grade}등급)로 소통합니다.`, 'success');
-    this.message = `🔥 '${picked.keyword}' 키워드로 소통 중...`;
+    this.log(`🏆 황금 키워드 '${picked.keyword}' (${picked.grade}등급)로 서이추를 진행합니다.`, 'success');
+    this.message = `👥 '${picked.keyword}' 키워드로 서이추 중...`;
     const output = await this.steps.engage({ keyword: picked.keyword, settings: this.settings });
     return { ...output, summary: `'${picked.keyword}' · ${output?.summary || '완료'}` };
   }

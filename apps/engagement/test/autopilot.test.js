@@ -206,3 +206,34 @@ test('a cycle cut off by a restart stays in the history as interrupted', async (
   assert.equal(manager.history[0].interrupted, true);
   assert.equal(manager.history[0].results.length, 1);
 });
+
+test('서이추 can rotate fixed keywords instead of searching golden keywords', async () => {
+  const calls = [];
+  const manager = new AutopilotManager({
+    steps: {
+      acceptNeighbors: async () => ({}), replies: async () => ({}), returnVisit: async () => ({}), feed: async () => ({}),
+      findKeywords: async (seed) => { calls.push(`find:${seed}`); return { items: [] }; },
+      engage: async ({ keyword }) => { calls.push(`engage:${keyword}`); return { summary: '서이추 2' }; }
+    },
+    sleep: async () => {}
+  });
+  assert.throws(() => manager.start({ keywordMode: 'fixed', fixedKeywords: '' }), /키워드/);
+  manager.settings = normalizeAutopilotSettings({ keywordMode: 'fixed', fixedKeywords: '캠핑 장비, 캠핑 요리' });
+  manager.enabled = true;
+  await manager.runCycle();
+  await manager.runCycle();
+  await manager.runCycle();
+  assert.deepEqual(calls, ['engage:캠핑 장비', 'engage:캠핑 요리', 'engage:캠핑 장비']);
+  assert.equal(manager.history[0].keyword, '캠핑 장비');
+});
+
+test('each step keeps its own 공감·댓글·서이추 options, carried over from older saves', () => {
+  const old = normalizeAutopilotSettings({ doLike: false, doComment: true, doNeighbor: false });
+  assert.equal(old.feedLike, false);
+  assert.equal(old.returnVisitLike, false);
+  assert.equal(old.replyNeighbor, false);
+  const split = normalizeAutopilotSettings({ doLike: false, feedLike: true, repliesPerCycle: 99 });
+  assert.equal(split.feedLike, true);
+  assert.equal(split.repliesPerCycle, 30);
+  assert.equal(normalizeAutopilotSettings({}).keywordMode, 'golden');
+});
