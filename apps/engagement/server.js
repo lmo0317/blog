@@ -1121,11 +1121,17 @@ app.post('/api/license/verify', async (_req, res, next) => {
   }
 });
 
+// The license server's error field is a code (TRIAL_ALREADY_USED); the screen shows `error`, so send the sentence.
+function sendLicenseResult(res, result) {
+  if (result.ok) return res.json(result);
+  res.status(400).json({ ...result, code: result.error, error: result.message || result.error });
+}
+
 app.post('/api/license/login', async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
     const result = await licenseClient.login({ email, password });
-    res.status(result.ok ? 200 : 400).json(result);
+    sendLicenseResult(res, result);
   } catch (err) {
     next(err);
   }
@@ -1135,7 +1141,7 @@ app.post('/api/license/register', async (req, res, next) => {
   try {
     const { email, password, name, licenseKey } = req.body || {};
     const result = await licenseClient.register({ email, password, name, licenseKey });
-    res.status(result.ok ? 200 : 400).json(result);
+    sendLicenseResult(res, result);
   } catch (err) {
     next(err);
   }
@@ -1145,7 +1151,7 @@ app.post('/api/license/activate', async (req, res, next) => {
   try {
     const { licenseKey } = req.body || {};
     const result = await licenseClient.activateKey(licenseKey);
-    res.status(result.ok ? 200 : 400).json(result);
+    sendLicenseResult(res, result);
   } catch (err) {
     next(err);
   }

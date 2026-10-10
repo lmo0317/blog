@@ -20,6 +20,7 @@ export class LicenseDatabase {
     }
 
     this.initSchema();
+    this.backfillTrialClaims();
   }
 
   initSchema() {
@@ -93,11 +94,44 @@ export class LicenseDatabase {
         value TEXT NOT NULL
       );
 
+      -- One free trial per PC (and a few per IP), whatever email is used. Kept apart from users so a
+      -- device reset or a deleted account does not hand out another trial.
+      CREATE TABLE IF NOT EXISTS trial_claims (
+        hwid TEXT PRIMARY KEY,
+        user_id INTEGER,
+        ip TEXT,
+        created_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_licenses_user_id ON licenses(user_id);
       CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(license_key);
       CREATE INDEX IF NOT EXISTS idx_licenses_order_id ON licenses(order_id);
     `);
+  }
+
+  // Trials handed out before trial_claims existed still count.
+  backfillTrialClaims() {
+    this.db.exec(`
+      INSERT OR IGNORE INTO trial_claims (hwid, user_id, ip, created_at)
+      SELECT u.hwid, u.id, NULL, MIN(l.created_at) FROM users u JOIN licenses l ON l.user_id = u.id
+      WHERE l.plan_type = 'free_trial' AND u.hwid IS NOT NULL AND u.hwid != '' GROUP BY u.hwid
+    `);
+  }
+
+  getTrialClaim(hwid) {
+    if (!hwid) return null;
+    return this.db.prepare('SELECT * FROM trial_claims WHERE hwid = ?').get(hwid) || null;
+  }
+
+  countTrialClaimsByIp(ip, sinceIso) {
+    if (!ip) return 0;
+    return this.db.prepare('SELECT COUNT(*) AS n FROM trial_claims WHERE ip = ? AND created_at >= ?').get(ip, sinceIso).n;
+  }
+
+  addTrialClaim({ hwid, userId, ip = '' }) {
+    this.db.prepare('INSERT OR IGNORE INTO trial_claims (hwid, user_id, ip, created_at) VALUES (?, ?, ?, ?)')
+      .run(hwid, userId, ip || null, new Date().toISOString());
   }
 
   createUser({ email, password_hash, password_salt, name = '', hwid = null }) {

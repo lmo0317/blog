@@ -4315,7 +4315,9 @@ function initLicenseManagement() {
         method: 'POST',
         body: JSON.stringify({ email, password, licenseKey })
       });
-      toast(`🎉 회원가입 완료! 3일 무료체험이 활성화되었습니다.`);
+      toast(res.state?.planType === 'free_trial'
+        ? `🎉 회원가입 완료! ${res.state.daysLeft}일 무료체험이 시작되었습니다.`
+        : `🎉 회원가입 완료! 이용권이 등록되었습니다 (D-${res.state?.daysLeft ?? 0}일).`);
       await refreshLicenseStatus();
       closeLicenseModal();
     } catch (err) {

@@ -29,6 +29,8 @@ export class LicenseService {
       || process.env.LICENSE_SERVER_SECRET
       || db.getOrCreateSetting('jwt_secret', () => crypto.randomBytes(48).toString('hex'));
     this.defaultTrialDays = options.defaultTrialDays ?? 3;
+    // A home or office shares one IP; a few trials per 30 days, then a key is needed.
+    this.maxTrialsPerIp = options.maxTrialsPerIp ?? 3;
     this.deviceResetCooldownDays = options.deviceResetCooldownDays ?? 30;
     this.tossSecretKey = options.tossSecretKey ?? process.env.TOSS_SECRET_KEY ?? '';
     this.tossFetchPayment = options.tossFetchPayment
@@ -86,6 +88,15 @@ export class LicenseService {
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }
 
+  checkTrialAllowed({ hwid, ip }) {
+    const message = '이 PC에서는 이미 무료 체험을 사용했습니다. 기존 계정으로 로그인하거나, 구매한 이용권 키를 함께 입력해 가입해 주세요.';
+    if (!hwid) return { ok: false, error: 'TRIAL_NEEDS_DEVICE', message: '이 PC를 확인할 수 없어 무료 체험을 시작할 수 없습니다. 이용권 키를 함께 입력해 가입해 주세요.' };
+    if (this.db.getTrialClaim(hwid)) return { ok: false, error: 'TRIAL_ALREADY_USED', message };
+    const since = new Date(Date.now() - 30 * DAY_MS).toISOString();
+    if (this.db.countTrialClaimsByIp(ip, since) >= this.maxTrialsPerIp) return { ok: false, error: 'TRIAL_ALREADY_USED', message };
+    return null;
+  }
+
   register({ email, password, name = '', licenseKey = null, hwid = null, ip = '' }) {
     if (!email || !email.includes('@')) {
       return { ok: false, error: 'INVALID_EMAIL', message: '올바른 이메일 주소를 입력해주세요.' };
@@ -106,6 +117,12 @@ export class LicenseService {
       voucher = found.voucher;
     }
 
+    // Without a paid key this signup is a free trial: one per PC, so a new email cannot buy more days.
+    if (!voucher) {
+      const trialBlock = this.checkTrialAllowed({ hwid, ip });
+      if (trialBlock) return trialBlock;
+    }
+
     const { hash, salt } = hashPassword(password);
     const user = this.db.createUser({
       email,
@@ -120,6 +137,7 @@ export class LicenseService {
       license = this.grantDays(user.id, voucher.days, { orderId: voucher.order_id, channel: voucher.channel });
     } else {
       // Free trial license (e.g. 3 days)
+      this.db.addTrialClaim({ hwid, userId: user.id, ip });
       license = this.db.createLicense({
         userId: user.id,
         licenseKey: generateLicenseKey('MATE'),

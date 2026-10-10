@@ -361,7 +361,7 @@ test('JWT secret is generated per database instead of a shared default', () => {
     assert.notStrictEqual(a.jwtSecret, b.jwtSecret);
     assert.ok(a.jwtSecret.length >= 64);
   }
-  const token = a.register({ email: 'a@example.com', password: 'password123' }).token;
+  const token = a.register({ email: 'a@example.com', password: 'password123', hwid: 'pc-a' }).token;
   assert.strictEqual(b.verifyLicense({ token }).error, 'INVALID_TOKEN');
 });
 
@@ -410,4 +410,40 @@ test('Seller admin issues vouchers, lists customers, extends and resets devices'
     server.close();
     db.close();
   }
+});
+
+test('free trial is one per PC and a few per IP, whatever email is used', () => {
+  const db = new LicenseDatabase(':memory:');
+  const service = new LicenseService(db, { defaultTrialDays: 3, maxTrialsPerIp: 2 });
+  const first = service.register({ email: 'a@example.com', password: 'password123', hwid: 'pc-1', ip: '1.1.1.1' });
+  assert.strictEqual(first.license.planType, 'free_trial');
+
+  const samePc = service.register({ email: 'b@example.com', password: 'password123', hwid: 'pc-1', ip: '2.2.2.2' });
+  assert.strictEqual(samePc.ok, false);
+  assert.strictEqual(samePc.error, 'TRIAL_ALREADY_USED');
+  assert.strictEqual(db.getUserByEmail('b@example.com'), null);
+
+  // A device reset by the seller does not give the PC another trial.
+  db.updateUserHwid(first.user.id, null);
+  assert.strictEqual(service.register({ email: 'c@example.com', password: 'password123', hwid: 'pc-1', ip: '3.3.3.3' }).ok, false);
+
+  assert.strictEqual(service.register({ email: 'd@example.com', password: 'password123', ip: '4.4.4.4' }).error, 'TRIAL_NEEDS_DEVICE');
+
+  assert.strictEqual(service.register({ email: 'e@example.com', password: 'password123', hwid: 'pc-2', ip: '1.1.1.1' }).ok, true);
+  assert.strictEqual(service.register({ email: 'f@example.com', password: 'password123', hwid: 'pc-3', ip: '1.1.1.1' }).error, 'TRIAL_ALREADY_USED');
+
+  // A paid key still signs up on a PC that used its trial.
+  const [code] = service.adminIssueVouchers({ days: 30, count: 1 }).vouchers.map((v) => v.code);
+  const paid = service.register({ email: 'g@example.com', password: 'password123', hwid: 'pc-1', ip: '1.1.1.1', licenseKey: code });
+  assert.strictEqual(paid.ok, true);
+  assert.notStrictEqual(paid.license.planType, 'free_trial');
+});
+
+test('trials given before trial tracking still count for their PC', () => {
+  const db = new LicenseDatabase(':memory:');
+  const user = db.createUser({ email: 'old@example.com', password_hash: 'x', password_salt: 'y', hwid: 'pc-old' });
+  db.createLicense({ userId: user.id, licenseKey: 'MATE-OLD', planType: 'free_trial', expiresAt: new Date().toISOString(), channel: 'trial' });
+  db.backfillTrialClaims();
+  const service = new LicenseService(db);
+  assert.strictEqual(service.register({ email: 'new@example.com', password: 'password123', hwid: 'pc-old' }).error, 'TRIAL_ALREADY_USED');
 });
