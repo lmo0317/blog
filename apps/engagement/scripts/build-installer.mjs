@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JavaScriptObfuscator from 'javascript-obfuscator';
 import { Arch, build, Platform } from 'electron-builder';
+import { UPDATE_FEED_URL } from '../lib/update-feed.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const stage = path.join(root, '.build', 'stage');
@@ -18,7 +19,7 @@ const step = (message) => console.log(`\n▶ ${message}`);
 step('소스 복사');
 await rm(stage, { recursive: true, force: true });
 await mkdir(stage, { recursive: true });
-for (const entry of ['main.js', 'server.js', 'lib', 'public']) {
+for (const entry of ['main.js', 'server.js', 'updater.js', 'lib', 'public']) {
   await cp(path.join(root, entry), path.join(stage, entry), { recursive: true });
 }
 
@@ -43,6 +44,7 @@ async function obfuscate(file, target) {
 }
 await obfuscate(path.join(stage, 'main.js'), 'node');
 await obfuscate(path.join(stage, 'server.js'), 'node');
+await obfuscate(path.join(stage, 'updater.js'), 'node');
 for (const name of await readdir(path.join(stage, 'lib'))) {
   if (name.endsWith('.js')) await obfuscate(path.join(stage, 'lib', name), 'node');
 }
@@ -69,6 +71,7 @@ step('설치 파일 만들기');
 const [installer] = await build({
   targets: Platform.WINDOWS.createTarget('nsis', Arch.x64),
   projectDir: stage,
+  publish: 'never',
   config: {
     appId: 'com.neighbormate.engage',
     productName: '이웃메이트',
@@ -79,6 +82,8 @@ const [installer] = await build({
     // Playwright starts its driver from real files on disk.
     asarUnpack: ['node_modules/playwright-core/**'],
     compression: 'maximum',
+    // Writes latest.yml for the auto-updater; scripts/release.mjs uploads it to the 112 server.
+    publish: { provider: 'generic', url: UPDATE_FEED_URL },
     win: existsSync(path.join(root, 'build', 'icon.png')) ? { icon: path.join(root, 'build', 'icon.png') } : {},
     nsis: {
       oneClick: true,

@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=38">
-  <link rel="stylesheet" href="app-mode.css?v=54">
+  <link rel="stylesheet" href="app-mode.css?v=55">
 </head>
 <body>
   <main class="shell">
@@ -23,6 +23,10 @@
         </div>
       </div>
       <div class="header-right">
+        <button type="button" class="header-update-pill hidden" id="appUpdatePill" aria-live="polite" disabled>
+          <span class="header-update-icon" aria-hidden="true">⬇️</span>
+          <span id="appUpdateText">새 버전 받는 중</span>
+        </button>
         <div class="header-license-badge" id="topLicenseBadge" title="클릭하여 정품 라이선스 및 구독 관리 확인" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 9999px; font-size: 12px; font-weight: 700; background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; transition: all 0.2s ease;">
           <span id="topLicenseBadgeText">구독 확인 중...</span>
         </div>
@@ -2608,6 +2612,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=58"></script>
+  <script type="module" src="app.js?v=59"></script>
 </body>
 </html>

@@ -27,6 +27,9 @@ app.on('second-instance', () => {
 
 // server.js reads NEIGHBORMATE_DATA_DIR while loading, so import it after setting it.
 const { startServer, shutdown } = await import('./server.js');
+const { createAppUpdater } = await import('./updater.js');
+// Stop the autopilot and browser cleanly before the installer replaces the app.
+const updater = createAppUpdater({ app, beforeInstall: () => shutdown() });
 
 let mainWindow = null;
 let serverPort = null;
@@ -34,11 +37,11 @@ let serverPort = null;
 async function createWindow() {
   // Start backend server on safe internal port
   try {
-    const { port } = await startServer(4313, { enforceLicense: app.isPackaged });
+    const { port } = await startServer(4313, { enforceLicense: app.isPackaged, updater });
     serverPort = port;
   } catch (err) {
     // If port 4310 is busy, use an open port
-    const { port } = await startServer(0, { enforceLicense: app.isPackaged });
+    const { port } = await startServer(0, { enforceLicense: app.isPackaged, updater });
     serverPort = port;
   }
 
@@ -92,6 +95,7 @@ async function createWindow() {
 
 app.whenReady().then(async () => {
   await createWindow();
+  updater.start();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

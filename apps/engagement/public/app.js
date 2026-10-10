@@ -5769,3 +5769,65 @@ function initNeighborHealth() {
 
 initNeighborHealth();
 
+
+// App auto-update (installed app only): new versions download quietly; when one is ready the
+// header shows a one-click restart button. Closing the app also installs it.
+function initAppUpdate() {
+  const pill = $('#appUpdatePill');
+  const text = $('#appUpdateText');
+  if (!pill) return;
+  let timer = null;
+  let announced = '';
+  let last = {};
+  const schedule = (ms) => { clearTimeout(timer); timer = setTimeout(refresh, ms); };
+
+  function render(update) {
+    last = update || {};
+    const status = update?.status;
+    pill.classList.remove('ready', 'busy');
+    if (status === 'downloading') {
+      pill.classList.remove('hidden');
+      pill.classList.add('busy');
+      pill.disabled = true;
+      pill.title = `현재 버전 ${update.currentVersion}`;
+      pill.querySelector('.header-update-icon').textContent = '⬇️';
+      text.textContent = `새 버전 받는 중 ${update.percent || 0}%`;
+      return schedule(3000);
+    }
+    if (status === 'ready' || status === 'installing') {
+      pill.classList.remove('hidden');
+      pill.classList.add('ready');
+      pill.disabled = status === 'installing';
+      pill.title = `현재 ${update.currentVersion} → 새 버전 ${update.version}. 누르면 앱이 잠시 닫혔다가 새 버전으로 다시 열립니다.`;
+      pill.querySelector('.header-update-icon').textContent = status === 'installing' ? '⏳' : '🎉';
+      text.textContent = status === 'installing' ? '업데이트 중… 곧 다시 열립니다' : `새 버전 ${update.version} · 지금 업데이트`;
+      if (status === 'ready' && announced !== update.version) {
+        announced = update.version;
+        toast(`🎉 새 버전 ${update.version}이 준비됐습니다. 위의 [지금 업데이트]를 누르거나, 앱을 닫으면 자동으로 설치됩니다.`);
+      }
+      return schedule(60 * 1000);
+    }
+    pill.classList.add('hidden');
+    if (status === 'dev' || status === 'unavailable') return undefined;
+    return schedule(status === 'checking' ? 5000 : 10 * 60 * 1000);
+  }
+
+  async function refresh() {
+    try { render(await api('api/app-update')); } catch { schedule(10 * 60 * 1000); }
+  }
+
+  pill.addEventListener('click', async () => {
+    if (!pill.classList.contains('ready')) return;
+    pill.disabled = true;
+    render({ ...last, status: 'installing' });
+    try {
+      await api('api/app-update/install', { method: 'POST' });
+    } catch (error) {
+      toast(error.message, true);
+      refresh();
+    }
+  });
+  refresh();
+}
+
+initAppUpdate();

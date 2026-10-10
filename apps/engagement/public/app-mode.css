@@ -7082,3 +7082,40 @@ button.ap-step-text:disabled { cursor: default; }
   padding: 2px 8px;
 }
 .ap-panel-section .form-group { margin: 0; }
+
+/* Header: app update pill (downloading → ready to install) */
+.header-update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: default;
+  transition: background .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.header-update-pill.hidden { display: none; }
+.header-update-pill.ready {
+  border-color: #03c75a;
+  background: #03c75a;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(3, 199, 90, .45);
+  animation: update-pulse 2.4s ease-out infinite;
+}
+.header-update-pill.ready:hover:not(:disabled) { background: #02b351; transform: translateY(-1px); }
+.header-update-pill.ready:disabled { cursor: progress; animation: none; opacity: .85; }
+.header-update-pill:focus-visible { outline: 3px solid rgba(3, 199, 90, .35); outline-offset: 2px; }
+@keyframes update-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(3, 199, 90, .45); }
+  70% { box-shadow: 0 0 0 8px rgba(3, 199, 90, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(3, 199, 90, 0); }
+}

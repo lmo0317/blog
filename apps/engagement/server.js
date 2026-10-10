@@ -180,6 +180,16 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 }));
 // Packaged builds (or NEIGHBORMATE_ENFORCE_LICENSE=1) refuse automation actions without an active subscription.
 let licenseEnforced = process.env.NEIGHBORMATE_ENFORCE_LICENSE === '1';
+// The desktop app hands in its auto-updater; updating stays open even with an expired license.
+let appUpdater = null;
+app.get('/api/app-update', (_req, res) => {
+  res.json(appUpdater ? appUpdater.getState() : { status: 'unavailable' });
+});
+app.post('/api/app-update/install', async (_req, res) => {
+  const started = appUpdater ? await appUpdater.install() : false;
+  if (!started) return res.status(409).json({ error: '설치할 업데이트가 아직 준비되지 않았습니다.' });
+  res.json({ ok: true });
+});
 app.use(createLicenseGuard(licenseClient, () => licenseEnforced));
 app.use('/generated-images', express.static(imagesDir, { etag: false, maxAge: 0 }));
 
@@ -2009,8 +2019,9 @@ function normalizePublishableDeal(deal) {
 
 let serverInstance = null;
 
-export function startServer(customPort = port, { enforceLicense = false } = {}) {
+export function startServer(customPort = port, { enforceLicense = false, updater = null } = {}) {
   if (enforceLicense) licenseEnforced = true;
+  if (updater) appUpdater = updater;
   return new Promise((resolve, reject) => {
     let isSettled = false;
     try {
