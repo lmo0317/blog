@@ -1,10 +1,12 @@
 import { chromium } from 'playwright';
+import { launchInstalledBrowser } from './naver.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { playwrightPath } from './app-paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ALGUMON_RANK_URL = 'https://www.algumon.com/n/deal/rank';
-const PROFILE_DIR = path.join(__dirname, '..', '.playwright', 'algumon-profile');
+const PROFILE_DIR = playwrightPath('algumon-profile');
 
 import { readdir, rm } from 'node:fs/promises';
 
@@ -69,7 +71,7 @@ export async function fetchAlgumonRankDeals({ limit = 5, forceRefresh = false, h
   let context;
   try {
     await cleanProfileLocks(PROFILE_DIR);
-    context = await chromium.launchPersistentContext(PROFILE_DIR, {
+    context = await launchInstalledBrowser({ launch: (options) => chromium.launchPersistentContext(PROFILE_DIR, options) }, {
       headless: isHeadless,
       args: [
         '--disable-blink-features=AutomationControlled',

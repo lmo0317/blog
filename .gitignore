@@ -25,3 +25,5 @@ training/comment-model/.venv/
 training/comment-model/artifacts/
 __pycache__/
 *.pyc
+apps/engagement/.build/
+apps/engagement/dist/

@@ -309,6 +309,22 @@ async function cleanProfileLocks(profileDir) {
   }
 }
 
+// Customers rarely have Playwright's own Chromium, so use the installed Chrome and fall back to
+// Edge, which ships with every Windows 10/11 PC.
+const BROWSER_CHANNELS = ['chrome', 'msedge', undefined];
+
+export async function launchInstalledBrowser(factory, options) {
+  let lastError = null;
+  for (const channel of BROWSER_CHANNELS) {
+    try {
+      return await factory.launch(channel ? { ...options, channel } : options);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 export class NaverBrowserSession {
   constructor({ headless = false, browserFactory = chromium, profileDir = '', sessionStatePath = '', groupStore = null, groupStorePath = '' }) {
     this.headless = headless;
@@ -489,7 +505,6 @@ export class NaverBrowserSession {
 
     const launchOptions = {
       headless: this.headless,
-      channel: 'chrome',
       args: baseArgs,
       ignoreDefaultArgs: ['--enable-automation']
     };
@@ -504,14 +519,8 @@ export class NaverBrowserSession {
       contextOptions.storageState = this.sessionStatePath;
     }
 
-    try {
-      this.browser = await this.browserFactory.launch(launchOptions);
-      this.context = await this.browser.newContext(contextOptions);
-    } catch {
-      delete launchOptions.channel;
-      this.browser = await this.browserFactory.launch(launchOptions);
-      this.context = await this.browser.newContext(contextOptions);
-    }
+    this.browser = await launchInstalledBrowser(this.browserFactory, launchOptions);
+    this.context = await this.browser.newContext(contextOptions);
 
     this.page = await this.context.newPage();
 
@@ -737,25 +746,14 @@ export class NaverBrowserSession {
     let interactiveBrowser = null;
     let interactiveContext = null;
     try {
-      interactiveBrowser = await this.browserFactory.launch({
+      interactiveBrowser = await launchInstalledBrowser(this.browserFactory, {
         headless: false,
-        channel: 'chrome',
         args: [
           '--disable-blink-features=AutomationControlled',
           '--no-sandbox',
           '--start-maximized',
           '--new-window'
         ]
-      }).catch(async () => {
-        return await this.browserFactory.launch({
-          headless: false,
-          args: [
-            '--disable-blink-features=AutomationControlled',
-            '--no-sandbox',
-            '--start-maximized',
-            '--new-window'
-          ]
-        });
       });
 
       interactiveContext = await interactiveBrowser.newContext({

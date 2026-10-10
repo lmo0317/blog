@@ -248,7 +248,8 @@ test('halting for app shutdown starts no new cycle and keeps autopilot switched 
       findKeywords: async () => ({ items: [{ keyword: '캠핑 추천', grade: 'S' }] }),
       engage: async () => ({ summary: 'ok' })
     },
-    sleep: () => new Promise((resolve) => { release = resolve; })
+    sleep: () => new Promise((resolve) => { release = resolve; }),
+    now: () => NOON_KST
   });
   manager.start({ seedTopics: '캠핑' });
   while (!release) await new Promise((r) => setTimeout(r, 5));

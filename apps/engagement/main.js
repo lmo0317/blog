@@ -1,14 +1,32 @@
 import { app, BrowserWindow, Menu, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startServer, shutdown } from './server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Give this desktop product its own Electron identity. Without this, Electron
 // treats it as the legacy combined app and only focuses that existing window.
 app.setName('Naver Engagement Desktop');
-app.setPath('userData', path.join(__dirname, '.electron'));
+if (app.isPackaged) {
+  // The install folder is read-only: keep login, history and downloaded AI models in AppData.
+  process.env.NEIGHBORMATE_DATA_DIR = app.getPath('userData');
+} else {
+  app.setPath('userData', path.join(__dirname, '.electron'));
+}
+
+// Only one copy may run: a second launch just brings the open window forward.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+});
+
+// server.js reads NEIGHBORMATE_DATA_DIR while loading, so import it after setting it.
+const { startServer, shutdown } = await import('./server.js');
 
 let mainWindow = null;
 let serverPort = null;

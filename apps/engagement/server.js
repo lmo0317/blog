@@ -28,25 +28,26 @@ import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManag
 import { acceptReceivedBuddyRequest, fetchReceivedBuddyRequests, fetchAllSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
 import { LicenseClientManager, createLicenseGuard } from './lib/license-client.js';
 import { CloudLlmManager, CLOUD_PROVIDERS } from './lib/cloud-llm.js';
+import { INSTALLED, dataPath, playwrightPath, imagesDir, modelsDir, llamaBinDir } from './lib/app-paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-if (existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
+if (!INSTALLED && existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.join(__dirname, '.env'));
 const app = express();
 const port = Number(process.env.PORT || 4310);
 
 const modelManager = new ModelManager(
-  path.join(__dirname, '..', '..', 'windows', '.models'),
-  path.join(__dirname, '.data', 'ai-config.json')
+  modelsDir,
+  dataPath('ai-config.json')
 );
 const embeddedLlama = new EmbeddedLlamaServer({ 
   modelManager, 
-  binDir: path.join(__dirname, '..', '..', 'windows', 'bin'),
+  binDir: llamaBinDir,
   port: 8089,
   host: '127.0.0.1',
   remoteUrl: process.env.NEIGHBORMATE_LLM_URL || ''
 });
 
-const cloudLlm = new CloudLlmManager({ settingsPath: path.join(__dirname, '.data', 'ai-engine.json') });
+const cloudLlm = new CloudLlmManager({ settingsPath: dataPath('ai-engine.json') });
 embeddedLlama.attachCloud(cloudLlm);
 const cloudReady = cloudLlm.load().then(() => Promise.all(CLOUD_PROVIDERS.map((p) => cloudLlm.refreshStatus(p).catch(() => null))));
 
@@ -57,30 +58,30 @@ const llmClient = new LocalLlmClient({
 
 const browserSession = new NaverBrowserSession({
   headless: String(process.env.NAVER_HEADLESS).toLowerCase() === 'true',
-  profileDir: path.join(__dirname, '.playwright', 'naver-profile'),
-  sessionStatePath: path.join(__dirname, '.playwright', 'naver-session.json'),
-  groupStorePath: path.join(__dirname, '.data', 'neighbor-group-state.json')
+  profileDir: playwrightPath('naver-profile'),
+  sessionStatePath: playwrightPath('naver-session.json'),
+  groupStorePath: dataPath('neighbor-group-state.json')
 });
-const historyStore = new NeighborHistoryStore(path.join(__dirname, '.data', 'neighbor-history.json'));
+const historyStore = new NeighborHistoryStore(dataPath('neighbor-history.json'));
 // Activity grades (active / slow / dormant / ad) from public RSS, cached for a few days.
-const blogActivityCache = new BlogActivityCache(path.join(__dirname, '.data', 'blog-activity.json'));
+const blogActivityCache = new BlogActivityCache(dataPath('blog-activity.json'));
 const assessActivity = (blogId) => blogActivityCache.assess(blogId);
 const automationManager = new NeighborAutomationManager({ browserSession, historyStore });
 
-const engagementHistoryStore = new EngagementHistoryStore(path.join(__dirname, '.data', 'engagement-history.json'));
+const engagementHistoryStore = new EngagementHistoryStore(dataPath('engagement-history.json'));
 const engagementManager = new EngagementAutomationManager({
   browserSession,
   embeddedLlama,
   historyStore: engagementHistoryStore,
-  statePath: path.join(__dirname, '.data', 'engagement-last-job.json'),
+  statePath: dataPath('engagement-last-job.json'),
   assessActivity,
   getSharedTodayCounts: async () => {
     const summary = await feedHistoryStore.getSummary();
     return { likes: summary.todayLikes, comments: summary.todayComments };
   }
 });
-const commentReplyStore = new CommentReplyStore(path.join(__dirname, '.data', 'comment-replies.json'));
-const feedHistoryStore = new FeedEngagementHistoryStore(path.join(__dirname, '.data', 'feed-engagement-history.json'));
+const commentReplyStore = new CommentReplyStore(dataPath('comment-replies.json'));
+const feedHistoryStore = new FeedEngagementHistoryStore(dataPath('feed-engagement-history.json'));
 const feedManager = new FeedEngagementManager({
   browserSession,
   embeddedLlama,
@@ -97,7 +98,7 @@ const neighborCleanerManager = new NeighborCleanerManager({
   assessActivity
 });
 const licenseClient = new LicenseClientManager({
-  cachePath: path.join(__dirname, '.data', 'license-cache.json')
+  cachePath: dataPath('license-cache.json')
 });
 
 async function startActiveEmbeddedModel() {
@@ -180,7 +181,7 @@ app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 
 // Packaged builds (or NEIGHBORMATE_ENFORCE_LICENSE=1) refuse automation actions without an active subscription.
 let licenseEnforced = process.env.NEIGHBORMATE_ENFORCE_LICENSE === '1';
 app.use(createLicenseGuard(licenseClient, () => licenseEnforced));
-app.use('/generated-images', express.static(path.join(__dirname, '.images'), { etag: false, maxAge: 0 }));
+app.use('/generated-images', express.static(imagesDir, { etag: false, maxAge: 0 }));
 
 // NAVER_LOGIN_MODE=qr (the 112 web build): only Naver QR login is allowed. A program typing the ID and password
 // on a server browser looks like credential stuffing to Naver and gets the account locked (보호조치).
@@ -1308,7 +1309,7 @@ let lastSentCleanupDate = '';
 let lastPruneDate = '';
 const neighborHealthManager = new NeighborHealthManager({
   browserSession,
-  statePath: path.join(__dirname, '.data', 'neighbor-health.json'),
+  statePath: dataPath('neighbor-health.json'),
   // People who commented on my posts are kept even when they rarely post.
   getProtectedIds: async () => new Set((await commentReplyStore.list()).map((record) => String(record.authorId || '').toLowerCase()).filter(Boolean))
 });
@@ -1353,7 +1354,7 @@ async function scanMyCommentsCached() {
   return data;
 }
 const autopilot = new AutopilotManager({
-  statePath: path.join(__dirname, '.data', 'autopilot.json'),
+  statePath: dataPath('autopilot.json'),
   isConnected: () => browserSession.connected,
   getBusyLabel: () => {
     if (isActiveJob(engagementManager.state)) return '주제 소통';
@@ -1781,7 +1782,7 @@ app.post('/api/blog/draft', async (req, res, next) => {
     const imageStyle = String(req.body?.imageStyle || 'photorealistic');
     let autoImages = [];
     try {
-      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle });
+      autoImages = await generateAiDrawingsForPost(post, imagesDir, { style: imageStyle });
     } catch (err) {
       console.error('Failed to generate AI drawings:', err);
     }
@@ -1857,7 +1858,7 @@ app.post('/api/blog/article/draft', async (req, res, next) => {
     let autoImages = [];
 
     try {
-      autoImages = await generateAiDrawingsForPost(post, path.join(__dirname, '.images'), { style: imageStyle });
+      autoImages = await generateAiDrawingsForPost(post, imagesDir, { style: imageStyle });
     } catch (err) {
       console.error('Failed to generate AI drawings:', err);
     }
@@ -1885,7 +1886,7 @@ app.post('/api/blog/images/generate', async (req, res, next) => {
     const image = await generateAiDrawing({
       prompt: textPrompt,
       style,
-      outputDir: path.join(__dirname, '.images')
+      outputDir: imagesDir
     });
     if (afterHeading) image.afterHeading = afterHeading;
     res.json({ ok: true, image });
@@ -1958,7 +1959,7 @@ app.post('/api/blog/publish', async (req, res, next) => {
     const requestedImages = (Array.isArray(req.body?.images) ? req.body.images : []).slice(0, 5);
     downloadedImages = await downloadCommonsImages(
       requestedImages,
-      path.join(__dirname, '.playwright', 'publish-uploads')
+      playwrightPath('publish-uploads')
     );
     if (requestedImages.length && downloadedImages.length !== requestedImages.length) {
       throw new Error(`선택한 상품 이미지 ${requestedImages.length}장 중 ${downloadedImages.length}장만 준비되었습니다. 이미지 주소를 확인한 뒤 다시 시도해주세요.`);

@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { launchInstalledBrowser } from './naver.js';
 import { mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -9,7 +10,7 @@ export async function getSharedBrowser() {
   if (sharedBrowser && sharedBrowser.isConnected()) {
     return sharedBrowser;
   }
-  sharedBrowser = await chromium.launch({
+  sharedBrowser = await launchInstalledBrowser(chromium, {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
