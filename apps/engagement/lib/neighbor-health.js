@@ -143,62 +143,63 @@ export function parseBuddyListHtml(html) {
 }
 
 export const RELATION_LABELS = Object.freeze({ all: '전체', mutual: '서로이웃', oneway: '일방 이웃' });
+export const ACTIVE_DAY_OPTIONS = Object.freeze([7, 14, 30, 60, 90]);
 
-/** Cleans the user's 정리 조건; returns { criteria } or { error }. */
+/** Cleans the user's 활성 이웃 기준. */
 export function normalizeCriteria(input = {}) {
-  const inactiveDays = Math.max(0, Math.min(Math.round(Number(input.inactiveDays) || 0), 3650));
-  const relation = ['mutual', 'oneway'].includes(input.relation) ? input.relation : 'all';
-  const minAddedDays = Math.max(0, Math.min(Math.round(Number(input.minAddedDays ?? 14) || 0), 3650));
-  const keyword = String(input.keyword || '').trim().slice(0, 40);
-  const criteria = { inactiveDays, relation, minAddedDays, keyword, excludeCommenters: input.excludeCommenters !== false };
-  if (!inactiveDays && relation === 'all' && !keyword) {
-    return { error: '정리할 이웃 조건을 하나 이상 넣어주세요. (새 글 없는 기간, 이웃 관계, 닉네임·ID)' };
-  }
-  return { criteria };
+  const activeDays = Math.max(1, Math.min(Math.round(Number(input.activeDays) || 30), 365));
+  const relation = input.relation === 'mutual' ? 'mutual' : 'all';
+  const graceDays = Math.max(0, Math.min(Math.round(Number(input.graceDays ?? 14) || 0), 365));
+  return { criteria: { activeDays, relation, graceDays, commentersActive: input.commentersActive !== false } };
 }
 
 export function describeCriteria(criteria) {
   return [
-    criteria.inactiveDays ? `${criteria.inactiveDays}일 이상 새 글 없음` : '',
-    criteria.relation !== 'all' ? RELATION_LABELS[criteria.relation] : '',
-    criteria.keyword ? `'${criteria.keyword}' 포함` : '',
-    criteria.minAddedDays ? `추가한 지 ${criteria.minAddedDays}일 이상` : ''
+    `최근 ${criteria.activeDays}일 안에 새 글`,
+    criteria.relation === 'mutual' ? '서로이웃만' : '',
+    criteria.commentersActive ? '내 글 댓글 이웃 포함' : ''
   ].filter(Boolean).join(' · ');
 }
 
-/** Neighbors matching every condition, each with the reason it matched. */
-export function filterNeighbors(rows, criteria, { now = new Date(), protectedIds = new Set() } = {}) {
-  const keyword = criteria.keyword.toLowerCase();
-  const matches = [];
-  let excludedCommenters = 0;
+/**
+ * Sorts my neighbors into 활성 (posted within the period, or talked with me), 비활성 and
+ * 지켜보는 중 (added too recently to judge). Each neighbor carries the reason for its group.
+ */
+export function classifyNeighbors(rows, criteria, { now = new Date(), protectedIds = new Set() } = {}) {
+  const active = [];
+  const inactive = [];
+  let watching = 0;
+  let commenters = 0;
   for (const row of rows) {
     if (row.relation === 'rss') continue;
     const lastPost = parseNaverDate(row.lastPostText, now);
     const lastPostDays = daysSince(lastPost, now);
     const addedDays = daysSince(parseNaverDate(row.addedText, now), now);
-    if (criteria.inactiveDays && lastPostDays < criteria.inactiveDays) continue;
-    if (criteria.relation !== 'all' && row.relation !== criteria.relation) continue;
-    if (keyword && !`${row.nickname} ${row.blogId}`.toLowerCase().includes(keyword)) continue;
-    if (criteria.minAddedDays && addedDays < criteria.minAddedDays) continue;
-    if (criteria.excludeCommenters && protectedIds.has(String(row.blogId).toLowerCase())) {
-      excludedCommenters += 1;
-      continue;
-    }
-    const reasons = [];
-    if (criteria.inactiveDays) reasons.push(lastPost ? `${lastPostDays}일 동안 새 글 없음` : '최근 글 없음');
-    if (criteria.relation === 'oneway') reasons.push('서로이웃 아님');
-    if (criteria.relation === 'mutual') reasons.push('서로이웃');
-    if (keyword) reasons.push(`'${criteria.keyword}' 일치`);
-    matches.push({
+    const item = {
       ...row,
       lastPostDays: Number.isFinite(lastPostDays) ? lastPostDays : null,
-      addedDays: Number.isFinite(addedDays) ? addedDays : null,
-      reason: reasons.join(' · ')
-    });
+      addedDays: Number.isFinite(addedDays) ? addedDays : null
+    };
+    const relationOk = criteria.relation !== 'mutual' || row.relation === 'mutual';
+    const postedRecently = lastPostDays <= criteria.activeDays;
+    if (criteria.commentersActive && protectedIds.has(String(row.blogId).toLowerCase())) {
+      commenters += 1;
+      active.push({ ...item, reason: '내 글에 댓글' });
+    } else if (relationOk && postedRecently) {
+      active.push({ ...item, reason: lastPostDays === 0 ? '오늘 새 글' : `${lastPostDays}일 전 새 글` });
+    } else if (criteria.graceDays && addedDays < criteria.graceDays) {
+      watching += 1;
+    } else {
+      const reasons = [];
+      if (!postedRecently) reasons.push(lastPost ? `${lastPostDays}일 동안 새 글 없음` : '최근 글 없음');
+      if (!relationOk) reasons.push('서로이웃 아님');
+      inactive.push({ ...item, reason: reasons.join(' · ') });
+    }
   }
-  // Longest silence first.
-  matches.sort((a, b) => (b.lastPostDays ?? 99999) - (a.lastPostDays ?? 99999));
-  return { matches, excludedCommenters };
+  // Most recent writers first; longest silence first.
+  active.sort((a, b) => (a.lastPostDays ?? 99999) - (b.lastPostDays ?? 99999));
+  inactive.sort((a, b) => (b.lastPostDays ?? 99999) - (a.lastPostDays ?? 99999));
+  return { active, inactive, watching, commenters };
 }
 
 export async function fetchBuddyListPage(page, blogId, pageNo = 1) {
@@ -291,7 +292,7 @@ export class NeighborHealthManager {
     this.logs = [];
     this.progress = { phase: '', done: 0, total: 0 };
     this.list = null; // { fetchedAt, rows } — my neighbor list, read on demand
-    this.result = null; // { queryId, criteria, description, matches, total, excludedCommenters, queriedAt }
+    this.result = null; // { queryId, criteria, description, active, inactive, activeCount, inactiveCount, watchingCount, total }
     this.queryCount = 0;
     this.pruneLog = {}; // { 'YYYY-MM-DD': count }
     this.load();
@@ -361,13 +362,12 @@ export class NeighborHealthManager {
   }
 
   /**
-   * Finds neighbors that match `input` conditions. Re-reads my neighbor list only when it is older
-   * than 30 minutes or `refresh` is set, so changing conditions and searching again is instant.
+   * Sorts my neighbors into active and inactive by `input`. Re-reads my neighbor list only when it is
+   * older than 30 minutes or `refresh` is set, so changing the 기준 and sorting again is instant.
    */
   async query(input = {}, { refresh = false } = {}) {
     if (this.state === 'running') throw new Error('이웃 조회·정리 작업이 이미 진행 중입니다.');
-    const { criteria, error } = normalizeCriteria(input);
-    if (error) throw new Error(error);
+    const { criteria } = normalizeCriteria(input);
     const needsRead = refresh || !this.list || Date.now() - this.list.fetchedAt > LIST_CACHE_MS;
     if (needsRead && !this.browserSession?.connected) throw new Error('네이버 계정이 연결되어 있지 않습니다.');
 
@@ -380,20 +380,23 @@ export class NeighborHealthManager {
         page = await this.browserSession.context.newPage();
         await this.readList(page);
       }
-      const protectedIds = criteria.excludeCommenters ? await this.getProtectedIds().catch(() => new Set()) : new Set();
-      const { matches, excludedCommenters } = filterNeighbors(this.list.rows, criteria, { protectedIds });
+      const protectedIds = criteria.commentersActive ? await this.getProtectedIds().catch(() => new Set()) : new Set();
+      const { active, inactive, watching, commenters } = classifyNeighbors(this.list.rows, criteria, { protectedIds });
       this.queryCount += 1;
       this.result = {
         queryId: this.queryCount,
         criteria,
         description: describeCriteria(criteria),
-        matches: matches.slice(0, 1000),
-        matchCount: matches.length,
+        active: active.slice(0, 1500),
+        inactive: inactive.slice(0, 1500),
+        activeCount: active.length,
+        inactiveCount: inactive.length,
+        watchingCount: watching,
+        commenterCount: commenters,
         total: this.list.rows.length,
-        excludedCommenters,
         queriedAt: new Date().toISOString()
       };
-      this.log(`🔎 조건(${this.result.description})에 맞는 이웃 ${matches.length}명을 찾았습니다.${excludedCommenters ? ` 내 글 댓글 이웃 ${excludedCommenters}명은 제외했습니다.` : ''}`, 'success');
+      this.log(`🔎 ${this.result.description} 기준으로 활성 이웃 ${active.length}명, 비활성 이웃 ${inactive.length}명을 추렸습니다.${watching ? ` 새로 추가한 ${watching}명은 지켜봅니다.` : ''}`, 'success');
       this.state = this.shouldStop ? 'stopped' : 'completed';
       return this.getStatus();
     } catch (err) {
@@ -405,7 +408,7 @@ export class NeighborHealthManager {
     }
   }
 
-  /** Deletes the picked neighbors from the latest query result, at most the daily remainder. */
+  /** Deletes the picked inactive neighbors from the latest result, at most the daily remainder. */
   async prune(buddyBlogNos = [], { queryId = null, maxCount = PRUNE_DAILY_LIMIT } = {}) {
     if (this.state === 'running') throw new Error('이웃 조회·정리 작업이 이미 진행 중입니다.');
     if (!this.browserSession?.connected) throw new Error('네이버 계정이 연결되어 있지 않습니다.');
@@ -414,13 +417,13 @@ export class NeighborHealthManager {
     const remaining = Math.max(0, Math.min(PRUNE_DAILY_LIMIT, maxCount) - this.prunedToday());
     if (!remaining) throw new Error(`오늘 정리 한도(${PRUNE_DAILY_LIMIT}명)를 모두 사용했습니다. 내일 다시 진행해주세요.`);
     const wanted = new Set(buddyBlogNos.map(String));
-    const targets = this.result.matches.filter((n) => wanted.has(String(n.buddyBlogNo))).slice(0, remaining);
-    if (!targets.length) throw new Error('정리할 이웃을 선택해주세요.');
+    const targets = this.result.inactive.filter((n) => wanted.has(String(n.buddyBlogNo))).slice(0, remaining);
+    if (!targets.length) throw new Error('정리할 비활성 이웃을 선택해주세요.');
 
     this.state = 'running';
     this.shouldStop = false;
     this.progress = { phase: 'prune', done: 0, total: targets.length };
-    this.log(`🧹 이웃 ${targets.length}명을 정리합니다. (오늘 남은 한도 ${remaining}명)`, 'info');
+    this.log(`🧹 비활성 이웃 ${targets.length}명을 정리합니다. (오늘 남은 한도 ${remaining}명)`, 'info');
     const page = await this.browserSession.context.newPage();
     const deletedNos = new Set();
     try {
@@ -449,9 +452,10 @@ export class NeighborHealthManager {
       }
       // Deleting changes pages, so the cached list is no longer trustworthy.
       this.list = null;
-      this.result = { ...this.result, matches: this.result.matches.filter((n) => !deletedNos.has(n.buddyBlogNo)) };
-      this.result.matchCount = this.result.matches.length;
-      this.log(`✅ 이웃 ${deletedNos.size}명을 정리했습니다.`, 'success');
+      this.result = { ...this.result, inactive: this.result.inactive.filter((n) => !deletedNos.has(n.buddyBlogNo)) };
+      this.result.inactiveCount = Math.max(0, this.result.inactiveCount - deletedNos.size);
+      this.result.total = Math.max(0, this.result.total - deletedNos.size);
+      this.log(`✅ 비활성 이웃 ${deletedNos.size}명을 정리했습니다.`, 'success');
       this.state = this.shouldStop ? 'stopped' : 'completed';
       return { ...this.getStatus(), deleted: deletedNos.size };
     } catch (error) {

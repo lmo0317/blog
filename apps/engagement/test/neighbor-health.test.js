@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   assessPosts,
   BlogActivityCache,
-  filterNeighbors,
+  classifyNeighbors,
   gradeByLastPost,
   NeighborHealthManager,
   normalizeCriteria,
@@ -51,31 +51,29 @@ const rows = [
   { buddyBlogNo: '6', relation: 'oneway', blogId: 'ancient', nickname: '옛날', lastPostText: '19.01.01.', addedText: '25.01.01.' }
 ];
 
-test('normalizeCriteria requires at least one narrowing condition', () => {
-  assert.match(normalizeCriteria({}).error, /조건/);
-  assert.equal(normalizeCriteria({ inactiveDays: 60 }).criteria.inactiveDays, 60);
-  assert.equal(normalizeCriteria({ relation: 'oneway' }).criteria.minAddedDays, 14);
-  assert.equal(normalizeCriteria({ keyword: '잠' }).criteria.excludeCommenters, true);
+test('normalizeCriteria defaults to a 30-day active period with commenters counted as active', () => {
+  assert.deepEqual(normalizeCriteria({}).criteria, { activeDays: 30, relation: 'all', graceDays: 14, commentersActive: true });
+  assert.equal(normalizeCriteria({ activeDays: 7, relation: 'mutual' }).criteria.relation, 'mutual');
+  assert.equal(normalizeCriteria({ relation: 'oneway' }).criteria.relation, 'all');
 });
 
-test('filterNeighbors applies every condition and protects commenters and new neighbors', () => {
+test('classifyNeighbors splits active, inactive and newly added neighbors', () => {
   const protectedIds = new Set(['friend']);
-  const dormant = filterNeighbors(rows, normalizeCriteria({ inactiveDays: 60 }).criteria, { now: NOW, protectedIds });
-  assert.deepEqual(dormant.matches.map((n) => n.blogId), ['ancient', 'sleepy']);
-  assert.equal(dormant.excludedCommenters, 1);
-  assert.match(dormant.matches[1].reason, /새 글 없음/);
+  const base = classifyNeighbors(rows, normalizeCriteria({ activeDays: 30 }).criteria, { now: NOW, protectedIds });
+  assert.deepEqual(base.active.map((n) => n.blogId), ['fresh', 'oneway_old', 'friend']);
+  assert.equal(base.active[2].reason, '내 글에 댓글');
+  assert.deepEqual(base.inactive.map((n) => n.blogId), ['ancient', 'sleepy']);
+  assert.match(base.inactive[1].reason, /새 글 없음/);
+  assert.equal(base.watching, 1);
+  assert.equal(base.commenters, 1);
 
-  const onewayDormant = filterNeighbors(rows, normalizeCriteria({ inactiveDays: 60, relation: 'oneway' }).criteria, { now: NOW, protectedIds });
-  assert.deepEqual(onewayDormant.matches.map((n) => n.blogId), ['ancient']);
+  const mutualOnly = classifyNeighbors(rows, normalizeCriteria({ activeDays: 30, relation: 'mutual' }).criteria, { now: NOW, protectedIds });
+  assert.ok(mutualOnly.inactive.some((n) => n.blogId === 'oneway_old' && n.reason === '서로이웃 아님'));
 
-  const oneway = filterNeighbors(rows, normalizeCriteria({ relation: 'oneway' }).criteria, { now: NOW });
-  assert.deepEqual(oneway.matches.map((n) => n.blogId).sort(), ['ancient', 'oneway_old']);
-
-  const byName = filterNeighbors(rows, normalizeCriteria({ keyword: '꾸러기' }).criteria, { now: NOW });
-  assert.deepEqual(byName.matches.map((n) => n.blogId), ['sleepy']);
-
-  const includeNew = filterNeighbors(rows, normalizeCriteria({ inactiveDays: 60, minAddedDays: 0, excludeCommenters: false }).criteria, { now: NOW, protectedIds });
-  assert.deepEqual(includeNew.matches.map((n) => n.blogId).sort(), ['ancient', 'friend', 'just_added', 'sleepy']);
+  const strict = classifyNeighbors(rows, normalizeCriteria({ activeDays: 7, graceDays: 0, commentersActive: false }).criteria, { now: NOW, protectedIds });
+  assert.deepEqual(strict.active.map((n) => n.blogId), ['fresh']);
+  assert.deepEqual(strict.inactive.map((n) => n.blogId).sort(), ['ancient', 'friend', 'just_added', 'oneway_old', 'sleepy']);
+  assert.equal(strict.watching, 0);
 });
 
 test('NeighborHealthManager reads the list once, re-filters instantly, and prunes only from the latest result', async () => {
@@ -92,17 +90,17 @@ test('NeighborHealthManager reads the list once, re-filters instantly, and prune
   const manager = new NeighborHealthManager({
     browserSession: { connected: true, context: { newPage: async () => fakePage }, resolveMyBlogId: async () => 'me' }
   });
-  await assert.rejects(() => manager.query({}), /조건/);
   await assert.rejects(() => manager.prune(['2']), /조회/);
 
-  const first = await manager.query({ inactiveDays: 60 });
-  assert.equal(first.result.matchCount >= 1, true);
-  assert.ok(first.result.matches.every((n) => n.blogId !== 'fresh'));
+  const first = await manager.query({ activeDays: 60 });
+  assert.deepEqual(first.result.active.map((n) => n.blogId), ['fresh']);
+  assert.deepEqual(first.result.inactive.map((n) => n.blogId), ['sleepy']);
   const readsAfterFirst = reads;
-  const second = await manager.query({ keyword: 'fresh' });
+  const second = await manager.query({ activeDays: 7 });
   assert.equal(reads, readsAfterFirst);
-  assert.deepEqual(second.result.matches.map((n) => n.blogId), ['fresh']);
+  assert.equal(second.result.activeCount, 1);
   assert.equal(second.result.queryId, first.result.queryId + 1);
+  await assert.rejects(() => manager.prune(['1'], { queryId: second.result.queryId }), /비활성 이웃을 선택/);
   await assert.rejects(() => manager.prune(['1'], { queryId: first.result.queryId }), /다시 조회/);
 });
 
