@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css?v=2">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=39">
-  <link rel="stylesheet" href="app-mode.css?v=61">
+  <link rel="stylesheet" href="app-mode.css?v=63">
 </head>
 <body>
   <main class="shell">
@@ -1476,14 +1476,20 @@
           </div>
 
           <div class="keyword-trends-panel hidden" id="keywordTrendsPanel">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div class="tb-head">
               <div>
-                <strong style="font-size:15px; color:#0f172a;">🔥 네이버 실시간 급상승 키워드</strong>
-                <p style="font-size:12px; color:#64748b; margin:2px 0 0;">현재 사람들이 가장 많이 찾는 실시간 트렌드 주제입니다.</p>
+                <strong>🔥 실시간 급상승 트렌드</strong>
+                <p>어디서, 누가, 무엇을 찾는지 나눠서 봅니다. 키워드를 누르면 바로 황금 키워드를 찾아 드려요.</p>
               </div>
-              <button type="button" class="button ghost small" id="kwRefreshTrendsBtn">↻ 트렌드 새로고침</button>
+              <button type="button" class="button ghost small" id="kwRefreshTrendsBtn">↻ 새로고침</button>
             </div>
-            <div class="trends-grid" id="kwTrendsGrid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px;"></div>
+            <div class="tb-views" role="tablist" aria-label="트렌드 보기">
+              <button type="button" class="tb-view active" role="tab" aria-selected="true" data-view="live">📡 실시간 이슈</button>
+              <button type="button" class="tb-view" role="tab" aria-selected="false" data-view="region">📍 지역별</button>
+              <button type="button" class="tb-view" role="tab" aria-selected="false" data-view="people">👥 나이·성별</button>
+            </div>
+            <div class="tb-filters" id="kwTrendFilters"></div>
+            <div class="tb-body" id="kwTrendsGrid"></div>
           </div>
         </div>
 
@@ -2703,7 +2709,7 @@
               <dl class="guide-defs">
                 <dt>등급은 이렇게 정합니다</dt><dd><b>🏆 S 황금</b> → <b>👍 A 추천</b> → <b>🙂 B 보통</b> → <b>⚠️ C 경쟁 심함</b>. 검색 수요가 있고, 제목에 그 검색어를 그대로 넣은 상위 글이 적고, 상위 글이 오래됐을수록 높은 등급입니다.</dd>
                 <dt>🎯 내 블로그 AI 맞춤 분석</dt><dd>내 최근 글의 주제를 읽고, 내 블로그와 잘 맞는 키워드와 소통 대상을 추천합니다.</dd>
-                <dt>🔥 실시간 급상승 트렌드</dt><dd>지금 사람들이 가장 많이 찾는 주제를 보여 줍니다. [↻ 트렌드 새로고침]으로 최신화합니다.</dd>
+                <dt>🔥 실시간 급상승 트렌드</dt><dd>세 가지로 나눠 봅니다. 📡 실시간 이슈(네이버·구글 급상승 검색어), 📍 지역별(16개 시·도), 👥 나이·성별(10대~60대 이상, 여성/남성, 쇼핑 분야별 인기 키워드). ⭐ 표시는 전체 순위에는 없고 그 그룹에서만 뜨는 키워드입니다. [↻ 새로고침]으로 최신화합니다.</dd>
               </dl>
               <p class="guide-tip">💡 찾은 S·A등급 키워드로 글을 쓰면 상위 노출에 유리합니다. 자율 주행 서이추의 '정해둔 키워드'에 넣으면 그 키워드 글에 꾸준히 소통할 수 있습니다.</p>
               <button type="button" class="guide-go wide" data-guide-tab="keywordTab">키워드 화면으로 →</button>
@@ -2903,6 +2909,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=67"></script>
+  <script type="module" src="app.js?v=68"></script>
 </body>
 </html>

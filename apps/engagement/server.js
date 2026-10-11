@@ -7,7 +7,7 @@ import { loadEnvFile } from 'node:process';
 import { NaverBrowserSession, normalizeAutocompleteKeywords } from './lib/naver.js';
 import { discoverGoldenKeywords, analyzeSingleKeyword } from './lib/golden-keyword.js';
 import { LocalLlmClient } from './lib/llm.js';
-import { fetchKoreanTrends, fetchShoppingKeywordRanks, koreanTrendsOnly, seasonTopics, SHOPPING_CATEGORIES } from './lib/trends.js';
+import { fetchGoogleTrends, fetchKoreanTrends, fetchNaverRealtime, fetchShoppingKeywordRanks, koreanTrendsOnly, markSegmentOnly, seasonTopics, SHOPPING_CATEGORIES, TREND_AGES, TREND_GENDERS, TREND_REGIONS } from './lib/trends.js';
 import { fetchAlgumonRankDeals, isDirectProductUrl, unwrapKnownRedirectUrl } from './lib/algumon.js';
 import { appendImageAttributions, cleanupDownloadedImages, downloadCommonsImages, searchOpenImages } from './lib/images.js';
 import { extractArticleContent } from './lib/article-scraper.js';
@@ -1644,6 +1644,73 @@ app.get('/api/blog/topic-ideas', async (req, res, next) => {
       categories: SHOPPING_CATEGORIES,
       shopping: { categoryId, range: shopping.range || '', items: shopping.items || [], error: shopping.error || '' },
       season: seasonTopics()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Detailed trend board: live issues (Naver + Google), Google trends per province, and Naver shopping
+// ranks per age group / gender / category. Each source is cached so switching chips stays fast.
+const trendBoardCache = new Map();
+// Age and gender differ the most in fashion, so the people view opens there.
+const FASHION_CATEGORY_ID = '50000000';
+// DataLab stops answering after a burst of 7~9 requests, so its calls go one at a time with a gap.
+let dataLabQueue = Promise.resolve();
+function throttledDataLab(task) {
+  const run = dataLabQueue.then(task);
+  dataLabQueue = run.catch(() => {}).then(() => new Promise((resolve) => setTimeout(resolve, 700)));
+  return run;
+}
+async function cachedTrend(key, ttlMs, refresh, load) {
+  const hit = trendBoardCache.get(key);
+  if (!refresh && hit && Date.now() - hit.loadedAt < ttlMs) return hit;
+  try {
+    const entry = { loadedAt: Date.now(), data: await load(), error: '' };
+    trendBoardCache.set(key, entry);
+    return entry;
+  } catch (error) {
+    // Keep showing the last good list when a source hiccups.
+    return hit ? { ...hit, error: '' } : { loadedAt: Date.now(), data: null, error: error.message };
+  }
+}
+
+app.get('/api/blog/trend-board', async (req, res, next) => {
+  try {
+    const view = ['live', 'region', 'people'].includes(String(req.query?.view)) ? String(req.query.view) : 'live';
+    const refresh = String(req.query?.refresh || '').toLowerCase() === 'true';
+    const options = { regions: TREND_REGIONS, ages: TREND_AGES, genders: TREND_GENDERS, categories: SHOPPING_CATEGORIES };
+    const at = (entry) => new Date(entry.loadedAt).toISOString();
+
+    if (view === 'live') {
+      const [naver, google] = await Promise.all([
+        cachedTrend('naver', 5 * 60 * 1000, refresh, () => fetchNaverRealtime()),
+        cachedTrend('google:KR', 5 * 60 * 1000, refresh, () => fetchGoogleTrends({ geo: 'KR' }))
+      ]);
+      return res.json({
+        view, options,
+        naver: { items: naver.data || [], refreshedAt: at(naver), error: naver.error },
+        google: { items: google.data || [], refreshedAt: at(google), error: google.error }
+      });
+    }
+
+    if (view === 'region') {
+      const region = TREND_REGIONS.find((r) => r.id === String(req.query?.geo)) || TREND_REGIONS[0];
+      const entry = await cachedTrend(`google:${region.id}`, 10 * 60 * 1000, refresh, () => fetchGoogleTrends({ geo: region.id }));
+      return res.json({ view, options, region, items: entry.data || [], refreshedAt: at(entry), error: entry.error });
+    }
+
+    const age = TREND_AGES.some((a) => a.id === String(req.query?.age)) ? String(req.query.age) : '';
+    const gender = TREND_GENDERS.some((g) => g.id === String(req.query?.gender)) ? String(req.query.gender) : '';
+    const categoryId = SHOPPING_CATEGORIES.some((c) => c.id === String(req.query?.category)) ? String(req.query.category) : FASHION_CATEGORY_ID;
+    const ranks = (a, g) => cachedTrend(`shop:${categoryId}:${a}:${g}`, 60 * 60 * 1000, refresh, () => throttledDataLab(() => fetchShoppingKeywordRanks({ categoryId, age: a, gender: g })));
+    const mine = await ranks(age, gender);
+    // The whole public's list for the same category, to star what only this group looks for.
+    const everyone = age || gender ? await ranks('', '') : null;
+    return res.json({
+      view, options, age, gender, categoryId,
+      items: markSegmentOnly(mine.data?.items || [], everyone?.data?.items || []),
+      range: mine.data?.range || '', error: mine.error
     });
   } catch (error) {
     next(error);

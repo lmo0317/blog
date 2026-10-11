@@ -101,3 +101,39 @@ test('topic ideas: only Korean live trends, and topics for the Korean month', as
   assert.equal(season.month, 10);
   assert.ok(season.topics.includes('단풍 여행 코스'));
 });
+
+test('trend board: shopping ranks pass the age group and gender, and drop unknown ones', async () => {
+  const { fetchShoppingKeywordRanks } = await import('../lib/trends.js');
+  const bodies = [];
+  const fetchImpl = async (_url, init) => {
+    bodies.push(new URLSearchParams(String(init.body)));
+    return { ok: true, json: async () => ({ ranks: [{ rank: 1, keyword: '후드집업' }] }) };
+  };
+  await fetchShoppingKeywordRanks({ categoryId: '50000000', age: '20', gender: 'f', fetchImpl });
+  await fetchShoppingKeywordRanks({ categoryId: '50000000', age: '99', gender: 'x', fetchImpl });
+  assert.equal(bodies[0].get('age'), '20');
+  assert.equal(bodies[0].get('gender'), 'f');
+  assert.equal(bodies[1].get('age'), '');
+  assert.equal(bodies[1].get('gender'), '');
+});
+
+test('trend board: Naver realtime states, Google per province, and segment-only keywords', async () => {
+  const { fetchNaverRealtime, fetchGoogleTrends, markSegmentOnly } = await import('../lib/trends.js');
+  const naver = await fetchNaverRealtime({
+    fetchImpl: async () => ({ ok: true, json: async () => ({ top10: [{ rank: 1, keyword: '골프', state: 'n' }, { rank: 2, keyword: '야구', state: '+' }, { rank: 3, keyword: ' ', state: 's' }] }) })
+  });
+  assert.deepEqual(naver, [{ rank: 1, keyword: '골프', state: 'new' }, { rank: 2, keyword: '야구', state: 'up' }]);
+
+  let url;
+  const rss = '<rss><item><title>연금</title><ht:approx_traffic>200+</ht:approx_traffic></item></rss>';
+  const items = await fetchGoogleTrends({ geo: 'KR-49', fetchImpl: async (u) => { url = u; return { ok: true, text: async () => rss }; } });
+  assert.match(url, /geo=KR-49$/);
+  assert.equal(items[0].topic, '연금');
+  await fetchGoogleTrends({ geo: 'US', fetchImpl: async (u) => { url = u; return { ok: true, text: async () => rss }; } });
+  assert.match(url, /geo=KR$/);
+  await assert.rejects(fetchGoogleTrends({ fetchImpl: async () => ({ ok: true, text: async () => '<rss></rss>' }) }), /급상승/);
+
+  const marked = markSegmentOnly([{ keyword: '후드집업' }, { keyword: '남자가디건' }], [{ keyword: '후드집업' }]);
+  assert.deepEqual(marked.map((i) => i.segmentOnly), [false, true]);
+  assert.deepEqual(markSegmentOnly([{ keyword: 'a' }], []).map((i) => i.segmentOnly), [false]);
+});

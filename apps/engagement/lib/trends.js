@@ -1,4 +1,5 @@
 const TRENDS_RSS_URL = 'https://trends.google.com/trending/rss?geo=KR';
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
 
 export function toTrendKeyword(topic = '') {
   const clean = String(topic).replace(/["'“”‘’()[\]{}<>]/g, ' ').replace(/[^0-9A-Za-z가-힣\s]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -109,18 +110,20 @@ function kstDate(now, daysAgo) {
 }
 
 /** The 20 most searched shopping keywords of one category over the last 7 days. */
-export async function fetchShoppingKeywordRanks({ categoryId = SHOPPING_CATEGORIES[0].id, fetchImpl = fetch, now = new Date() } = {}) {
+export async function fetchShoppingKeywordRanks({ categoryId = SHOPPING_CATEGORIES[0].id, age = '', gender = '', fetchImpl = fetch, now = new Date() } = {}) {
   const category = SHOPPING_CATEGORIES.find((c) => c.id === String(categoryId)) || SHOPPING_CATEGORIES[0];
   const body = new URLSearchParams({
     cid: category.id, timeUnit: 'date', startDate: kstDate(now, 8), endDate: kstDate(now, 1),
-    age: '', gender: '', device: '', page: '1', count: '20'
+    age: TREND_AGES.some((a) => a.id === String(age)) ? String(age) : '',
+    gender: TREND_GENDERS.some((g) => g.id === String(gender)) ? String(gender) : '',
+    device: '', page: '1', count: '20'
   });
   const response = await fetchImpl(DATALAB_RANK_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       Referer: 'https://datalab.naver.com/shoppingInsight/sCategory.naver',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
+      'User-Agent': BROWSER_UA
     },
     body,
     signal: AbortSignal.timeout(8000)
@@ -158,4 +161,63 @@ const SEASON_TOPICS = {
 export function seasonTopics(now = new Date()) {
   const month = Number(kstDate(now, 0).slice(5, 7));
   return { month, topics: SEASON_TOPICS[month] || [] };
+}
+
+// ── Detailed trend board (keyword tab → 🔥 실시간 급상승 트렌드) ────────────────────
+// Live issues from two sources (Naver realtime via signal.bz, Google), Google trends per province,
+// and Naver shopping ranks per age group and gender. All free and keyless.
+
+export const TREND_REGIONS = [
+  { id: 'KR-11', label: '서울' }, { id: 'KR-41', label: '경기' }, { id: 'KR-28', label: '인천' },
+  { id: 'KR-26', label: '부산' }, { id: 'KR-27', label: '대구' }, { id: 'KR-29', label: '광주' },
+  { id: 'KR-30', label: '대전' }, { id: 'KR-31', label: '울산' }, { id: 'KR-42', label: '강원' },
+  { id: 'KR-43', label: '충북' }, { id: 'KR-44', label: '충남' }, { id: 'KR-45', label: '전북' },
+  { id: 'KR-46', label: '전남' }, { id: 'KR-47', label: '경북' }, { id: 'KR-48', label: '경남' },
+  { id: 'KR-49', label: '제주' }
+];
+
+export const TREND_AGES = [
+  { id: '10', label: '10대' }, { id: '20', label: '20대' }, { id: '30', label: '30대' },
+  { id: '40', label: '40대' }, { id: '50', label: '50대' }, { id: '60', label: '60대 이상' }
+];
+
+export const TREND_GENDERS = [{ id: 'f', label: '여성' }, { id: 'm', label: '남성' }];
+
+/** Google's live search trends for Korea or one province (`KR-11` …). Throws when nothing comes back. */
+export async function fetchGoogleTrends({ geo = 'KR', fetchImpl = fetch } = {}) {
+  const code = geo === 'KR' || TREND_REGIONS.some((r) => r.id === geo) ? geo : 'KR';
+  const response = await fetchImpl(`https://trends.google.com/trending/rss?geo=${code}`, {
+    headers: { 'User-Agent': BROWSER_UA },
+    signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error(`구글 트렌드 응답 오류 (${response.status})`);
+  const items = parseTrendRss(await response.text());
+  if (!items.length) throw new Error('구글 트렌드에서 급상승 검색어를 받지 못했습니다.');
+  return items;
+}
+
+const SIGNAL_STATES = { n: 'new', '+': 'up', '-': 'down', s: 'same' };
+
+/** Naver's live top 10 (Naver retired its own ranking; signal.bz rebuilds it from Naver searches). */
+export async function fetchNaverRealtime({ fetchImpl = fetch } = {}) {
+  const response = await fetchImpl('https://api.signal.bz/news/realtime', {
+    headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' },
+    signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error(`실시간 검색어 응답 오류 (${response.status})`);
+  const data = await response.json();
+  const items = (Array.isArray(data?.top10) ? data.top10 : [])
+    .map((r) => ({ rank: Number(r.rank) || 0, keyword: String(r.keyword || '').trim(), state: SIGNAL_STATES[r.state] || 'same' }))
+    .filter((r) => r.keyword);
+  if (!items.length) throw new Error('실시간 검색어를 받지 못했습니다.');
+  return items;
+}
+
+/**
+ * Marks the keywords a segment searches for that the whole public does not (not in the category's
+ * overall top 20), so "what 20대 여성 look for" stands out from what everyone looks for.
+ */
+export function markSegmentOnly(items = [], overall = []) {
+  const everyone = new Set(overall.map((i) => i.keyword));
+  return items.map((i) => ({ ...i, segmentOnly: overall.length > 0 && !everyone.has(i.keyword) }));
 }

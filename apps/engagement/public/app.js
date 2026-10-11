@@ -4809,57 +4809,161 @@ function initKeywordWorkspaceController() {
     }
   });
 
-  // Subtab 3: Real-time Trends
-  let trendsLoaded = false;
-  async function loadKeywordTrends(forceRefresh = false) {
-    if (trendsLoaded && !forceRefresh) return;
-    const grid = $('#kwTrendsGrid');
-    if (!grid) return;
+  // Subtab 3: Real-time Trends — live issues (Naver + Google), per province, per age group / gender.
+  // Any keyword runs the golden keyword search for it.
+  const trendState = { view: 'live', geo: 'KR-11', age: '', gender: '', category: '50000000', loaded: false, dirty: false, busy: false };
+  const tbEl = (tag, className, text = '') => Object.assign(document.createElement(tag), { className, textContent: text });
+  const tbAgo = (iso) => {
+    const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    return minutes < 1 ? '방금 갱신' : `${minutes}분 전 갱신`;
+  };
+  const tbPick = (keyword) => {
+    if (searchInput) searchInput.value = keyword;
+    runGoldenKeywordDiscovery(keyword);
+  };
+  const TB_STATES = { new: ['NEW', 'new'], up: ['▲', 'up'], down: ['▼', 'down'] };
+  const tbBadge = (text, tone) => tbEl('span', `tb-badge ${tone}`, text);
 
-    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #64748b;"><div class="finder-spinner" style="margin: 0 auto 10px;"></div>실시간 급상승 트렌드 불러오는 중...</div>';
+  // One ranked keyword row: number, keyword, optional badges and a news line under it.
+  function tbRow(rank, keyword, { badges = [], sub = '' } = {}) {
+    const button = tbEl('button', `tb-row${rank <= 3 ? ' top' : ''}`);
+    button.type = 'button';
+    button.title = `'${keyword}' 황금 키워드 찾기`;
+    const text = tbEl('span', 'tb-row-text');
+    const line = tbEl('span', 'tb-row-line');
+    line.append(tbEl('span', 'tb-row-word', keyword), ...badges);
+    text.append(line);
+    if (sub) text.append(tbEl('span', 'tb-row-sub', sub));
+    button.append(tbEl('span', 'tb-row-num', String(rank)), text);
+    button.addEventListener('click', () => tbPick(keyword));
+    return button;
+  }
+  const googleRows = (items) => items.map((t, i) => tbRow(i + 1, t.topic || t.keyword, {
+    badges: t.traffic ? [tbBadge(`🔥 ${t.traffic}`, 'hot')] : [],
+    sub: t.newsTitle ? `${t.source ? `${t.source} · ` : ''}${t.newsTitle}` : ''
+  }));
+  function tbCard(title, meta, rows, emptyText) {
+    const card = tbEl('section', 'tb-card');
+    const head = tbEl('div', 'tb-card-head');
+    head.append(tbEl('h4', '', title), tbEl('span', 'tb-card-meta', meta));
+    const list = tbEl('div', 'tb-list');
+    list.append(...(rows.length ? rows : [tbEl('p', 'tb-empty', emptyText)]));
+    card.append(head, list);
+    return card;
+  }
+  function tbChips(label, options, value, onPick) {
+    const row = tbEl('div', 'tb-filter-row');
+    row.append(tbEl('span', 'tb-filter-label', label));
+    const chips = tbEl('div', 'tb-chips');
+    chips.append(...options.map((o) => {
+      const chip = tbEl('button', `tb-chip${o.id === value ? ' active' : ''}`, o.label);
+      chip.type = 'button';
+      chip.setAttribute('aria-pressed', String(o.id === value));
+      chip.addEventListener('click', () => { if (!trendState.busy && o.id !== value) onPick(o.id); });
+      return chip;
+    }));
+    row.append(chips);
+    return row;
+  }
+
+  function renderTrendFilters(options) {
+    const box = $('#kwTrendFilters');
+    if (!box) return;
+    const set = (key) => (id) => { trendState[key] = id; trendState.dirty = true; loadKeywordTrends(); };
+    if (trendState.view === 'region') {
+      box.replaceChildren(tbChips('📍 지역', options.regions, trendState.geo, set('geo')));
+    } else if (trendState.view === 'people') {
+      box.replaceChildren(
+        tbChips('🎂 나이', [{ id: '', label: '전체' }, ...options.ages], trendState.age, set('age')),
+        tbChips('🚻 성별', [{ id: '', label: '전체' }, ...options.genders], trendState.gender, set('gender')),
+        tbChips('🗂️ 분야', options.categories.map((c) => ({ id: c.id, label: `${c.icon} ${c.label}` })), trendState.category, set('category'))
+      );
+    } else {
+      box.replaceChildren();
+    }
+    box.classList.toggle('hidden', !box.children.length);
+  }
+
+  function renderLive(data) {
+    const naverRows = data.naver.items.map((t) => {
+      const state = TB_STATES[t.state];
+      return tbRow(t.rank, t.keyword, { badges: state ? [tbBadge(state[0], state[1])] : [] });
+    });
+    const grid = tbEl('div', 'tb-grid two');
+    grid.append(
+      tbCard('🟢 네이버 실시간 검색어', data.naver.items.length ? tbAgo(data.naver.refreshedAt) : '', naverRows, '지금은 네이버 실시간 검색어를 불러오지 못했습니다.'),
+      tbCard('🔎 구글 급상승 검색어', data.google.items.length ? tbAgo(data.google.refreshedAt) : '', googleRows(data.google.items), '지금은 구글 급상승 검색어를 불러오지 못했습니다.')
+    );
+    return [grid];
+  }
+
+  function renderRegion(data) {
+    const card = tbCard(`📍 ${data.region.label}에서 지금 뜨는 검색어`, data.items.length ? `구글 · ${tbAgo(data.refreshedAt)}` : '', googleRows(data.items), '이 지역의 급상승 검색어를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
+    card.classList.add('wide', 'news');
+    return [card];
+  }
+
+  function renderPeople(data) {
+    const age = data.options.ages.find((a) => a.id === data.age)?.label || '';
+    const gender = data.options.genders.find((g) => g.id === data.gender)?.label || '';
+    const who = [age, gender].filter(Boolean).join(' ') || '전체 연령·성별';
+    const category = data.options.categories.find((c) => c.id === data.categoryId);
+    const rows = data.items.map((t) => tbRow(t.rank, t.keyword, { badges: t.segmentOnly ? [tbBadge('⭐ 이 그룹 특징', 'only')] : [] }));
+    const card = tbCard(`${category?.icon || ''} ${who} · ${category?.label || ''} TOP ${data.items.length || 20}`,
+      `네이버 쇼핑 검색 기준${data.range ? ` · ${data.range}` : ''}`, rows,
+      data.error ? '지금은 네이버 쇼핑 순위를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.' : '이 그룹의 인기 키워드가 아직 없습니다.');
+    card.classList.add('wide');
+    if ((data.age || data.gender) && rows.length) card.querySelector('.tb-card-head').after(tbEl('span', 'tb-legend', '⭐ 전체 순위엔 없고 이 그룹에서만 뜨는 키워드'));
+    return [card];
+  }
+
+  async function loadKeywordTrends(forceRefresh = false) {
+    if (trendState.loaded && !forceRefresh && !trendState.dirty) return;
+    const grid = $('#kwTrendsGrid');
+    if (!grid || trendState.busy) return;
+    trendState.busy = true;
+    trendState.dirty = false;
+    const refreshBtn = $('#kwRefreshTrendsBtn');
+    if (refreshBtn) refreshBtn.disabled = true;
+    const loading = tbEl('div', 'tb-loading');
+    loading.append(tbEl('div', 'finder-spinner'), tbEl('span', '', '실시간 트렌드를 불러오는 중...'));
+    grid.replaceChildren(loading);
 
     try {
-      const endpoint = forceRefresh ? 'api/blog/trends?refresh=true' : 'api/blog/trends';
-      const data = await api(endpoint);
-      const trends = Array.isArray(data.items) ? data.items : (Array.isArray(data.trends) ? data.trends : []);
-      trendsLoaded = true;
-
-      if (trends.length === 0) {
-        grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #64748b;">현재 불러올 수 있는 실시간 트렌드가 없습니다. [↻ 트렌드 새로고침]을 눌러보세요.</div>';
-        return;
+      const query = new URLSearchParams({ view: trendState.view });
+      if (trendState.view === 'region') query.set('geo', trendState.geo);
+      if (trendState.view === 'people') {
+        if (trendState.age) query.set('age', trendState.age);
+        if (trendState.gender) query.set('gender', trendState.gender);
+        query.set('category', trendState.category);
       }
-
-      grid.innerHTML = trends.map((t, idx) => {
-        const trafficBadge = t.traffic ? `<span style="font-size: 10px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">조회 ${t.traffic}</span>` : '';
-        return `
-          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; transition: all 0.15s ease;" class="kw-trend-item-card" data-kw="${t.keyword || t.topic}">
-            <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
-              <span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: ${idx < 3 ? '#ecfdf5' : '#f1f5f9'}; color: ${idx < 3 ? '#047857' : '#64748b'}; font-size: 11px; font-weight: 800; flex-shrink: 0;">${idx + 1}</span>
-              <div style="min-width: 0; flex: 1;">
-                <strong style="color: #0f172a; font-size: 13.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.keyword || t.topic}</strong>
-                ${trafficBadge}
-              </div>
-            </div>
-            <span style="font-size: 11px; color: #03c75a; font-weight: 700; flex-shrink: 0;">발굴 ⚡</span>
-          </div>
-        `;
-      }).join('');
-
-      $$('.kw-trend-item-card').forEach((card) => {
-        card.addEventListener('click', () => {
-          const kw = card.dataset.kw;
-          if (searchInput) searchInput.value = kw;
-          runGoldenKeywordDiscovery(kw);
-        });
-      });
-    } catch {
-      grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #ef4444;">트렌드를 불러오지 못했습니다. [↻ 트렌드 새로고침] 버튼을 눌러주세요.</div>';
+      if (forceRefresh) query.set('refresh', 'true');
+      const data = await api(`api/blog/trend-board?${query}`);
+      trendState.loaded = true;
+      renderTrendFilters(data.options);
+      const render = { live: renderLive, region: renderRegion, people: renderPeople }[data.view];
+      grid.replaceChildren(...render(data));
+    } catch (error) {
+      grid.replaceChildren(tbEl('p', 'tb-empty error', `트렌드를 불러오지 못했습니다: ${error.message}`));
+    } finally {
+      trendState.busy = false;
+      if (refreshBtn) refreshBtn.disabled = false;
     }
   }
 
-  $('#kwRefreshTrendsBtn')?.addEventListener('click', () => {
-    loadKeywordTrends(true);
+  $$('#keywordTrendsPanel .tb-view').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      if (trendState.busy || tab.dataset.view === trendState.view) return;
+      $$('#keywordTrendsPanel .tb-view').forEach((t) => {
+        t.classList.toggle('active', t === tab);
+        t.setAttribute('aria-selected', String(t === tab));
+      });
+      trendState.view = tab.dataset.view;
+      trendState.dirty = true;
+      loadKeywordTrends();
+    });
   });
+  $('#kwRefreshTrendsBtn')?.addEventListener('click', () => loadKeywordTrends(true));
 }
 
 // Naver QR login: scan with the Naver app. Needed where the login page cannot be shown (the web build's
