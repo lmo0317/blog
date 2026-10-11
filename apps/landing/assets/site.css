@@ -537,3 +537,23 @@ input[type="checkbox"] { width: 16px !important; height: 16px !important; margin
 @media (prefers-reduced-motion: reduce) {
   .chore-list li::after, .big-switch, .big-switch i { transition: none !important; }
 }
+
+/* KakaoTalk open chat */
+.kakao-float { position: fixed; right: 20px; bottom: 20px; z-index: 40; display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px 0 16px; border-radius: 9999px; background: #fee500; color: #191919; font-size: 15px; font-weight: 800; box-shadow: 0 10px 24px rgba(15,23,42,.22); transition: transform .18s ease, box-shadow .18s ease; }
+.kakao-float:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15,23,42,.28); }
+.kakao-float:focus-visible, .kakao-btn:focus-visible { outline: 3px solid rgba(25,25,25,.4); outline-offset: 2px; }
+.kakao-float svg, .kakao-btn svg, .faq-more.kakao svg { width: 22px; height: 22px; flex-shrink: 0; }
+.kakao-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 12px; background: #fee500; color: #191919; font-size: 14.5px; font-weight: 800; white-space: nowrap; transition: transform .15s ease, filter .15s ease; }
+.kakao-btn:hover { transform: translateY(-1px); filter: brightness(.97); }
+.board-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.ask-more { display: grid; gap: 10px; max-width: 820px; margin: 18px auto 0; }
+.ask-more .faq-more { margin: 0; }
+.faq-more.kakao { border: 1px solid #f5dc00; background: #fff9c4; color: #3c3a1e; }
+.faq-more.kakao b { color: #191919; }
+.faq-more.kakao:hover { background: #fee500; }
+footer { padding-bottom: 88px; }
+@media (max-width: 640px) {
+  .kakao-float { right: 14px; bottom: 14px; height: 48px; padding: 0 16px 0 13px; font-size: 14px; }
+  .kakao-btn { width: 100%; justify-content: center; }
+}
+@media print { .kakao-float { display: none; } }

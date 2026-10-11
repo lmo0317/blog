@@ -10,7 +10,7 @@
 <meta property="og:image" content="https://minohlee.mooo.com/neighbormate-app/assets/autopilot.webp">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="assets/site.css?v=20261011c">
+<link rel="stylesheet" href="assets/site.css?v=20261011d">
 </head>
 <body>
 
@@ -387,7 +387,10 @@
         <details><summary>PC를 바꾸면요?</summary><p>이용권은 PC 한 대에 연결됩니다. 구매처로 문의해 ‘PC 초기화’를 받은 뒤 새 PC에서 같은 계정으로 로그인하면 됩니다.</p></details>
         <details><summary>업데이트는 어떻게 받나요?</summary><p>자동입니다. 새 버전이 나오면 프로그램이 뒤에서 받아 두고 상단에 알려 드립니다. 버튼을 누르거나 프로그램을 닫으면 설치됩니다.</p></details>
       </div>
-      <a class="faq-more" href="qna.html">💬 찾는 답이 없나요? <b>질문 게시판에 물어보기 →</b></a>
+      <div class="ask-more">
+        <a class="faq-more" href="qna.html">💬 찾는 답이 없나요? <b>질문 게시판에 물어보기 →</b></a>
+        <a class="faq-more kakao" href="https://open.kakao.com/o/sxZ1kQRi" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.53 2 10.9c0 2.82 1.87 5.3 4.69 6.7l-.96 3.53c-.08.31.27.56.54.38l4.2-2.78c.5.06 1.01.09 1.53.09 5.52 0 10-3.53 10-7.92S17.52 3 12 3z"/></svg>빠른 답이 필요하면 <b>카카오톡으로 문의 →</b></a>
+      </div>
     </div>
   </section>
 
@@ -406,7 +409,7 @@
 <footer>
   <div class="wrap">
     <span>© 2026 이웃메이트 · 네이버와 제휴하지 않은 독립 소프트웨어입니다.</span>
-    <span class="foot-links"><a href="./">홈</a><a href="about.html">기능 소개</a><a href="qna.html">질문 게시판</a></span>
+    <span class="foot-links"><a href="./">홈</a><a href="about.html">기능 소개</a><a href="qna.html">질문 게시판</a><a href="https://open.kakao.com/o/sxZ1kQRi" target="_blank" rel="noopener">카톡 문의</a></span>
   </div>
 </footer>
 
@@ -428,5 +431,6 @@
   box.addEventListener('click', () => box.classList.remove('open'));
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') box.classList.remove('open'); });
 </script>
+<a class="kakao-float" href="https://open.kakao.com/o/sxZ1kQRi" target="_blank" rel="noopener" aria-label="카카오톡 오픈채팅으로 문의하기"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.53 2 10.9c0 2.82 1.87 5.3 4.69 6.7l-.96 3.53c-.08.31.27.56.54.38l4.2-2.78c.5.06 1.01.09 1.53.09 5.52 0 10-3.53 10-7.92S17.52 3 12 3z"/></svg><span>카톡 문의</span></a>
 </body>
 </html>
