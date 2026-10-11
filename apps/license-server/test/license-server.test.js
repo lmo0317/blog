@@ -511,3 +511,39 @@ test('Q&A board: ask, hide private questions, answer from admin, delete with the
     db.close();
   }
 });
+
+test('Site visitors: one person counts once, bots and junk pages are skipped, admin sees the totals', async () => {
+  const db = new LicenseDatabase(':memory:');
+  let now = Date.parse('2026-10-10T03:00:00Z');
+  const { app } = createLicenseServer(db, { adminSecret: 'admin-test-secret', visits: { maxPerHour: 3, now: () => now } });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const visit = (body, ua = 'Mozilla/5.0') => fetch(`${baseUrl}/api/visit`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': ua }, body: JSON.stringify(body) });
+
+  try {
+    assert.strictEqual((await visit({ visitor: 'aaaaaaaa-1', page: 'home', referrer: 'https://m.search.naver.com/search?q=x' })).status, 204);
+    await visit({ visitor: 'aaaaaaaa-1', page: 'about', referrer: 'https://minohlee.mooo.com/neighbormate-app/' });
+    await visit({ visitor: 'bbbbbbbb-2', page: 'home', referrer: '' });
+    await visit({ visitor: 'cccccccc-3', page: 'home' }, 'Googlebot/2.1');
+    assert.strictEqual((await visit({ visitor: 'aaaaaaaa-1', page: 'admin' })).status, 400);
+    now += 24 * 60 * 60 * 1000;
+    await visit({ visitor: 'aaaaaaaa-1', page: 'qna' });
+    await visit({ page: 'home' }); // no id: counted by IP + browser
+    await visit({ visitor: 'dddddddd-4', page: 'home' }); // 3rd from this IP in this hour
+    await visit({ visitor: 'eeeeeeee-5', page: 'home' }); // over the limit: dropped
+
+    assert.strictEqual((await fetch(`${baseUrl}/api/admin/visits`)).status, 401);
+    const { visits } = await (await fetch(`${baseUrl}/api/admin/visits`, { headers: { 'x-admin-secret': 'admin-test-secret' } })).json();
+    assert.deepStrictEqual(visits.total, { visitors: 4, views: 6 });
+    assert.deepStrictEqual(visits.today, { visitors: 3, views: 3 });
+    assert.deepStrictEqual(visits.yesterday, { visitors: 2, views: 3 });
+    assert.strictEqual(visits.days.length, 14);
+    assert.strictEqual(visits.days.at(-1).day, '2026-10-11');
+    assert.deepStrictEqual(visits.referrers, [{ host: 'search.naver.com', visitors: 1 }]);
+    assert.strictEqual(visits.pages.find((p) => p.page === 'home').visitors, 4);
+    assert.strictEqual(visits.since, '2026-10-10');
+  } finally {
+    server.close();
+    db.close();
+  }
+});

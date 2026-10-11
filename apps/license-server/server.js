@@ -4,12 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { LicenseDatabase } from './lib/db.js';
 import { LicenseService } from './lib/license-service.js';
 import { QnaService } from './lib/qna-service.js';
+import { VisitService } from './lib/visit-service.js';
 
 export function createLicenseServer(db = null, options = {}) {
   const app = express();
   const database = db || new LicenseDatabase();
   const service = new LicenseService(database, options);
   const qna = new QnaService(database, options.qna);
+  const visits = new VisitService(database, options.visits);
 
   app.use(express.json({ limit: '2mb' }));
 
@@ -121,6 +123,13 @@ export function createLicenseServer(db = null, options = {}) {
   app.post('/api/qna/:id/open', (req, res) => qnaSend(res, qna.open(req.params.id, { password: req.body?.password, ip: getClientIp(req) })));
   app.post('/api/qna/:id/delete', (req, res) => qnaSend(res, qna.remove(req.params.id, { password: req.body?.password, ip: getClientIp(req) })));
 
+  // ---- Visitor counts for the promo site: each page sends one beacon per view ----
+  app.post('/api/visit', (req, res) => {
+    const { visitor, page, referrer } = req.body || {};
+    const result = visits.record({ visitor, page, referrer, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
+    res.status(result.ok ? 204 : 400).end();
+  });
+
   // ---- Seller admin page (크몽 판매용 이용권 발급·고객 관리) ----
   const adminDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'admin');
   app.get('/admin', (_req, res) => res.sendFile(path.join(adminDir, 'index.html')));
@@ -157,11 +166,12 @@ export function createLicenseServer(db = null, options = {}) {
   app.post('/api/admin/users/:id/extend', requireAdmin, (req, res) => send(res, service.adminExtendUser(req.params.id, req.body?.days)));
   app.post('/api/admin/users/:id/reset-device', requireAdmin, (req, res) => send(res, service.adminResetDevice(req.params.id)));
 
+  app.get('/api/admin/visits', requireAdmin, (_req, res) => send(res, visits.stats()));
   app.get('/api/admin/qna', requireAdmin, (req, res) => send(res, qna.adminList({ status: req.query.status })));
   app.post('/api/admin/qna/:id/answer', requireAdmin, (req, res) => send(res, qna.adminAnswer(req.params.id, req.body?.answer)));
   app.post('/api/admin/qna/:id/delete', requireAdmin, (req, res) => send(res, qna.adminDelete(req.params.id)));
 
-  return { app, database, service, qna };
+  return { app, database, service, qna, visits };
 }
 
 // Start server when run directly

@@ -116,16 +116,47 @@
   .q-actions .btn-save { color: #fff; border: 0; background: linear-gradient(135deg, var(--green) 0%, var(--green-hover) 100%); }
   .q-actions .btn-save:hover { background: linear-gradient(135deg, var(--green-hover) 0%, #008f42 100%); }
 
+  /* Promo site visitors */
+  .visits { margin-bottom: 18px; }
+  .visits .card-head { flex-wrap: wrap; }
+  .visits .card-head .meta { font-size: 12px; color: var(--hint); font-weight: 600; }
+  .vhead-side { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  .vstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .vstat { padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+  .vstat span { display: block; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .vstat strong { display: block; margin-top: 2px; font-size: 22px; font-weight: 800; color: var(--title); font-variant-numeric: tabular-nums; }
+  .vstat small { display: block; font-size: 11.5px; color: var(--hint); font-weight: 600; }
+  .vstat.hot { background: var(--green-soft); border-color: var(--green-border); }
+  .vstat.hot strong { color: var(--ok); }
+  .vrow { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; margin-top: 16px; }
+  .vlabel { font-size: 12.5px; font-weight: 800; color: var(--title); margin-bottom: 8px; }
+  .vchart { display: flex; align-items: flex-end; gap: 4px; height: 150px; padding: 0 2px; border-bottom: 1px solid var(--border); }
+  .vbar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; }
+  .vbar b { font-size: 10.5px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .vbar i { display: block; width: 100%; max-width: 26px; min-height: 2px; border-radius: 6px 6px 2px 2px; background: #a7f3d0; transition: height .3s ease; }
+  .vbar.today i { background: var(--green); }
+  .vbar.today b { color: var(--ok); }
+  .vdays { display: flex; gap: 4px; padding: 4px 2px 0; }
+  .vdays span { flex: 1; min-width: 0; text-align: center; font-size: 10.5px; color: var(--hint); font-variant-numeric: tabular-nums; }
+  .vlist { display: flex; flex-direction: column; gap: 6px; }
+  .vitem { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface); font-size: 13px; }
+  .vitem span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--body); font-weight: 600; }
+  .vitem b { flex-shrink: 0; color: var(--title); font-variant-numeric: tabular-nums; }
+  .vitem small { color: var(--hint); font-weight: 600; margin-left: 4px; }
+  .vempty { font-size: 12.5px; color: var(--hint); padding: 8px 2px; }
+
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 11px 16px; border-radius: 12px; background: #0f172a; color: #fff; font-weight: 600; font-size: 13px; box-shadow: 0 10px 25px rgba(0,0,0,.2); transition: all .2s; pointer-events: none; z-index: 20; max-width: calc(100% - 32px); }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.error { background: var(--danger); }
 
   @media (max-width: 1024px) {
     .grid { grid-template-columns: 1fr; }
+    .vrow { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 720px) {
     .topbar-inner, .main { padding-left: 16px; padding-right: 16px; }
-    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stats, .vstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .vdays span:nth-child(odd) { visibility: hidden; }
     .row { flex-direction: column; align-items: stretch; }
     .row-actions { justify-content: flex-end; }
     .search { width: 100%; }
@@ -164,6 +195,37 @@
         <div class="stat info"><span>🎁 무료체험 중</span><strong id="statTrial">-</strong></div>
         <div class="stat warn"><span>🎟️ 안 쓴 이용권</span><strong id="statUnused">-</strong></div>
       </div>
+
+      <section class="card visits">
+        <div class="card-head">
+          <h2>📈 홈페이지 방문자</h2>
+          <div class="vhead-side">
+            <span class="meta" id="visitSince"></span>
+            <a class="btn btn-sm" href="/neighbormate-app/" target="_blank" rel="noopener">홈페이지 열기 ↗</a>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="vstats">
+            <div class="vstat hot"><span>👀 오늘 방문자</span><strong id="vToday">-</strong><small id="vTodayViews"></small></div>
+            <div class="vstat"><span>📅 어제</span><strong id="vYesterday">-</strong><small id="vYesterdayViews"></small></div>
+            <div class="vstat"><span>🗓️ 최근 7일</span><strong id="vWeek">-</strong><small id="vWeekViews"></small></div>
+            <div class="vstat"><span>👥 누적 방문자</span><strong id="vTotal">-</strong><small id="vTotalViews"></small></div>
+          </div>
+          <div class="vrow">
+            <div>
+              <div class="vlabel">최근 14일 방문자</div>
+              <div class="vchart" id="vChart"></div>
+              <div class="vdays" id="vDays"></div>
+            </div>
+            <div>
+              <div class="vlabel">페이지별</div>
+              <div class="vlist" id="vPages"></div>
+              <div class="vlabel" style="margin-top:14px">어디서 왔나</div>
+              <div class="vlist" id="vRefs"></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div class="grid">
         <section class="card">
@@ -305,6 +367,7 @@
     $('#gate').classList.add('hidden');
     $('#app').classList.remove('hidden');
     loadVouchers();
+    loadVisits().catch((err) => toast(`방문자 통계를 불러오지 못했습니다: ${err.message}`, true));
   }
 
   $('#gateForm').addEventListener('submit', async (e) => {
@@ -336,6 +399,35 @@
     const pending = summary.unansweredQuestions || 0;
     $('#qnaCount').textContent = pending > 99 ? '99+' : String(pending);
     $('#qnaCount').classList.toggle('hidden', !pending);
+  }
+
+
+  // ---- Promo site visitors ----
+  const PAGE_NAMES = { home: '🏠 홈', about: '📖 기능 소개', qna: '💬 질문 게시판' };
+  const n = (v) => Number(v || 0).toLocaleString();
+  async function loadVisits() {
+    const { visits } = await api('api/admin/visits');
+    $('#vToday').textContent = `${n(visits.today.visitors)}명`;
+    $('#vTodayViews').textContent = `페이지 ${n(visits.today.views)}회`;
+    $('#vYesterday').textContent = `${n(visits.yesterday.visitors)}명`;
+    $('#vYesterdayViews').textContent = `페이지 ${n(visits.yesterday.views)}회`;
+    $('#vWeek').textContent = `${n(visits.week.visitors)}명`;
+    $('#vWeekViews').textContent = `페이지 ${n(visits.week.views)}회`;
+    $('#vTotal').textContent = `${n(visits.total.visitors)}명`;
+    $('#vTotalViews').textContent = `페이지 ${n(visits.total.views)}회`;
+    $('#visitSince').textContent = visits.since ? `${visits.since.replace(/-/g, '.')}부터 집계` : '아직 방문 기록이 없습니다';
+
+    const max = Math.max(1, ...visits.days.map((d) => d.visitors));
+    const last = visits.days.length - 1;
+    $('#vChart').innerHTML = visits.days.map((d, i) => `<div class="vbar${i === last ? ' today' : ''}" title="${esc(d.day)} · 방문자 ${n(d.visitors)}명 · 페이지 ${n(d.views)}회"><b>${d.visitors || ''}</b><i style="height:${Math.round((d.visitors / max) * 100)}%"></i></div>`).join('');
+    $('#vDays').innerHTML = visits.days.map((d, i) => `<span>${i === last ? '오늘' : `${Number(d.day.slice(5, 7))}/${Number(d.day.slice(8))}`}</span>`).join('');
+
+    $('#vPages').innerHTML = visits.pages.length
+      ? visits.pages.map((p) => `<div class="vitem"><span>${esc(PAGE_NAMES[p.page] || p.page)}</span><b>${n(p.visitors)}명<small>${n(p.views)}회</small></b></div>`).join('')
+      : '<div class="vempty">아직 기록이 없습니다.</div>';
+    $('#vRefs').innerHTML = visits.referrers.length
+      ? visits.referrers.map((r) => `<div class="vitem"><span>${esc(r.host)}</span><b>${n(r.visitors)}명</b></div>`).join('')
+      : '<div class="vempty">아직 다른 사이트에서 들어온 방문이 없습니다. (주소를 직접 입력한 방문은 빠집니다)</div>';
   }
 
   // ---- Issue ----
@@ -406,6 +498,7 @@
   }));
   $('#refreshBtn').addEventListener('click', () => {
     loadSummary().catch((err) => toast(err.message, true));
+    loadVisits().catch(() => {});
     loaders[currentTab]();
   });
   $('#voucherFilter').addEventListener('click', (e) => {
