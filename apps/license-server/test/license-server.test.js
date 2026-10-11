@@ -404,7 +404,7 @@ test('Seller admin issues vouchers, lists customers, extends and resets devices'
     assert.strictEqual((await (await call('GET', '/api/admin/users')).json()).users[0].hasDevice, false);
 
     const summary = await (await call('GET', '/api/admin/summary')).json();
-    assert.deepStrictEqual(summary.summary, { users: 1, paidActive: 1, trialActive: 0, unusedVouchers: 0 });
+    assert.deepStrictEqual(summary.summary, { users: 1, paidActive: 1, trialActive: 0, unusedVouchers: 0, unansweredQuestions: 0 });
     assert.strictEqual((await fetch(`${baseUrl}/admin`)).status, 200);
   } finally {
     server.close();
@@ -447,4 +447,58 @@ test('trials given before trial tracking still count for their PC', () => {
   db.backfillTrialClaims();
   const service = new LicenseService(db);
   assert.strictEqual(service.register({ email: 'new@example.com', password: 'password123', hwid: 'pc-old' }).error, 'TRIAL_ALREADY_USED');
+});
+
+test('Q&A board: ask, hide private questions, answer from admin, delete with the password', async () => {
+  const db = new LicenseDatabase(':memory:');
+  const { app } = createLicenseServer(db, { adminSecret: 'admin-test-secret', qna: { maxPostsPerHour: 3, maxPasswordFailures: 3 } });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const call = (method, url, body, secret = '') => fetch(`${baseUrl}${url}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const admin = (method, url, body) => call(method, url, body, 'admin-test-secret');
+
+  try {
+    assert.strictEqual((await call('POST', '/api/qna', { nickname: '', password: '1234', title: '제목', body: '내용입니다요' })).status, 400);
+    assert.strictEqual((await call('POST', '/api/qna', { nickname: '봇', password: '1234', title: '제목', body: '내용입니다요', website: 'http://spam' })).status, 400);
+
+    const open = await (await call('POST', '/api/qna', { nickname: '블로거', password: '1234', title: '맥에서도 되나요?', body: '맥북에서 쓸 수 있는지 궁금합니다.' })).json();
+    const secret = await (await call('POST', '/api/qna', { nickname: '비밀', password: 'abcd', title: '결제 문의', body: '계좌이체도 되나요?', isPrivate: true })).json();
+    assert.ok(open.ok && secret.ok);
+    // Third post from the same IP is still allowed, the fourth hits the hourly limit.
+    assert.strictEqual((await call('POST', '/api/qna', { nickname: 'c', password: '1234', title: '세번째', body: '세번째 질문입니다' })).status, 200);
+    assert.strictEqual((await call('POST', '/api/qna', { nickname: 'd', password: '1234', title: '네번째', body: '네번째 질문입니다' })).status, 429);
+
+    const list = await (await call('GET', '/api/qna')).json();
+    assert.strictEqual(list.total, 3);
+    const privateRow = list.items.find((q) => q.id === secret.question.id);
+    assert.strictEqual(privateRow.title, '');
+    assert.strictEqual(privateRow.isPrivate, true);
+
+    assert.strictEqual((await call('GET', `/api/qna/${open.question.id}`)).status, 200);
+    assert.strictEqual((await call('GET', `/api/qna/${secret.question.id}`)).status, 403);
+    assert.strictEqual((await call('POST', `/api/qna/${secret.question.id}/open`, { password: 'nope' })).status, 403);
+    const opened = await (await call('POST', `/api/qna/${secret.question.id}/open`, { password: 'abcd' })).json();
+    assert.strictEqual(opened.question.body, '계좌이체도 되나요?');
+
+    assert.strictEqual((await call('GET', '/api/admin/qna')).status, 401);
+    assert.strictEqual((await (await admin('GET', '/api/admin/summary')).json()).summary.unansweredQuestions, 3);
+    await admin('POST', `/api/admin/qna/${open.question.id}/answer`, { answer: '지금은 Windows 전용입니다.' });
+    const answered = await (await call('GET', `/api/qna/${open.question.id}`)).json();
+    assert.strictEqual(answered.question.answer, '지금은 Windows 전용입니다.');
+    assert.strictEqual((await (await admin('GET', '/api/admin/qna?status=unanswered')).json()).questions.length, 2);
+
+    assert.strictEqual((await call('POST', `/api/qna/${open.question.id}/delete`, { password: 'wrong' })).status, 403);
+    assert.strictEqual((await call('POST', `/api/qna/${open.question.id}/delete`, { password: 'wrong' })).status, 403);
+    // After three wrong passwords this IP is locked out, even with the right one.
+    assert.strictEqual((await call('POST', `/api/qna/${open.question.id}/delete`, { password: '1234' })).status, 429);
+    assert.strictEqual((await admin('POST', `/api/admin/qna/${open.question.id}/delete`)).status, 200);
+    assert.strictEqual((await call('GET', `/api/qna/${open.question.id}`)).status, 404);
+  } finally {
+    server.close();
+    db.close();
+  }
 });

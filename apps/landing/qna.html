@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>질문 게시판 — 이웃메이트</title>
+<meta name="description" content="이웃메이트 설치, 사용법, 구독에 대해 궁금한 점을 남겨 주세요. 제작자가 직접 답변합니다.">
+<meta property="og:title" content="질문 게시판 — 이웃메이트">
+<meta property="og:description" content="설치, 사용법, 구독 무엇이든 물어보세요. 제작자가 직접 답변합니다.">
+<meta property="og:image" content="https://minohlee.mooo.com/neighbormate-app/assets/autopilot.webp">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/site.css?v=20261011">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><span class="brand-mark">N</span>이웃메이트</a>
+    <nav class="nav" aria-label="사이트 메뉴">
+      <a href="./">홈</a>
+      <a href="about.html">기능 소개</a>
+      <a href="qna.html" aria-current="page">질문 게시판</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="https://minohlee.mooo.com/updates/neighbormate/NeighborMate-Setup.exe">무료 체험</a>
+  </div>
+</header>
+
+<main>
+  <section class="board-hero">
+    <div class="wrap">
+      <div>
+        <span class="kicker">질문 게시판</span>
+        <h1>궁금한 점을 물어보세요</h1>
+        <p>설치, 사용법, 구독까지 무엇이든 남겨 주세요. 제작자가 직접 답변합니다.</p>
+      </div>
+      <button class="btn btn-primary btn-lg" type="button" id="askBtn">✏️ 질문하기</button>
+    </div>
+  </section>
+
+  <section class="board">
+    <div class="wrap">
+      <div class="board-tools">
+        <span id="boardCount">질문을 불러오는 중…</span>
+        <a href="about.html#faq">자주 묻는 질문 먼저 보기 →</a>
+      </div>
+      <ol class="q-list" id="qList">
+        <li class="skeleton"></li><li class="skeleton"></li><li class="skeleton"></li>
+      </ol>
+      <nav class="pager" id="pager" aria-label="페이지"></nav>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 이웃메이트 · 네이버와 제휴하지 않은 독립 소프트웨어입니다.</span>
+    <span class="foot-links"><a href="./">홈</a><a href="about.html">기능 소개</a><a href="qna.html">질문 게시판</a></span>
+  </div>
+</footer>
+
+<dialog class="ask" id="askDialog" aria-labelledby="askTitle">
+  <form id="askForm" novalidate>
+    <div class="ask-head">
+      <div>
+        <h2 id="askTitle">✏️ 질문하기</h2>
+        <p>답변이 달리면 이 게시판에서 바로 볼 수 있어요.</p>
+      </div>
+      <button class="x-btn" type="button" data-close aria-label="닫기">✕</button>
+    </div>
+    <div class="ask-body">
+      <div class="field-row">
+        <div class="field">
+          <label for="fNick">닉네임</label>
+          <input class="input" id="fNick" name="nickname" maxlength="20" autocomplete="nickname" placeholder="예: 맛집블로거">
+        </div>
+        <div class="field">
+          <label for="fPass">비밀번호</label>
+          <input class="input" id="fPass" name="password" type="password" maxlength="64" autocomplete="new-password" placeholder="4자 이상">
+          <span class="hint">비밀글을 열거나 질문을 지울 때 써요.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="fTitle">제목</label>
+        <input class="input" id="fTitle" name="title" maxlength="80" placeholder="예: 노트북에서도 로컬 AI가 돌아가나요?">
+      </div>
+      <div class="field">
+        <label for="fBody">질문 내용</label>
+        <textarea class="textarea" id="fBody" name="body" maxlength="3000" placeholder="궁금한 점을 편하게 적어 주세요. 사용 중인 PC 사양이나 화면에 뜬 문구를 함께 적어 주시면 더 정확히 답변드릴 수 있어요."></textarea>
+        <span class="count" id="bodyCount">0 / 3000</span>
+      </div>
+      <label class="option-card">
+        <input type="checkbox" id="fPrivate" name="isPrivate">
+        <span class="option-icon">🔒</span>
+        <span class="option-content">
+          <span class="option-title">비밀글로 올리기</span>
+          <span class="option-desc">나와 제작자만 볼 수 있어요. 결제·계정 문의에 써 주세요.</span>
+        </span>
+      </label>
+      <div class="hp" aria-hidden="true"><label>웹사이트 <input name="website" tabindex="-1" autocomplete="off"></label></div>
+      <div class="form-error" id="formError" role="alert"></div>
+    </div>
+    <div class="ask-foot">
+      <button class="btn btn-ghost btn-md" type="button" data-close>취소</button>
+      <button class="btn btn-primary btn-md" type="submit" id="submitBtn">질문 올리기</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const API = '/license/api/qna';
+  const $ = (s, root = document) => root.querySelector(s);
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const day = (iso) => new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' });
+  const when = (iso) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  let page = 1;
+  const opened = new Map();     // id -> full question once read
+  const passwords = new Map();  // id -> password the visitor typed (this tab only)
+
+  let toastTimer;
+  function toast(message, error = false) {
+    const el = $('#toast');
+    el.textContent = message;
+    el.className = `toast show${error ? ' error' : ''}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = 'toast'; }, 2800);
+  }
+
+  async function call(path, { method = 'GET', body } = {}) {
+    const res = await fetch(`${API}${path}`, {
+      method, cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await res.json().catch(() => ({ ok: false, message: '서버와 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.' }));
+    return { status: res.status, ...data };
+  }
+
+  // ---- List ----
+  function rowHtml(q) {
+    const title = q.isPrivate ? '<span class="q-title locked">🔒 비밀글입니다</span>' : `<span class="q-title">${esc(q.title)}</span>`;
+    return `<li class="q-item" id="q-${q.id}" data-id="${q.id}">
+      <button class="q-row" type="button" aria-expanded="false" aria-controls="qd-${q.id}">
+        <span class="status ${q.answered ? 'done' : 'wait'}">${q.answered ? '답변 완료' : '답변 대기'}</span>
+        ${title}
+        <span class="q-meta">${esc(q.nickname)} · ${day(q.createdAt)}</span>
+      </button>
+      <div class="q-detail" id="qd-${q.id}" hidden></div>
+    </li>`;
+  }
+
+  async function load(target = page, openId = null) {
+    const list = $('#qList');
+    const res = await call(`?page=${target}`).catch(() => ({ ok: false }));
+    if (!res.ok) {
+      $('#boardCount').textContent = '질문 목록';
+      list.innerHTML = '<li class="board-empty"><b>질문 목록을 불러오지 못했습니다</b>잠시 뒤 새로고침해 주세요.</li>';
+      $('#pager').innerHTML = '';
+      return;
+    }
+    page = res.page;
+    $('#boardCount').innerHTML = `질문 <b>${res.total.toLocaleString()}</b>개`;
+    if (!res.items.length) {
+      list.innerHTML = '<li class="board-empty"><b>아직 올라온 질문이 없습니다</b>첫 질문을 남겨 주세요. 비밀글로도 올릴 수 있어요.<br><button class="btn btn-primary btn-md" type="button" data-ask>✏️ 첫 질문 남기기</button></li>';
+    } else {
+      list.innerHTML = res.items.map(rowHtml).join('');
+    }
+    renderPager(res.pages);
+    if (openId) toggle(openId, true);
+  }
+
+  function renderPager(pages) {
+    const pager = $('#pager');
+    if (pages <= 1) { pager.innerHTML = ''; return; }
+    const from = Math.max(1, Math.min(page - 2, pages - 4));
+    const nums = Array.from({ length: Math.min(5, pages) }, (_, i) => from + i);
+    pager.innerHTML = `<button type="button" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''} aria-label="이전 페이지">‹</button>`
+      + nums.map((n) => `<button type="button" data-page="${n}" ${n === page ? 'aria-current="page"' : ''}>${n}</button>`).join('')
+      + `<button type="button" data-page="${page + 1}" ${page === pages ? 'disabled' : ''} aria-label="다음 페이지">›</button>`;
+  }
+  $('#pager').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-page]');
+    if (!btn || btn.disabled) return;
+    load(Number(btn.dataset.page));
+    $('.board').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // ---- Detail ----
+  function detailHtml(q) {
+    const answer = q.answer
+      ? `<div class="q-answer"><div class="who"><span class="brand-mark">N</span>이웃메이트 답변</div><p>${esc(q.answer)}</p><small>${when(q.answeredAt)}</small></div>`
+      : '<div class="q-wait">⏳ 답변을 준비하고 있어요. 답변이 달리면 여기에 바로 보입니다.</div>';
+    return `<div class="q-text"><h3>${q.isPrivate ? '🔒 ' : ''}${esc(q.title)}</h3>${esc(q.body)}</div>
+      ${answer}
+      <div class="q-foot"><button class="link-btn" type="button" data-delete>질문 삭제</button></div>`;
+  }
+
+  const lockHtml = (message, button, danger = false) => `<form class="pw-form lock" data-pw="${danger ? 'delete' : 'open'}">
+      <span class="msg">${message}</span>
+      <input class="input" type="password" placeholder="비밀번호" aria-label="비밀번호" autocomplete="current-password">
+      <button class="btn ${danger ? 'btn-danger' : 'btn-primary'} btn-md" type="submit">${button}</button>
+      ${danger ? '<button class="btn btn-ghost btn-md" type="button" data-cancel>취소</button>' : ''}
+      <span class="err"></span>
+    </form>`;
+
+  async function toggle(id, forceOpen = false) {
+    const item = document.getElementById(`q-${id}`);
+    if (!item) return;
+    const row = $('.q-row', item), detail = $('.q-detail', item);
+    const open = forceOpen || detail.hidden;
+    detail.hidden = !open;
+    item.classList.toggle('open', open);
+    row.setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    if (forceOpen) item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (opened.has(id)) { detail.innerHTML = detailHtml(opened.get(id)); return; }
+    detail.innerHTML = '<div class="skeleton"></div>';
+    const res = await call(`/${id}`);
+    if (res.ok) { opened.set(id, res.question); detail.innerHTML = detailHtml(res.question); }
+    else if (res.error === 'PRIVATE') detail.innerHTML = lockHtml('🔒 비밀글입니다. 질문을 올릴 때 정한 비밀번호를 입력해 주세요.', '열기');
+    else detail.innerHTML = `<div class="q-wait">${esc(res.message || '질문을 불러오지 못했습니다.')}</div>`;
+    $('input', detail)?.focus();
+  }
+
+  $('#qList').addEventListener('click', (e) => {
+    if (e.target.closest('[data-ask]')) return openAsk();
+    const item = e.target.closest('.q-item');
+    if (!item) return;
+    const id = Number(item.dataset.id);
+    if (e.target.closest('.q-row')) return toggle(id);
+    if (e.target.closest('[data-delete]')) {
+      const foot = $('.q-foot', item);
+      if (passwords.has(id)) return removeQuestion(id, passwords.get(id), foot);
+      foot.innerHTML = lockHtml('질문을 지우려면 비밀번호를 입력해 주세요.', '삭제', true);
+      $('input', foot).focus();
+      return;
+    }
+    if (e.target.closest('[data-cancel]')) {
+      $('.q-foot', item).innerHTML = '<button class="link-btn" type="button" data-delete>질문 삭제</button>';
+    }
+  });
+
+  $('#qList').addEventListener('submit', async (e) => {
+    const form = e.target.closest('[data-pw]');
+    if (!form) return;
+    e.preventDefault();
+    const id = Number(form.closest('.q-item').dataset.id);
+    const password = $('input', form).value;
+    if (!password) { $('.err', form).textContent = '비밀번호를 입력해 주세요.'; return; }
+    const btn = $('button[type="submit"]', form);
+    btn.disabled = true;
+    if (form.dataset.pw === 'delete') return removeQuestion(id, password, form);
+    const res = await call(`/${id}/open`, { method: 'POST', body: { password } });
+    btn.disabled = false;
+    if (!res.ok) { $('.err', form).textContent = res.message || '열지 못했습니다.'; $('input', form).select(); return; }
+    opened.set(id, res.question);
+    passwords.set(id, password);
+    form.closest('.q-detail').innerHTML = detailHtml(res.question);
+  });
+
+  async function removeQuestion(id, password, container) {
+    const res = await call(`/${id}/delete`, { method: 'POST', body: { password } });
+    if (!res.ok) {
+      passwords.delete(id);
+      const foot = container.closest('.q-foot') || container;
+      foot.innerHTML = lockHtml('질문을 지우려면 비밀번호를 입력해 주세요.', '삭제', true);
+      $('.err', foot).textContent = res.message || '삭제하지 못했습니다.';
+      $('input', foot).focus();
+      return;
+    }
+    opened.delete(id); passwords.delete(id);
+    toast('질문을 삭제했습니다.');
+    load(page);
+  }
+
+  // ---- Ask ----
+  const dialog = $('#askDialog'), form = $('#askForm');
+  function openAsk() {
+    $('#formError').textContent = '';
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+    $('#fNick').focus();
+  }
+  const closeAsk = () => (typeof dialog.close === 'function' ? dialog.close() : dialog.removeAttribute('open'));
+  $('#askBtn').addEventListener('click', openAsk);
+  dialog.addEventListener('click', (e) => { if (e.target === dialog || e.target.closest('[data-close]')) closeAsk(); });
+  $('#fBody').addEventListener('input', () => { $('#bodyCount').textContent = `${$('#fBody').value.length.toLocaleString()} / 3000`; });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = {
+      nickname: $('#fNick').value.trim(),
+      password: $('#fPass').value,
+      title: $('#fTitle').value.trim(),
+      body: $('#fBody').value.trim(),
+      isPrivate: $('#fPrivate').checked,
+      website: form.elements.website.value
+    };
+    const problem = !data.nickname ? ['#fNick', '닉네임을 입력해 주세요.']
+      : data.password.length < 4 ? ['#fPass', '비밀번호는 4자 이상으로 정해 주세요.']
+      : data.title.length < 2 ? ['#fTitle', '제목을 두 글자 이상 입력해 주세요.']
+      : data.body.length < 5 ? ['#fBody', '질문 내용을 다섯 글자 이상 입력해 주세요.'] : null;
+    if (problem) { $('#formError').textContent = problem[1]; $(problem[0]).focus(); return; }
+
+    const btn = $('#submitBtn');
+    btn.disabled = true; btn.textContent = '올리는 중…';
+    const res = await call('', { method: 'POST', body: data }).catch(() => ({ ok: false }));
+    btn.disabled = false; btn.textContent = '질문 올리기';
+    if (!res.ok) { $('#formError').textContent = res.message || '질문을 올리지 못했습니다. 잠시 뒤 다시 시도해 주세요.'; return; }
+
+    opened.set(res.question.id, res.question);
+    passwords.set(res.question.id, data.password);
+    form.reset();
+    $('#bodyCount').textContent = '0 / 3000';
+    closeAsk();
+    toast('✅ 질문을 올렸습니다. 답변이 달리면 여기에서 볼 수 있어요.');
+    history.replaceState(null, '', `#q-${res.question.id}`);
+    load(1, res.question.id);
+  });
+
+  // ---- Start ----
+  const params = new URLSearchParams(location.search);
+  const hashId = Number((location.hash.match(/^#q-(\d+)$/) || [])[1]) || null;
+  load(1, hashId);
+  if (params.get('ask') === '1') { history.replaceState(null, '', location.pathname + location.hash); openAsk(); }
+})();
+</script>
+</body>
+</html>

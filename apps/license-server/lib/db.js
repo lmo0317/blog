@@ -103,6 +103,21 @@ export class LicenseDatabase {
         created_at TEXT NOT NULL
       );
 
+      -- Public Q&A board on the promo site. The password lets the asker open a private question or delete it.
+      CREATE TABLE IF NOT EXISTS questions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nickname TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        answer TEXT,
+        answered_at TEXT,
+        ip TEXT,
+        created_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_licenses_user_id ON licenses(user_id);
       CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(license_key);
@@ -302,7 +317,8 @@ export class LicenseDatabase {
       users: one('SELECT COUNT(*) AS n FROM users'),
       paidActive: one("SELECT COUNT(DISTINCT user_id) AS n FROM licenses WHERE expires_at > ? AND plan_type != 'free_trial' AND status = 'active'", now),
       trialActive: one("SELECT COUNT(DISTINCT user_id) AS n FROM licenses WHERE expires_at > ? AND plan_type = 'free_trial' AND status = 'active'", now),
-      unusedVouchers: one('SELECT COUNT(*) AS n FROM vouchers WHERE redeemed_by IS NULL')
+      unusedVouchers: one('SELECT COUNT(*) AS n FROM vouchers WHERE redeemed_by IS NULL'),
+      unansweredQuestions: one('SELECT COUNT(*) AS n FROM questions WHERE answer IS NULL')
     };
   }
 

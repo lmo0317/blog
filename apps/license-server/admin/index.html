@@ -106,6 +106,16 @@
   .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
   .empty strong { display: block; color: var(--title); margin-bottom: 4px; }
 
+  .tab-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9999px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; }
+  .q { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
+  .q.pending { border-color: var(--warn-border); background: #fffdf5; }
+  .q-body { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--body); line-height: 1.6; padding: 10px 12px; background: var(--surface); border-radius: 10px; }
+  .q textarea { width: 100%; min-height: 84px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; font: inherit; line-height: 1.55; resize: vertical; outline: none; }
+  .q textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(3,199,90,.15); }
+  .q-actions { display: flex; justify-content: flex-end; gap: 6px; }
+  .q-actions .btn-save { color: #fff; border: 0; background: linear-gradient(135deg, var(--green) 0%, var(--green-hover) 100%); }
+  .q-actions .btn-save:hover { background: linear-gradient(135deg, var(--green-hover) 0%, #008f42 100%); }
+
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 11px 16px; border-radius: 12px; background: #0f172a; color: #fff; font-weight: 600; font-size: 13px; box-shadow: 0 10px 25px rgba(0,0,0,.2); transition: all .2s; pointer-events: none; z-index: 20; max-width: calc(100% - 32px); }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.error { background: var(--danger); }
@@ -196,6 +206,7 @@
             <div class="tabs" role="tablist">
               <button type="button" class="tab active" data-tab="vouchers" role="tab">이용권</button>
               <button type="button" class="tab" data-tab="users" role="tab">고객</button>
+              <button type="button" class="tab" data-tab="qna" role="tab">질문<span class="tab-count hidden" id="qnaCount"></span></button>
             </div>
             <button class="btn btn-sm" type="button" id="refreshBtn">새로고침</button>
           </div>
@@ -215,6 +226,16 @@
                 <input class="input search" id="userSearch" placeholder="이메일로 찾기">
               </div>
               <div class="list" id="userList"></div>
+            </div>
+            <div class="hidden" id="qnaPanel">
+              <div class="toolbar">
+                <div class="seg chips" id="qnaFilter">
+                  <button type="button" class="chip active" data-status="unanswered">답변 대기</button>
+                  <button type="button" class="chip" data-status="all">전체</button>
+                </div>
+                <a class="btn btn-sm" href="/neighbormate-app/qna.html" target="_blank" rel="noopener">게시판 열기 ↗</a>
+              </div>
+              <div class="list" id="qnaList"></div>
             </div>
           </div>
         </section>
@@ -312,6 +333,9 @@
     $('#statPaid').textContent = summary.paidActive.toLocaleString();
     $('#statTrial').textContent = summary.trialActive.toLocaleString();
     $('#statUnused').textContent = summary.unusedVouchers.toLocaleString();
+    const pending = summary.unansweredQuestions || 0;
+    $('#qnaCount').textContent = pending > 99 ? '99+' : String(pending);
+    $('#qnaCount').classList.toggle('hidden', !pending);
   }
 
   // ---- Issue ----
@@ -370,16 +394,19 @@
   });
 
   // ---- Lists ----
+  let currentTab = 'vouchers';
+  const loaders = { vouchers: () => loadVouchers(), users: () => loadUsers(), qna: () => loadQna() };
   $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
+    currentTab = tab.dataset.tab;
     $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-    const users = tab.dataset.tab === 'users';
-    $('#usersPanel').classList.toggle('hidden', !users);
-    $('#vouchersPanel').classList.toggle('hidden', users);
-    users ? loadUsers() : loadVouchers();
+    $('#vouchersPanel').classList.toggle('hidden', currentTab !== 'vouchers');
+    $('#usersPanel').classList.toggle('hidden', currentTab !== 'users');
+    $('#qnaPanel').classList.toggle('hidden', currentTab !== 'qna');
+    loaders[currentTab]();
   }));
   $('#refreshBtn').addEventListener('click', () => {
     loadSummary().catch((err) => toast(err.message, true));
-    $('#usersPanel').classList.contains('hidden') ? loadVouchers() : loadUsers();
+    loaders[currentTab]();
   });
   $('#voucherFilter').addEventListener('click', (e) => {
     const chip = e.target.closest('.chip'); if (!chip) return;
@@ -482,6 +509,69 @@
       }
       loadUsers(); loadSummary().catch(() => {});
     } catch (err) { toast(err.message, true); }
+  });
+
+  // ---- Q&A ----
+  let qnaStatus = 'unanswered';
+  $('#qnaFilter').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    qnaStatus = chip.dataset.status;
+    $$('#qnaFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
+    loadQna();
+  });
+
+  async function loadQna() {
+    const list = $('#qnaList');
+    try {
+      const { questions } = await api(`api/admin/qna?status=${qnaStatus}`);
+      if (!questions.length) {
+        list.innerHTML = `<div class="empty"><strong>${qnaStatus === 'unanswered' ? '답변을 기다리는 질문이 없습니다' : '아직 질문이 없습니다'}</strong>홍보 사이트 질문 게시판에 올라온 질문이 여기에 나옵니다.</div>`;
+        return;
+      }
+      list.innerHTML = questions.map((q) => {
+        const pending = q.answer == null;
+        return `<div class="q${pending ? ' pending' : ''}" data-q="${q.id}">
+          <div class="row-main">
+            <div class="row-title">${esc(q.title)}${q.isPrivate ? '<span class="badge gray">🔒 비밀글</span>' : ''}${pending ? '<span class="badge warn">답변 대기</span>' : '<span class="badge ok">답변 완료</span>'}</div>
+            <div class="row-meta">${esc(q.nickname)} · ${esc(fmt(q.createdAt))}${q.answeredAt ? ` · 답변 ${esc(fmt(q.answeredAt))}` : ''}</div>
+          </div>
+          <div class="q-body">${esc(q.body)}</div>
+          <textarea placeholder="답변을 입력하세요. 저장하면 게시판에 바로 보입니다." aria-label="답변">${esc(q.answer || '')}</textarea>
+          <div class="q-actions">
+            <button class="btn btn-sm btn-danger" type="button" data-qdelete>삭제</button>
+            <button class="btn btn-sm btn-save" type="button" data-qsave>${pending ? '답변 등록' : '답변 수정'}</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = `<div class="empty"><strong>질문을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
+    }
+  }
+
+  $('#qnaList').addEventListener('click', async (e) => {
+    const card = e.target.closest('[data-q]');
+    const save = e.target.closest('[data-qsave]');
+    const del = e.target.closest('[data-qdelete]');
+    if (!card || (!save && !del)) return;
+    if (del && del.dataset.confirm !== '1') {
+      del.dataset.confirm = '1'; del.textContent = '정말 삭제';
+      setTimeout(() => { if (del.isConnected) { del.dataset.confirm = ''; del.textContent = '삭제'; } }, 3000);
+      return;
+    }
+    const answer = card.querySelector('textarea').value.trim();
+    if (save && !answer) return toast('답변을 입력해주세요.', true);
+    const btn = save || del;
+    btn.disabled = true;
+    try {
+      if (save) {
+        await api(`api/admin/qna/${card.dataset.q}/answer`, { method: 'POST', body: { answer } });
+        toast('💬 답변을 등록했습니다. 게시판에 바로 보입니다.');
+      } else {
+        await api(`api/admin/qna/${card.dataset.q}/delete`, { method: 'POST' });
+        toast('질문을 삭제했습니다.');
+      }
+      loadQna(); loadSummary().catch(() => {});
+    } catch (err) { toast(err.message, true); btn.disabled = false; }
   });
 
   // Start: try a remembered key, otherwise show the gate.
