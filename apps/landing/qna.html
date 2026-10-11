@@ -10,9 +10,9 @@
 <meta property="og:image" content="https://minohlee.mooo.com/neighbormate-app/assets/autopilot.webp">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="assets/site.css?v=20261011">
+<link rel="stylesheet" href="assets/site.css?v=20261011c">
 </head>
-<body>
+<body class="board-body">
 
 <header class="top">
   <div class="wrap">
@@ -26,30 +26,101 @@
   </div>
 </header>
 
-<main>
-  <section class="board-hero">
-    <div class="wrap">
-      <div>
-        <span class="kicker">질문 게시판</span>
-        <h1>궁금한 점을 물어보세요</h1>
-        <p>설치, 사용법, 구독까지 무엇이든 남겨 주세요. 제작자가 직접 답변합니다.</p>
-      </div>
-      <button class="btn btn-primary btn-lg" type="button" id="askBtn">✏️ 질문하기</button>
+<main class="board-main">
+  <div class="wrap board-wrap">
+    <div class="board-title">
+      <h1><a href="qna.html" data-nav="list">💬 질문 게시판</a></h1>
+      <p>설치, 사용법, 구독까지 무엇이든 물어보세요. 제작자가 직접 답변합니다.</p>
     </div>
-  </section>
 
-  <section class="board">
-    <div class="wrap">
-      <div class="board-tools">
-        <span id="boardCount">질문을 불러오는 중…</span>
-        <a href="about.html#faq">자주 묻는 질문 먼저 보기 →</a>
+    <!-- List -->
+    <section id="listView" hidden>
+      <div class="board-bar">
+        <span class="board-count" id="boardCount"></span>
+        <button class="btn btn-primary btn-md" type="button" data-nav="write">✏️ 글쓰기</button>
       </div>
-      <ol class="q-list" id="qList">
-        <li class="skeleton"></li><li class="skeleton"></li><li class="skeleton"></li>
-      </ol>
+      <table class="board-table">
+        <colgroup><col class="c-no"><col><col class="c-name"><col class="c-date"><col class="c-views"></colgroup>
+        <thead><tr><th scope="col">번호</th><th scope="col">제목</th><th scope="col">작성자</th><th scope="col">작성일</th><th scope="col">조회</th></tr></thead>
+        <tbody id="boardRows"></tbody>
+      </table>
       <nav class="pager" id="pager" aria-label="페이지"></nav>
-    </div>
-  </section>
+      <form class="board-search" id="searchForm" role="search">
+        <select class="select" id="searchField" aria-label="검색 범위">
+          <option value="all">제목+내용</option>
+          <option value="title">제목</option>
+          <option value="nickname">작성자</option>
+        </select>
+        <input class="input" id="searchInput" type="search" maxlength="40" placeholder="검색어를 입력하세요" aria-label="검색어">
+        <button class="btn btn-dark btn-md" type="submit">검색</button>
+      </form>
+    </section>
+
+    <!-- Post -->
+    <section id="postView" hidden>
+      <article class="post" id="post"></article>
+      <div class="post-actions">
+        <button class="btn btn-ghost btn-md" type="button" data-nav="list">☰ 목록</button>
+        <div class="post-actions-right">
+          <button class="btn btn-ghost btn-md" type="button" id="deleteBtn">삭제</button>
+          <button class="btn btn-primary btn-md" type="button" data-nav="write">✏️ 글쓰기</button>
+        </div>
+      </div>
+      <form class="pw-row" id="deleteForm" hidden>
+        <span>질문을 지우려면 글을 쓸 때 정한 비밀번호를 입력해 주세요.</span>
+        <input class="input" type="password" id="deletePass" placeholder="비밀번호" aria-label="비밀번호" autocomplete="current-password">
+        <button class="btn btn-danger btn-md" type="submit">삭제</button>
+        <button class="btn btn-ghost btn-md" type="button" id="deleteCancel">취소</button>
+        <em class="err" id="deleteErr"></em>
+      </form>
+      <table class="post-nav" id="postNav"></table>
+    </section>
+
+    <!-- Write -->
+    <section id="writeView" hidden>
+      <form class="write" id="writeForm" novalidate>
+        <h2 class="write-title">✏️ 질문 쓰기</h2>
+        <div class="write-row">
+          <label for="fNick">작성자</label>
+          <div><input class="input" id="fNick" maxlength="20" autocomplete="nickname" placeholder="닉네임"></div>
+        </div>
+        <div class="write-row">
+          <label for="fPass">비밀번호</label>
+          <div><input class="input" id="fPass" type="password" maxlength="64" autocomplete="new-password" placeholder="4자 이상"><span class="hint">비밀글을 열거나 질문을 지울 때 써요.</span></div>
+        </div>
+        <div class="write-row">
+          <label for="fTitle">제목</label>
+          <div><input class="input wide" id="fTitle" maxlength="80" placeholder="예: 노트북에서도 로컬 AI가 돌아가나요?"></div>
+        </div>
+        <div class="write-row">
+          <span class="label">공개 설정</span>
+          <div>
+            <label class="option-card">
+              <input type="checkbox" id="fPrivate">
+              <span class="option-icon">🔒</span>
+              <span class="option-content">
+                <span class="option-title">비밀글로 올리기</span>
+                <span class="option-desc">나와 제작자만 볼 수 있어요. 결제·계정 문의에 써 주세요.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="write-row top">
+          <label for="fBody">내용</label>
+          <div>
+            <textarea class="textarea" id="fBody" maxlength="3000" placeholder="궁금한 점을 편하게 적어 주세요. 사용 중인 PC 사양이나 화면에 뜬 문구를 함께 적어 주시면 더 정확히 답변드릴 수 있어요."></textarea>
+            <span class="count" id="bodyCount">0 / 3000</span>
+          </div>
+        </div>
+        <div class="hp" aria-hidden="true"><label>웹사이트 <input id="fSite" tabindex="-1" autocomplete="off"></label></div>
+        <div class="form-error" id="formError" role="alert"></div>
+        <div class="write-actions">
+          <button class="btn btn-ghost btn-md" type="button" data-nav="list">취소</button>
+          <button class="btn btn-primary btn-md" type="submit" id="submitBtn">등록</button>
+        </div>
+      </form>
+    </section>
+  </div>
 </main>
 
 <footer>
@@ -59,54 +130,6 @@
   </div>
 </footer>
 
-<dialog class="ask" id="askDialog" aria-labelledby="askTitle">
-  <form id="askForm" novalidate>
-    <div class="ask-head">
-      <div>
-        <h2 id="askTitle">✏️ 질문하기</h2>
-        <p>답변이 달리면 이 게시판에서 바로 볼 수 있어요.</p>
-      </div>
-      <button class="x-btn" type="button" data-close aria-label="닫기">✕</button>
-    </div>
-    <div class="ask-body">
-      <div class="field-row">
-        <div class="field">
-          <label for="fNick">닉네임</label>
-          <input class="input" id="fNick" name="nickname" maxlength="20" autocomplete="nickname" placeholder="예: 맛집블로거">
-        </div>
-        <div class="field">
-          <label for="fPass">비밀번호</label>
-          <input class="input" id="fPass" name="password" type="password" maxlength="64" autocomplete="new-password" placeholder="4자 이상">
-          <span class="hint">비밀글을 열거나 질문을 지울 때 써요.</span>
-        </div>
-      </div>
-      <div class="field">
-        <label for="fTitle">제목</label>
-        <input class="input" id="fTitle" name="title" maxlength="80" placeholder="예: 노트북에서도 로컬 AI가 돌아가나요?">
-      </div>
-      <div class="field">
-        <label for="fBody">질문 내용</label>
-        <textarea class="textarea" id="fBody" name="body" maxlength="3000" placeholder="궁금한 점을 편하게 적어 주세요. 사용 중인 PC 사양이나 화면에 뜬 문구를 함께 적어 주시면 더 정확히 답변드릴 수 있어요."></textarea>
-        <span class="count" id="bodyCount">0 / 3000</span>
-      </div>
-      <label class="option-card">
-        <input type="checkbox" id="fPrivate" name="isPrivate">
-        <span class="option-icon">🔒</span>
-        <span class="option-content">
-          <span class="option-title">비밀글로 올리기</span>
-          <span class="option-desc">나와 제작자만 볼 수 있어요. 결제·계정 문의에 써 주세요.</span>
-        </span>
-      </label>
-      <div class="hp" aria-hidden="true"><label>웹사이트 <input name="website" tabindex="-1" autocomplete="off"></label></div>
-      <div class="form-error" id="formError" role="alert"></div>
-    </div>
-    <div class="ask-foot">
-      <button class="btn btn-ghost btn-md" type="button" data-close>취소</button>
-      <button class="btn btn-primary btn-md" type="submit" id="submitBtn">질문 올리기</button>
-    </div>
-  </form>
-</dialog>
-
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -114,12 +137,40 @@
   const API = '/license/api/qna';
   const $ = (s, root = document) => root.querySelector(s);
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const day = (iso) => new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' });
-  const when = (iso) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const pad = (n) => String(n).padStart(2, '0');
+  const shortDate = (iso) => {
+    const d = new Date(iso), now = new Date();
+    return d.toDateString() === now.toDateString() ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+  };
+  const fullDate = (iso) => { const d = new Date(iso); return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const isNew = (iso) => Date.now() - new Date(iso).getTime() < 24 * 60 * 60 * 1000;
 
-  let page = 1;
-  const opened = new Map();     // id -> full question once read
-  const passwords = new Map();  // id -> password the visitor typed (this tab only)
+  const NOTICE = {
+    title: '질문 게시판 이용 안내',
+    date: '2026-10-11T09:00:00+09:00',
+    body: [
+      '이웃메이트 질문 게시판입니다. 설치, 사용법, 구독, 오류 무엇이든 편하게 물어보세요.',
+      '',
+      '■ 질문 전에',
+      '· 기능 소개 페이지의 자주 묻는 질문에 이미 답이 있을 수 있어요.',
+      '· 앱 안의 [사용 방법] 버튼에도 메뉴별 설명이 있습니다.',
+      '',
+      '■ 질문할 때',
+      '· 사용 중인 PC 사양(그래픽카드, 메모리)과 앱 버전(상단 v1.0.x)을 적어 주세요.',
+      '· 오류라면 화면에 뜬 문구를 그대로 적어 주시면 더 빨리 답변드릴 수 있어요.',
+      '· 결제·계정·이메일처럼 남이 보면 안 되는 내용은 꼭 비밀글로 올려 주세요.',
+      '',
+      '■ 비밀번호',
+      '· 글을 쓸 때 정한 비밀번호로 비밀글을 열고, 내 질문을 지울 수 있어요.',
+      '· 비밀번호는 다시 찾을 수 없으니 잊지 않게 정해 주세요.',
+      '',
+      '광고, 욕설, 개인정보가 담긴 글은 예고 없이 지울 수 있습니다.'
+    ].join('\n')
+  };
+
+  const state = { page: 1, q: '', field: 'all' };
+  const passwords = new Map(); // id -> password typed in this tab
+  let current = null;          // question shown in the post view
 
   let toastTimer;
   function toast(message, error = false) {
@@ -131,165 +182,257 @@
   }
 
   async function call(path, { method = 'GET', body } = {}) {
-    const res = await fetch(`${API}${path}`, {
-      method, cache: 'no-store',
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined
-    });
-    const data = await res.json().catch(() => ({ ok: false, message: '서버와 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.' }));
-    return { status: res.status, ...data };
+    try {
+      const res = await fetch(`${API}${path}`, {
+        method, cache: 'no-store',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined
+      });
+      return await res.json();
+    } catch {
+      return { ok: false, message: '서버와 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.' };
+    }
   }
+
+  // ---- Routing: ?page=&q=&field= (list) · ?id= (post) · ?notice=1 · ?write=1 ----
+  function go(params, replace = false) {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null));
+    const url = `qna.html${qs.toString() ? `?${qs}` : ''}`;
+    history[replace ? 'replaceState' : 'pushState'](null, '', url);
+    route();
+  }
+  const listParams = () => ({ page: state.page > 1 ? state.page : '', q: state.q, field: state.q && state.field !== 'all' ? state.field : '' });
+
+  function show(view) {
+    for (const id of ['listView', 'postView', 'writeView']) $(`#${id}`).hidden = id !== view;
+    window.scrollTo({ top: 0 });
+  }
+
+  function route() {
+    const p = new URLSearchParams(location.search);
+    if (p.get('write')) return showWrite();
+    if (p.get('notice')) return showNotice();
+    if (p.get('id')) return showPost(Number(p.get('id')));
+    state.page = Math.max(1, Number(p.get('page')) || 1);
+    state.q = p.get('q') || '';
+    state.field = p.get('field') || 'all';
+    showList();
+  }
+  window.addEventListener('popstate', route);
+
+  document.addEventListener('click', (e) => {
+    const nav = e.target.closest('[data-nav]');
+    if (nav) {
+      e.preventDefault();
+      if (nav.dataset.nav === 'write') go({ write: 1 });
+      else if (nav.dataset.nav === 'list') go(listParams());
+      return;
+    }
+    const link = e.target.closest('a[data-id], a[data-notice]');
+    if (link && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      e.preventDefault();
+      go(link.dataset.notice ? { notice: 1 } : { id: link.dataset.id });
+    }
+  });
 
   // ---- List ----
-  function rowHtml(q) {
-    const title = q.isPrivate ? '<span class="q-title locked">🔒 비밀글입니다</span>' : `<span class="q-title">${esc(q.title)}</span>`;
-    return `<li class="q-item" id="q-${q.id}" data-id="${q.id}">
-      <button class="q-row" type="button" aria-expanded="false" aria-controls="qd-${q.id}">
-        <span class="status ${q.answered ? 'done' : 'wait'}">${q.answered ? '답변 완료' : '답변 대기'}</span>
-        ${title}
-        <span class="q-meta">${esc(q.nickname)} · ${day(q.createdAt)}</span>
-      </button>
-      <div class="q-detail" id="qd-${q.id}" hidden></div>
-    </li>`;
-  }
+  const titleCell = (q) => {
+    const status = `<span class="tag ${q.answered ? 'done' : 'wait'}">${q.answered ? '답변완료' : '답변대기'}</span>`;
+    const title = q.isPrivate ? '<span class="locked">🔒 비밀글입니다</span>' : esc(q.title);
+    return `<a href="qna.html?id=${q.id}" data-id="${q.id}">${status}<span class="t">${title}</span>${isNew(q.createdAt) ? '<span class="new" title="새 글">N</span>' : ''}</a>`;
+  };
 
-  async function load(target = page, openId = null) {
-    const list = $('#qList');
-    const res = await call(`?page=${target}`).catch(() => ({ ok: false }));
+  async function showList() {
+    show('listView');
+    $('#searchInput').value = state.q;
+    $('#searchField').value = state.field;
+    const rows = $('#boardRows');
+    rows.innerHTML = '<tr class="loading"><td colspan="5">질문을 불러오는 중…</td></tr>';
+    const qs = new URLSearchParams({ page: state.page });
+    if (state.q) { qs.set('q', state.q); qs.set('field', state.field); }
+    const res = await call(`?${qs}`);
     if (!res.ok) {
-      $('#boardCount').textContent = '질문 목록';
-      list.innerHTML = '<li class="board-empty"><b>질문 목록을 불러오지 못했습니다</b>잠시 뒤 새로고침해 주세요.</li>';
+      $('#boardCount').textContent = '';
+      rows.innerHTML = `<tr class="empty"><td colspan="5">${esc(res.message || '질문 목록을 불러오지 못했습니다.')}</td></tr>`;
       $('#pager').innerHTML = '';
       return;
     }
-    page = res.page;
-    $('#boardCount').innerHTML = `질문 <b>${res.total.toLocaleString()}</b>개`;
-    if (!res.items.length) {
-      list.innerHTML = '<li class="board-empty"><b>아직 올라온 질문이 없습니다</b>첫 질문을 남겨 주세요. 비밀글로도 올릴 수 있어요.<br><button class="btn btn-primary btn-md" type="button" data-ask>✏️ 첫 질문 남기기</button></li>';
-    } else {
-      list.innerHTML = res.items.map(rowHtml).join('');
-    }
+    state.page = res.page;
+    $('#boardCount').innerHTML = state.q
+      ? `‘${esc(state.q)}’ 검색 결과 <b>${res.total.toLocaleString()}</b>건 <button class="link-btn" type="button" data-all>전체 보기</button>`
+      : `전체 <b>${res.total.toLocaleString()}</b>건`;
+    const notice = state.q || state.page > 1 ? '' : `<tr class="notice">
+      <td class="no"><span class="tag notice-tag">공지</span></td>
+      <td class="title"><a href="qna.html?notice=1" data-notice="1"><span class="tag notice-tag">공지</span><span class="t">${NOTICE.title}</span></a></td>
+      <td class="name">이웃메이트</td><td class="date">${shortDate(NOTICE.date)}</td><td class="views">-</td></tr>`;
+    const body = res.items.map((q, i) => `<tr>
+      <td class="no">${res.total - (res.page - 1) * res.pageSize - i}</td>
+      <td class="title">${titleCell(q)}</td>
+      <td class="name">${esc(q.nickname)}</td>
+      <td class="date">${shortDate(q.createdAt)}</td>
+      <td class="views">${q.views.toLocaleString()}</td>
+    </tr>`).join('');
+    const empty = res.items.length ? '' : `<tr class="empty"><td colspan="5">${state.q ? '검색 결과가 없습니다.' : '아직 올라온 질문이 없습니다. 첫 질문을 남겨 주세요!'}</td></tr>`;
+    rows.innerHTML = notice + body + empty;
     renderPager(res.pages);
-    if (openId) toggle(openId, true);
   }
+
+  $('#listView').addEventListener('click', (e) => {
+    if (e.target.closest('[data-all]')) { state.q = ''; state.page = 1; go({}); }
+  });
 
   function renderPager(pages) {
     const pager = $('#pager');
     if (pages <= 1) { pager.innerHTML = ''; return; }
-    const from = Math.max(1, Math.min(page - 2, pages - 4));
-    const nums = Array.from({ length: Math.min(5, pages) }, (_, i) => from + i);
-    pager.innerHTML = `<button type="button" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''} aria-label="이전 페이지">‹</button>`
-      + nums.map((n) => `<button type="button" data-page="${n}" ${n === page ? 'aria-current="page"' : ''}>${n}</button>`).join('')
-      + `<button type="button" data-page="${page + 1}" ${page === pages ? 'disabled' : ''} aria-label="다음 페이지">›</button>`;
+    const block = Math.floor((state.page - 1) / 10) * 10;
+    const nums = [];
+    for (let n = block + 1; n <= Math.min(block + 10, pages); n++) nums.push(n);
+    const btn = (n, label, aria, disabled) => `<button type="button" data-page="${n}" ${disabled ? 'disabled' : ''} aria-label="${aria}">${label}</button>`;
+    pager.innerHTML = btn(1, '«', '첫 페이지', state.page === 1) + btn(state.page - 1, '‹', '이전 페이지', state.page === 1)
+      + nums.map((n) => `<button type="button" data-page="${n}" ${n === state.page ? 'aria-current="page"' : ''}>${n}</button>`).join('')
+      + btn(state.page + 1, '›', '다음 페이지', state.page === pages) + btn(pages, '»', '마지막 페이지', state.page === pages);
   }
   $('#pager').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-page]');
-    if (!btn || btn.disabled) return;
-    load(Number(btn.dataset.page));
-    $('.board').scrollIntoView({ behavior: 'smooth' });
+    const b = e.target.closest('[data-page]');
+    if (!b || b.disabled) return;
+    state.page = Number(b.dataset.page);
+    go(listParams());
   });
 
-  // ---- Detail ----
-  function detailHtml(q) {
-    const answer = q.answer
-      ? `<div class="q-answer"><div class="who"><span class="brand-mark">N</span>이웃메이트 답변</div><p>${esc(q.answer)}</p><small>${when(q.answeredAt)}</small></div>`
-      : '<div class="q-wait">⏳ 답변을 준비하고 있어요. 답변이 달리면 여기에 바로 보입니다.</div>';
-    return `<div class="q-text"><h3>${q.isPrivate ? '🔒 ' : ''}${esc(q.title)}</h3>${esc(q.body)}</div>
-      ${answer}
-      <div class="q-foot"><button class="link-btn" type="button" data-delete>질문 삭제</button></div>`;
-  }
-
-  const lockHtml = (message, button, danger = false) => `<form class="pw-form lock" data-pw="${danger ? 'delete' : 'open'}">
-      <span class="msg">${message}</span>
-      <input class="input" type="password" placeholder="비밀번호" aria-label="비밀번호" autocomplete="current-password">
-      <button class="btn ${danger ? 'btn-danger' : 'btn-primary'} btn-md" type="submit">${button}</button>
-      ${danger ? '<button class="btn btn-ghost btn-md" type="button" data-cancel>취소</button>' : ''}
-      <span class="err"></span>
-    </form>`;
-
-  async function toggle(id, forceOpen = false) {
-    const item = document.getElementById(`q-${id}`);
-    if (!item) return;
-    const row = $('.q-row', item), detail = $('.q-detail', item);
-    const open = forceOpen || detail.hidden;
-    detail.hidden = !open;
-    item.classList.toggle('open', open);
-    row.setAttribute('aria-expanded', String(open));
-    if (!open) return;
-    if (forceOpen) item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (opened.has(id)) { detail.innerHTML = detailHtml(opened.get(id)); return; }
-    detail.innerHTML = '<div class="skeleton"></div>';
-    const res = await call(`/${id}`);
-    if (res.ok) { opened.set(id, res.question); detail.innerHTML = detailHtml(res.question); }
-    else if (res.error === 'PRIVATE') detail.innerHTML = lockHtml('🔒 비밀글입니다. 질문을 올릴 때 정한 비밀번호를 입력해 주세요.', '열기');
-    else detail.innerHTML = `<div class="q-wait">${esc(res.message || '질문을 불러오지 못했습니다.')}</div>`;
-    $('input', detail)?.focus();
-  }
-
-  $('#qList').addEventListener('click', (e) => {
-    if (e.target.closest('[data-ask]')) return openAsk();
-    const item = e.target.closest('.q-item');
-    if (!item) return;
-    const id = Number(item.dataset.id);
-    if (e.target.closest('.q-row')) return toggle(id);
-    if (e.target.closest('[data-delete]')) {
-      const foot = $('.q-foot', item);
-      if (passwords.has(id)) return removeQuestion(id, passwords.get(id), foot);
-      foot.innerHTML = lockHtml('질문을 지우려면 비밀번호를 입력해 주세요.', '삭제', true);
-      $('input', foot).focus();
-      return;
-    }
-    if (e.target.closest('[data-cancel]')) {
-      $('.q-foot', item).innerHTML = '<button class="link-btn" type="button" data-delete>질문 삭제</button>';
-    }
-  });
-
-  $('#qList').addEventListener('submit', async (e) => {
-    const form = e.target.closest('[data-pw]');
-    if (!form) return;
+  $('#searchForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const id = Number(form.closest('.q-item').dataset.id);
-    const password = $('input', form).value;
-    if (!password) { $('.err', form).textContent = '비밀번호를 입력해 주세요.'; return; }
-    const btn = $('button[type="submit"]', form);
-    btn.disabled = true;
-    if (form.dataset.pw === 'delete') return removeQuestion(id, password, form);
-    const res = await call(`/${id}/open`, { method: 'POST', body: { password } });
-    btn.disabled = false;
-    if (!res.ok) { $('.err', form).textContent = res.message || '열지 못했습니다.'; $('input', form).select(); return; }
-    opened.set(id, res.question);
-    passwords.set(id, password);
-    form.closest('.q-detail').innerHTML = detailHtml(res.question);
+    state.q = $('#searchInput').value.trim();
+    state.field = $('#searchField').value;
+    state.page = 1;
+    go(listParams());
   });
 
-  async function removeQuestion(id, password, container) {
-    const res = await call(`/${id}/delete`, { method: 'POST', body: { password } });
-    if (!res.ok) {
-      passwords.delete(id);
-      const foot = container.closest('.q-foot') || container;
-      foot.innerHTML = lockHtml('질문을 지우려면 비밀번호를 입력해 주세요.', '삭제', true);
-      $('.err', foot).textContent = res.message || '삭제하지 못했습니다.';
-      $('input', foot).focus();
-      return;
-    }
-    opened.delete(id); passwords.delete(id);
-    toast('질문을 삭제했습니다.');
-    load(page);
+  // ---- Post ----
+  function postHead(q, { notice = false } = {}) {
+    const tag = notice ? '<span class="tag notice-tag">공지</span>' : `<span class="tag ${q.answered || q.answer ? 'done' : 'wait'}">${q.answered || q.answer ? '답변완료' : '답변대기'}</span>`;
+    const title = q.title ? esc(q.title) : '🔒 비밀글입니다';
+    return `<header class="post-head">
+        <h2>${tag}${q.isPrivate && q.title ? '🔒 ' : ''}${title}</h2>
+        <div class="post-meta"><span><b>${esc(q.nickname)}</b></span><span>${fullDate(q.createdAt)}</span>${notice ? '' : `<span>조회 ${Number(q.views || 0).toLocaleString()}</span>`}</div>
+      </header>`;
   }
 
-  // ---- Ask ----
-  const dialog = $('#askDialog'), form = $('#askForm');
-  function openAsk() {
+  function answerHtml(q) {
+    if (!q.answer) return '<section class="answers"><h3>답변 <b>0</b></h3><p class="answer-wait">⏳ 답변을 준비하고 있어요. 답변이 달리면 여기에 바로 보입니다.</p></section>';
+    return `<section class="answers"><h3>답변 <b>1</b></h3>
+      <div class="answer"><div class="answer-who"><span class="brand-mark">N</span><b>이웃메이트</b><span class="tag admin">제작자</span><time>${fullDate(q.answeredAt)}</time></div>
+      <p>${esc(q.answer)}</p></div></section>`;
+  }
+
+  function navHtml(prev, next) {
+    const row = (label, q) => `<tr><th scope="row">${label}</th><td>${q
+      ? `<a href="qna.html?id=${q.id}" data-id="${q.id}">${q.isPrivate ? '🔒 비밀글입니다' : esc(q.title)}</a>`
+      : `<span class="none">${label === '▲ 다음글' ? '다음 글이 없습니다' : '이전 글이 없습니다'}</span>`}</td></tr>`;
+    return row('▲ 다음글', next) + row('▼ 이전글', prev);
+  }
+
+  function renderPost(q, prev, next) {
+    current = q;
+    $('#post').innerHTML = `${postHead(q)}<div class="post-body">${esc(q.body)}</div>${answerHtml(q)}`;
+    $('#postNav').innerHTML = navHtml(prev, next);
+    $('#deleteBtn').hidden = false;
+  }
+
+  async function showPost(id) {
+    show('postView');
+    resetDelete();
+    $('#post').innerHTML = '<div class="post-loading">질문을 불러오는 중…</div>';
+    $('#postNav').innerHTML = '';
+    const known = passwords.get(id);
+    const res = known ? await call(`/${id}/open`, { method: 'POST', body: { password: known } }) : await call(`/${id}`);
+    if (res.ok) return renderPost(res.question, res.prev, res.next);
+    if (res.error === 'PRIVATE') {
+      current = res.question;
+      $('#post').innerHTML = `${postHead(res.question)}
+        <form class="lock-box" id="lockForm">
+          <span class="lock-ico">🔒</span>
+          <b>비밀글입니다</b>
+          <p>질문을 올릴 때 정한 비밀번호를 입력하면 볼 수 있어요.</p>
+          <div class="lock-row"><input class="input" type="password" id="lockPass" placeholder="비밀번호" aria-label="비밀번호" autocomplete="current-password"><button class="btn btn-primary btn-md" type="submit">확인</button></div>
+          <em class="err" id="lockErr"></em>
+        </form>`;
+      $('#postNav').innerHTML = navHtml(res.prev, res.next);
+      $('#deleteBtn').hidden = false;
+      $('#lockPass').focus();
+      return;
+    }
+    current = null;
+    $('#post').innerHTML = `<div class="post-missing"><b>${esc(res.message || '질문을 불러오지 못했습니다.')}</b><p>목록에서 다른 질문을 확인해 주세요.</p></div>`;
+    $('#deleteBtn').hidden = true;
+  }
+
+  $('#post').addEventListener('submit', async (e) => {
+    if (e.target.id !== 'lockForm') return;
+    e.preventDefault();
+    const password = $('#lockPass').value;
+    if (!password) { $('#lockErr').textContent = '비밀번호를 입력해 주세요.'; return; }
+    const res = await call(`/${current.id}/open`, { method: 'POST', body: { password } });
+    if (!res.ok) { $('#lockErr').textContent = res.message || '열지 못했습니다.'; $('#lockPass').select(); return; }
+    passwords.set(current.id, password);
+    renderPost(res.question, res.prev, res.next);
+  });
+
+  function showNotice() {
+    show('postView');
+    resetDelete();
+    current = null;
+    $('#post').innerHTML = `${postHead({ title: NOTICE.title, nickname: '이웃메이트', createdAt: NOTICE.date }, { notice: true })}<div class="post-body">${esc(NOTICE.body)}</div>`;
+    $('#postNav').innerHTML = '';
+    $('#deleteBtn').hidden = true;
+  }
+
+  // ---- Delete ----
+  function resetDelete() {
+    $('#deleteForm').hidden = true;
+    $('#deleteErr').textContent = '';
+    $('#deletePass').value = '';
+  }
+  async function removeCurrent(password) {
+    const res = await call(`/${current.id}/delete`, { method: 'POST', body: { password } });
+    if (!res.ok) {
+      passwords.delete(current.id);
+      $('#deleteForm').hidden = false;
+      $('#deleteErr').textContent = res.message || '삭제하지 못했습니다.';
+      $('#deletePass').focus();
+      return;
+    }
+    passwords.delete(current.id);
+    toast('질문을 삭제했습니다.');
+    go(listParams(), true);
+  }
+  $('#deleteBtn').addEventListener('click', () => {
+    if (!current) return;
+    if (passwords.has(current.id) && $('#deleteForm').hidden) {
+      $('#deleteForm').hidden = false;
+      $('#deletePass').value = passwords.get(current.id);
+      $('#deleteErr').textContent = '';
+      return;
+    }
+    $('#deleteForm').hidden = !$('#deleteForm').hidden;
+    if (!$('#deleteForm').hidden) $('#deletePass').focus();
+  });
+  $('#deleteCancel').addEventListener('click', resetDelete);
+  $('#deleteForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const password = $('#deletePass').value;
+    if (!password) { $('#deleteErr').textContent = '비밀번호를 입력해 주세요.'; return; }
+    removeCurrent(password);
+  });
+
+  // ---- Write ----
+  function showWrite() {
+    show('writeView');
     $('#formError').textContent = '';
-    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
     $('#fNick').focus();
   }
-  const closeAsk = () => (typeof dialog.close === 'function' ? dialog.close() : dialog.removeAttribute('open'));
-  $('#askBtn').addEventListener('click', openAsk);
-  dialog.addEventListener('click', (e) => { if (e.target === dialog || e.target.closest('[data-close]')) closeAsk(); });
   $('#fBody').addEventListener('input', () => { $('#bodyCount').textContent = `${$('#fBody').value.length.toLocaleString()} / 3000`; });
 
-  form.addEventListener('submit', async (e) => {
+  $('#writeForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = {
       nickname: $('#fNick').value.trim(),
@@ -297,35 +440,31 @@
       title: $('#fTitle').value.trim(),
       body: $('#fBody').value.trim(),
       isPrivate: $('#fPrivate').checked,
-      website: form.elements.website.value
+      website: $('#fSite').value
     };
-    const problem = !data.nickname ? ['#fNick', '닉네임을 입력해 주세요.']
+    const problem = !data.nickname ? ['#fNick', '작성자(닉네임)를 입력해 주세요.']
       : data.password.length < 4 ? ['#fPass', '비밀번호는 4자 이상으로 정해 주세요.']
       : data.title.length < 2 ? ['#fTitle', '제목을 두 글자 이상 입력해 주세요.']
-      : data.body.length < 5 ? ['#fBody', '질문 내용을 다섯 글자 이상 입력해 주세요.'] : null;
+      : data.body.length < 5 ? ['#fBody', '내용을 다섯 글자 이상 입력해 주세요.'] : null;
     if (problem) { $('#formError').textContent = problem[1]; $(problem[0]).focus(); return; }
 
     const btn = $('#submitBtn');
-    btn.disabled = true; btn.textContent = '올리는 중…';
-    const res = await call('', { method: 'POST', body: data }).catch(() => ({ ok: false }));
-    btn.disabled = false; btn.textContent = '질문 올리기';
+    btn.disabled = true; btn.textContent = '등록 중…';
+    const res = await call('', { method: 'POST', body: data });
+    btn.disabled = false; btn.textContent = '등록';
     if (!res.ok) { $('#formError').textContent = res.message || '질문을 올리지 못했습니다. 잠시 뒤 다시 시도해 주세요.'; return; }
 
-    opened.set(res.question.id, res.question);
     passwords.set(res.question.id, data.password);
-    form.reset();
+    $('#writeForm').reset();
     $('#bodyCount').textContent = '0 / 3000';
-    closeAsk();
-    toast('✅ 질문을 올렸습니다. 답변이 달리면 여기에서 볼 수 있어요.');
-    history.replaceState(null, '', `#q-${res.question.id}`);
-    load(1, res.question.id);
+    toast('✅ 질문을 올렸습니다. 답변이 달리면 이 글에서 볼 수 있어요.');
+    go({ id: res.question.id }, true);
   });
 
-  // ---- Start ----
-  const params = new URLSearchParams(location.search);
-  const hashId = Number((location.hash.match(/^#q-(\d+)$/) || [])[1]) || null;
-  load(1, hashId);
-  if (params.get('ask') === '1') { history.replaceState(null, '', location.pathname + location.hash); openAsk(); }
+  // Old links (#q-12) open that question.
+  const legacy = location.hash.match(/^#q-(\d+)$/);
+  if (legacy) history.replaceState(null, '', `qna.html?id=${legacy[1]}`);
+  route();
 })();
 </script>
 </body>

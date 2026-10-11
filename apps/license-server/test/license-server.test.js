@@ -478,7 +478,16 @@ test('Q&A board: ask, hide private questions, answer from admin, delete with the
     assert.strictEqual(privateRow.title, '');
     assert.strictEqual(privateRow.isPrivate, true);
 
-    assert.strictEqual((await call('GET', `/api/qna/${open.question.id}`)).status, 200);
+    const first = await (await call('GET', `/api/qna/${open.question.id}`)).json();
+    assert.strictEqual(first.question.views, 1);
+    assert.strictEqual(first.prev, null);
+    assert.strictEqual(first.next.id, secret.question.id);
+    assert.strictEqual(first.next.title, '');
+    // Search finds public titles and nicknames, never the text of a private question.
+    assert.strictEqual((await (await call('GET', `/api/qna?q=${encodeURIComponent('맥북')}`)).json()).total, 1);
+    assert.strictEqual((await (await call('GET', `/api/qna?q=${encodeURIComponent('계좌이체')}`)).json()).total, 0);
+    assert.strictEqual((await (await call('GET', `/api/qna?q=${encodeURIComponent('비밀')}&field=nickname`)).json()).total, 1);
+    assert.strictEqual((await (await call('GET', '/api/qna?q=100%25')).json()).total, 0);
     assert.strictEqual((await call('GET', `/api/qna/${secret.question.id}`)).status, 403);
     assert.strictEqual((await call('POST', `/api/qna/${secret.question.id}/open`, { password: 'nope' })).status, 403);
     const opened = await (await call('POST', `/api/qna/${secret.question.id}/open`, { password: 'abcd' })).json();
