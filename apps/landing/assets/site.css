@@ -557,3 +557,57 @@ footer { padding-bottom: 88px; }
   .kakao-btn { width: 100%; justify-content: center; }
 }
 @media print { .kakao-float { display: none; } }
+
+/* Activity report (Excel) look-alike */
+.xl { border-radius: 16px; background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow-lg); overflow: hidden; }
+.xl .frame-bar span::before { content: "X"; display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: 7px; border-radius: 4px; background: #107c41; color: #fff; font-size: 10px; font-weight: 900; vertical-align: -3px; }
+.xl-body { min-height: 236px; }
+.xl-table { width: 100%; border-collapse: collapse; table-layout: auto; font-size: 13px; }
+.xl-table th, .xl-table td { padding: 9px 10px; border-right: 1px solid #edf2f7; border-bottom: 1px solid #edf2f7; text-align: left; vertical-align: top; }
+.xl-table th { background: var(--green-soft); color: var(--ink); font-weight: 800; font-size: 12.5px; white-space: nowrap; border-bottom: 1px solid var(--green-border); }
+.xl-table td { color: var(--body); line-height: 1.5; white-space: nowrap; }
+.xl-table td.long { white-space: normal; min-width: 120px; }
+@media (max-width: 1100px) and (min-width: 981px) { .report-home .xl-table .opt { display: none; } }
+.xl-body { overflow-x: auto; }
+.xl-table .rn { width: 30px; padding: 9px 0; text-align: center; background: var(--surface); color: var(--hint); font-size: 11.5px; font-weight: 700; }
+.xl-table thead .rn { background: #f1f5f9; }
+.xl-tag { display: inline-block; padding: 2px 9px; border-radius: 9999px; font-size: 12px; font-weight: 750; white-space: nowrap; }
+.xl-tag.ok { background: #dcfce7; color: #15803d; }
+.xl-tag.no { background: #fee2e2; color: #dc2626; }
+.xl-tag.wait { background: #fef3c7; color: #b45309; }
+.xl-link { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; }
+.xl-tabs { display: flex; gap: 2px; padding: 0 8px; background: var(--surface); border-top: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.xl-tabs::-webkit-scrollbar { display: none; }
+.xl-tabs button { flex-shrink: 0; padding: 9px 14px; border: 0; border-bottom: 3px solid transparent; background: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; transition: color .15s ease, background .15s ease; }
+.xl-tabs button:hover { color: var(--ink); background: #fff; }
+.xl-tabs button[aria-selected="true"] { color: #107c41; background: #fff; border-bottom-color: #107c41; }
+.xl-tabs button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+
+.report-block { background: linear-gradient(180deg, #fff 0%, #f0fdf4 100%); }
+.sheet-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.sheet-chips span { padding: 6px 12px; border-radius: 9999px; background: #fff; border: 1px solid var(--green-border); font-size: 13.5px; font-weight: 700; color: var(--green-deep); }
+
+/* Home: report teaser */
+.report-home { padding: 104px 0; background: #fff; }
+.report-home .split { grid-template-columns: 1fr 1.35fr; }
+.report-home h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 900; letter-spacing: -0.03em; }
+.report-home h2 em { font-style: normal; color: #107c41; }
+.report-home .lead-sm { margin-top: 16px; font-size: 17px; color: var(--muted); }
+
+@media (max-width: 980px) {
+  .report-home .split { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .report-home { padding: 64px 0; }
+  .xl-table .opt { display: none; }
+  .xl-table { font-size: 12.5px; }
+  .xl-table th, .xl-table td { padding: 8px 7px; }
+  .xl-body { min-height: 0; }
+  .xl-table td.long { min-width: 0; }
+}
+/* 9 feature tiles: 3 × 3 on wide screens, the odd last tile spans the row on two columns */
+.feat-map { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 980px) {
+  .feat-map { grid-template-columns: repeat(2, 1fr); }
+  .feat-map a:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
