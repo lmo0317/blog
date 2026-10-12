@@ -121,11 +121,8 @@ html, body {
   width: 24px !important;
   height: 24px !important;
   border-radius: 6px !important;
-  background: var(--win-accent) !important;
-  color: #fff !important;
-  font-weight: 900 !important;
-  font-size: 13px !important;
-  box-shadow: 0 2px 4px rgba(3, 199, 90, 0.3);
+  background: url(logo.png) center / cover no-repeat !important;
+  flex-shrink: 0;
 }
 
 .pill-version {

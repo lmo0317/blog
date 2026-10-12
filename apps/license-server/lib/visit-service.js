@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 
 const PAGES = new Set(['home', 'about', 'qna']);
+// Clicks counted alongside page views: the installer download and the purchase (KakaoTalk) button.
+const ACTIONS = new Set(['download', 'buy']);
+const ONLY_PAGES = "page IN ('home', 'about', 'qna')";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -16,6 +19,12 @@ function referrerHost(value) {
     return '';
   }
 }
+
+/** utm_source / utm_campaign as sent by our own links ("naverblog", "launch-2610"), or null. */
+const utmValue = (value) => {
+  const text = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9._-]{1,40}$/.test(text) ? text : null;
+};
 
 // Visitor counts for the promo site (/neighbormate-app/). Each page sends one beacon per view with a
 // random id the browser keeps, so a person counts once however many pages or days they come back.
@@ -37,11 +46,15 @@ export class VisitService {
       CREATE INDEX IF NOT EXISTS idx_site_visits_day ON site_visits(day);
       CREATE INDEX IF NOT EXISTS idx_site_visits_visitor ON site_visits(visitor);
     `);
+    // Campaign columns arrived after the table; add them to databases made before.
+    const columns = new Set(this.db.prepare('PRAGMA table_info(site_visits)').all().map((c) => c.name));
+    if (!columns.has('utm_source')) this.db.exec('ALTER TABLE site_visits ADD COLUMN utm_source TEXT');
+    if (!columns.has('utm_campaign')) this.db.exec('ALTER TABLE site_visits ADD COLUMN utm_campaign TEXT');
   }
 
-  record({ visitor, page, referrer, ip = '', userAgent = '' } = {}) {
+  record({ visitor, page, referrer, source, campaign, ip = '', userAgent = '' } = {}) {
     const name = String(page || '');
-    if (!PAGES.has(name)) return { ok: false, error: 'INVALID_PAGE' };
+    if (!PAGES.has(name) && !ACTIONS.has(name)) return { ok: false, error: 'INVALID_PAGE' };
     if (/bot|crawl|spider|slurp|preview|headless/i.test(String(userAgent))) return { ok: true, skipped: true };
 
     // One IP cannot pad the numbers.
@@ -56,12 +69,12 @@ export class VisitService {
     const id = /^[A-Za-z0-9-]{8,64}$/.test(String(visitor || ''))
       ? String(visitor)
       : `ip-${crypto.createHash('sha256').update(`${ip}|${userAgent}|${kstDay(now)}`).digest('hex').slice(0, 24)}`;
-    this.db.prepare('INSERT INTO site_visits (visitor, page, day, referrer, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(id, name, kstDay(now), referrerHost(referrer) || null, new Date(now).toISOString());
+    this.db.prepare('INSERT INTO site_visits (visitor, page, day, referrer, utm_source, utm_campaign, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, name, kstDay(now), referrerHost(referrer) || null, utmValue(source), utmValue(campaign), new Date(now).toISOString());
     return { ok: true };
   }
 
-  /** Totals, today, the last 14 days, per page and the top referring sites. */
+  /** Totals, today, the last 14 days, per page, the top referring sites, campaigns and download / purchase clicks. */
   stats() {
     const now = this.now();
     const today = kstDay(now);
@@ -69,11 +82,13 @@ export class VisitService {
     const weekStart = kstDay(now - 6 * DAY_MS);
     const first = kstDay(now - 13 * DAY_MS);
     const one = (sql, ...args) => this.db.prepare(sql).get(...args);
-    const people = (where = '', ...args) => Number(one(`SELECT COUNT(DISTINCT visitor) AS n FROM site_visits ${where}`, ...args).n);
-    const views = (where = '', ...args) => Number(one(`SELECT COUNT(*) AS n FROM site_visits ${where}`, ...args).n);
+    // Visitor and view numbers count page views only; download / purchase clicks are reported separately.
+    const people = (where = '', ...args) => Number(one(`SELECT COUNT(DISTINCT visitor) AS n FROM site_visits WHERE ${ONLY_PAGES}${where}`, ...args).n);
+    const views = (where = '', ...args) => Number(one(`SELECT COUNT(*) AS n FROM site_visits WHERE ${ONLY_PAGES}${where}`, ...args).n);
+    const clickers = (action, where = '', ...args) => Number(one(`SELECT COUNT(DISTINCT visitor) AS n FROM site_visits WHERE page = ?${where}`, action, ...args).n);
 
     const perDay = new Map(this.db.prepare(
-      'SELECT day, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views FROM site_visits WHERE day >= ? GROUP BY day'
+      `SELECT day, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views FROM site_visits WHERE ${ONLY_PAGES} AND day >= ? GROUP BY day`
     ).all(first).map((r) => [r.day, { visitors: Number(r.visitors), views: Number(r.views) }]));
     const days = Array.from({ length: 14 }, (_, i) => {
       const day = kstDay(now - (13 - i) * DAY_MS);
@@ -81,22 +96,37 @@ export class VisitService {
     });
 
     const pages = this.db.prepare(
-      'SELECT page, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views FROM site_visits GROUP BY page ORDER BY views DESC'
+      `SELECT page, COUNT(DISTINCT visitor) AS visitors, COUNT(*) AS views FROM site_visits WHERE ${ONLY_PAGES} GROUP BY page ORDER BY views DESC`
     ).all().map((r) => ({ page: r.page, visitors: Number(r.visitors), views: Number(r.views) }));
     const referrers = this.db.prepare(
-      'SELECT referrer, COUNT(DISTINCT visitor) AS visitors FROM site_visits WHERE referrer IS NOT NULL GROUP BY referrer ORDER BY visitors DESC LIMIT 8'
+      `SELECT referrer, COUNT(DISTINCT visitor) AS visitors FROM site_visits WHERE ${ONLY_PAGES} AND referrer IS NOT NULL GROUP BY referrer ORDER BY visitors DESC LIMIT 8`
     ).all().map((r) => ({ host: r.referrer, visitors: Number(r.visitors) }));
+    // Per campaign link: how many people came, and how many of them downloaded or pressed buy.
+    const campaigns = this.db.prepare(`
+      SELECT utm_source AS source, COALESCE(utm_campaign, '') AS campaign,
+        COUNT(DISTINCT CASE WHEN ${ONLY_PAGES} THEN visitor END) AS visitors,
+        COUNT(DISTINCT CASE WHEN page = 'download' THEN visitor END) AS downloads,
+        COUNT(DISTINCT CASE WHEN page = 'buy' THEN visitor END) AS buys
+      FROM site_visits WHERE utm_source IS NOT NULL GROUP BY utm_source, utm_campaign ORDER BY visitors DESC, downloads DESC LIMIT 10
+    `).all().map((r) => ({ source: r.source, campaign: r.campaign, visitors: Number(r.visitors), downloads: Number(r.downloads), buys: Number(r.buys) }));
+    const actions = Object.fromEntries([...ACTIONS].map((action) => [action, {
+      today: clickers(action, ' AND day = ?', today),
+      week: clickers(action, ' AND day >= ?', weekStart),
+      total: clickers(action)
+    }]));
 
     return {
       ok: true,
       visits: {
         total: { visitors: people(), views: views() },
-        today: { visitors: people('WHERE day = ?', today), views: views('WHERE day = ?', today) },
-        yesterday: { visitors: people('WHERE day = ?', yesterday), views: views('WHERE day = ?', yesterday) },
-        week: { visitors: people('WHERE day >= ?', weekStart), views: views('WHERE day >= ?', weekStart) },
+        today: { visitors: people(' AND day = ?', today), views: views(' AND day = ?', today) },
+        yesterday: { visitors: people(' AND day = ?', yesterday), views: views(' AND day = ?', yesterday) },
+        week: { visitors: people(' AND day >= ?', weekStart), views: views(' AND day >= ?', weekStart) },
         days,
         pages,
         referrers,
+        campaigns,
+        actions,
         since: one('SELECT MIN(day) AS d FROM site_visits').d || null
       }
     };

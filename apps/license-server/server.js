@@ -125,8 +125,8 @@ export function createLicenseServer(db = null, options = {}) {
 
   // ---- Visitor counts for the promo site: each page sends one beacon per view ----
   app.post('/api/visit', (req, res) => {
-    const { visitor, page, referrer } = req.body || {};
-    const result = visits.record({ visitor, page, referrer, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
+    const { visitor, page, referrer, source, campaign } = req.body || {};
+    const result = visits.record({ visitor, page, referrer, source, campaign, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
     res.status(result.ok ? 204 : 400).end();
   });
 

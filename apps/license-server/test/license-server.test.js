@@ -209,6 +209,12 @@ test('Toss webhook only extends after the Toss API confirms the payment, once pe
   const afterToss = service.login({ email: 'subscriber@example.com', password: 'password123', hwid: 'pc-subscriber' });
   assert.strictEqual(afterToss.license.daysLeft >= 30 && afterToss.license.daysLeft <= 31, true);
 
+  // A 3-month plan (26,900원) gives 3 months, not 26,900 ÷ 9,900 = 2.
+  payments.toss_order_3m = { orderId: 'toss_order_3m', status: 'DONE', totalAmount: 26900, customerEmail: 'subscriber@example.com' };
+  await service.handleTossWebhook({ data: { orderId: 'toss_order_3m', status: 'DONE' } });
+  const afterPlan = service.login({ email: 'subscriber@example.com', password: 'password123', hwid: 'pc-subscriber' });
+  assert.strictEqual(afterPlan.license.daysLeft >= 120 && afterPlan.license.daysLeft <= 121, true);
+
   const unconfigured = new LicenseService(new LicenseDatabase(':memory:'), { tossSecretKey: '' });
   const noKey = await unconfigured.handleTossWebhook({ data: { orderId: 'x', status: 'DONE' } });
   assert.strictEqual(noKey.status, 'NOT_CONFIGURED');
@@ -542,6 +548,37 @@ test('Site visitors: one person counts once, bots and junk pages are skipped, ad
     assert.deepStrictEqual(visits.referrers, [{ host: 'search.naver.com', visitors: 1 }]);
     assert.strictEqual(visits.pages.find((p) => p.page === 'home').visitors, 4);
     assert.strictEqual(visits.since, '2026-10-10');
+  } finally {
+    server.close();
+    db.close();
+  }
+});
+
+test('Site visitors: campaign links and download / purchase clicks are counted apart from page views', async () => {
+  const db = new LicenseDatabase(':memory:');
+  const now = Date.parse('2026-10-12T03:00:00Z');
+  const { app } = createLicenseServer(db, { adminSecret: 'admin-test-secret', visits: { now: () => now } });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const visit = (body) => fetch(`${baseUrl}/api/visit`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' }, body: JSON.stringify(body) });
+
+  try {
+    await visit({ visitor: 'aaaaaaaa-1', page: 'home', source: 'YouTube', campaign: 'launch-2610' });
+    await visit({ visitor: 'aaaaaaaa-1', page: 'download', source: 'youtube', campaign: 'launch-2610' });
+    await visit({ visitor: 'bbbbbbbb-2', page: 'home', source: 'naverblog', campaign: 'launch-2610' });
+    await visit({ visitor: 'bbbbbbbb-2', page: 'buy', source: 'naverblog', campaign: 'launch-2610' });
+    await visit({ visitor: 'cccccccc-3', page: 'home', source: '<script>' });
+    await visit({ visitor: 'cccccccc-3', page: 'download' });
+
+    const { visits } = await (await fetch(`${baseUrl}/api/admin/visits`, { headers: { 'x-admin-secret': 'admin-test-secret' } })).json();
+    assert.deepStrictEqual(visits.total, { visitors: 3, views: 3 });
+    assert.deepStrictEqual(visits.actions.download, { today: 2, week: 2, total: 2 });
+    assert.deepStrictEqual(visits.actions.buy, { today: 1, week: 1, total: 1 });
+    assert.deepStrictEqual(visits.campaigns, [
+      { source: 'youtube', campaign: 'launch-2610', visitors: 1, downloads: 1, buys: 0 },
+      { source: 'naverblog', campaign: 'launch-2610', visitors: 1, downloads: 0, buys: 1 }
+    ]);
+    assert.ok(!visits.pages.some((p) => p.page === 'download'));
   } finally {
     server.close();
     db.close();

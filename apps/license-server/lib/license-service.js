@@ -34,6 +34,8 @@ export class LicenseService {
     this.tossFetchPayment = options.tossFetchPayment
       || ((orderId) => fetchTossPayment(orderId, this.tossSecretKey));
     this.monthlyPrice = options.monthlyPrice ?? 9900;
+    // Prices on the promo site: amount paid -> months. Other amounts fall back to whole months of monthlyPrice.
+    this.plans = options.plans ?? { 9900: 1, 26900: 3, 89000: 12 };
     this.adminSecret = options.adminSecret ?? process.env.LICENSE_ADMIN_SECRET ?? '';
   }
 
@@ -434,7 +436,7 @@ export class LicenseService {
     }
 
     const amount = Number(payment.totalAmount || 0);
-    const months = Math.floor(amount / this.monthlyPrice);
+    const months = this.plans[amount] ?? Math.floor(amount / this.monthlyPrice);
     if (months < 1) {
       return { ok: false, status: 'AMOUNT_MISMATCH', message: `결제 금액이 이용권 가격보다 적습니다. (${amount}원)` };
     }

@@ -8,18 +8,20 @@
 <meta property="og:title" content="질문 게시판 — 이웃메이트">
 <meta property="og:description" content="설치, 사용법, 구독 무엇이든 물어보세요. 제작자가 직접 답변합니다.">
 <meta property="og:image" content="https://minohlee.mooo.com/neighbormate-app/assets/autopilot.webp">
+<link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="assets/site.css?v=20261012">
+<link rel="stylesheet" href="assets/site.css?v=20261012b">
 </head>
 <body class="board-body">
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="./"><span class="brand-mark">N</span>이웃메이트</a>
+    <a class="brand" href="./"><span class="brand-mark" aria-hidden="true"></span>이웃메이트</a>
     <nav class="nav" aria-label="사이트 메뉴">
       <a href="./">홈</a>
       <a href="about.html">기능 소개</a>
+      <a href="./#pricing">가격</a>
       <a href="qna.html" aria-current="page">질문 게시판</a>
     </nav>
     <a class="btn btn-primary btn-sm" href="https://minohlee.mooo.com/updates/neighbormate/NeighborMate-Setup.exe">무료 체험</a>
@@ -324,7 +326,7 @@
   function answerHtml(q) {
     if (!q.answer) return '<section class="answers"><h3>답변 <b>0</b></h3><p class="answer-wait">⏳ 답변을 준비하고 있어요. 답변이 달리면 여기에 바로 보입니다.</p></section>';
     return `<section class="answers"><h3>답변 <b>1</b></h3>
-      <div class="answer"><div class="answer-who"><span class="brand-mark">N</span><b>이웃메이트</b><span class="tag admin">제작자</span><time>${fullDate(q.answeredAt)}</time></div>
+      <div class="answer"><div class="answer-who"><span class="brand-mark" aria-hidden="true"></span><b>이웃메이트</b><span class="tag admin">제작자</span><time>${fullDate(q.answeredAt)}</time></div>
       <p>${esc(q.answer)}</p></div></section>`;
   }
 
@@ -472,19 +474,6 @@
 })();
 </script>
 <a class="kakao-float" href="https://open.kakao.com/o/sxZ1kQRi" target="_blank" rel="noopener" aria-label="카카오톡 오픈채팅으로 문의하기"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.53 2 10.9c0 2.82 1.87 5.3 4.69 6.7l-.96 3.53c-.08.31.27.56.54.38l4.2-2.78c.5.06 1.01.09 1.53.09 5.52 0 10-3.53 10-7.92S17.52 3 12 3z"/></svg><span>카톡 문의</span></a>
-<script>
-// Visitor count for the seller admin page: one beacon per view, with a random id this browser keeps.
-(() => {
-  let id = '';
-  try {
-    id = localStorage.getItem('nm-visitor') || '';
-    if (!id) { id = crypto.randomUUID(); localStorage.setItem('nm-visitor', id); }
-  } catch {}
-  fetch('/license/api/visit', {
-    method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ visitor: id, page: 'qna', referrer: document.referrer })
-  }).catch(() => {});
-})();
-</script>
+<script src="assets/visit.js?v=20261012" data-page="qna"></script>
 </body>
 </html>
