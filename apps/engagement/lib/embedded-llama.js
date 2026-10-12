@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { detectGpuSpecs } from './hardware.js';
-import { buildBlogCommentMessages, buildNeighborMessagePrompt, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment, validateNeighborMessage } from './comment-prompt.js';
+import { buildBlogCommentMessages, buildNeighborMessagePrompt, commentSimilarity, normalizeCommentText, validateBlogComment, validateNeighborMessage } from './comment-prompt.js';
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
 export class EmbeddedLlamaServer extends EventEmitter {
@@ -420,18 +420,46 @@ export class EmbeddedLlamaServer extends EventEmitter {
     return { summary: '최근 글에서 반복해서 나타난 주제를 기준으로 분석했습니다.', audience: '해당 주제에 관심 있는 네이버 블로그 독자', targets: fallbackKeywords.map((keyword, index) => ({ keyword, reason: '최근 글에서 반복적으로 확인된 주제', score: Math.max(55, 85 - index * 5) })), method: 'fallback' };
   }
 
-  async generateCommentReply({ postTitle = '', commentText = '', commenterName = '' }) {
+  // A reply to a comment on my post. Throws when no engine writes one that is new: the same stock
+  // sentence under every comment is worse than replying on the next cycle.
+  async generateCommentReply({ postTitle = '', postSnippet = '', commentText = '', commenterName = '', recentReplies = [] }) {
     const source = normalizeCommentText(commentText);
     if (!source) throw new Error('답글을 만들 댓글 내용이 없습니다.');
-    const fallback = `${commenterName ? `${commenterName}님, ` : ''}따뜻한 댓글 감사합니다. 남겨주신 말씀 덕분에 힘이 나네요!`;
-    try {
-      const text = normalizeCommentText(await this.chatCompletion([
-        { role: 'system', content: '당신은 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 정중하고 자연스러운 한국어 대댓글 1~2문장을 작성하세요. 상대 댓글의 구체적인 표현에 답하고, 과장하거나 방문·구매 경험을 지어내지 마세요. 이모지는 최대 1개, 해시태그·URL·따옴표·자기소개는 금지합니다. 답글만 출력하세요.' },
-        { role: 'user', content: `[내 글 제목]\n${postTitle}\n[댓글 작성자]\n${commenterName}\n[받은 댓글]\n${source}` }
-      ], { temperature: 0.55, maxTokens: 120, timeoutMs: 12000 }));
-      if (text.length < 10 || text.length > 120 || /https?:\/\/|www\.|[#<>\[\]{}]/i.test(text)) return fallback;
-      return text;
-    } catch { return fallback; }
+    const recent = recentReplies.map((reply) => normalizeCommentText(reply)).filter(Boolean).slice(0, 12);
+    const system = [
+      '당신은 이 글을 직접 쓴 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 글쓴이로서 자연스러운 한국어 대댓글 1~2문장을 씁니다. 글을 처음 읽는 독자처럼 말하지 마세요.',
+      '- 상대가 쓴 구체적인 말(질문, 요청, 경험, 상황)에 먼저 답하세요. 질문이나 요청이 있으면 그 내용에 직접 답하세요.',
+      '- "잘 보고 갑니다"처럼 짧은 인사 댓글이면 내 글 내용 중 한 가지를 짚어 이야기를 이어가세요.',
+      '- "도움이 되셨다니 다행", "궁금한 점 있으시면 언제든", "더 유용한 정보로 찾아뵐게요" 같은 상투적인 문장은 쓰지 마세요.',
+      '- [최근에 쓴 대댓글]과 비슷한 문장 구조나 표현을 다시 쓰지 마세요.',
+      '- 내 글에 없는 사실(출시·배포 여부, 일정, 가격, 지원 범위)을 지어내거나 약속하지 마세요. 그런 요청은 잘 받았다고만 답하세요.',
+      '- 매번 질문으로 끝내지 마세요. 과장하거나 경험을 지어내지 마세요. 이모지는 0~1개, 해시태그·URL·따옴표·자기소개 금지. 답글만 출력하세요.'
+    ].join('\n');
+    const user = [
+      `[내 글 제목]\n${postTitle}`,
+      postSnippet ? `[내 글 앞부분]\n${String(postSnippet).slice(0, 400)}` : '',
+      `[댓글 작성자]\n${commenterName}`,
+      `[받은 댓글]\n${source}`,
+      recent.length ? `[최근에 쓴 대댓글]\n${recent.map((reply) => `- ${reply}`).join('\n')}` : ''
+    ].filter(Boolean).join('\n');
+    const stock = /도움이 되셨다니|궁금한 점 있으시면|궁금하신 점 있으면|유용한 정보로 찾아뵐|따뜻한 댓글 감사/;
+    let reason = '';
+    for (const temperature of [0.75, 0.95]) {
+      try {
+        const text = normalizeCommentText(await this.chatCompletion(
+          [{ role: 'system', content: system }, { role: 'user', content: user }],
+          { temperature, maxTokens: 140, timeoutMs: this.acceleration !== 'GPU' ? 45000 : 15000 }
+        ));
+        if (text.length < 10 || text.length > 150 || /https?:\/\/|www\.|[#<>\[\]{}]/i.test(text)) reason = '형식 오류';
+        else if (stock.test(text)) reason = '상투적인 문장';
+        else if (recent.some((reply) => commentSimilarity(text, reply) >= 0.6)) reason = '최근 대댓글과 비슷함';
+        else return text;
+        this.addLog(`Reply rejected: ${reason} (${text})`, 'warn');
+      } catch (err) {
+        reason = err.message;
+      }
+    }
+    throw new Error(`AI가 새 대댓글을 만들지 못했습니다 (${reason}). 다음 차례에 다시 시도합니다.`);
   }
 
   // A personal 서로이웃 message for the post just read; '' when no engine answers acceptably,
@@ -461,40 +489,30 @@ export class EmbeddedLlamaServer extends EventEmitter {
     const maxTokens = cpuMode ? 90 : 150;
     this.lastCommentFailure = '';
 
-    // 1. The routed engine: local model (started here if needed) or a connected Claude/Gemini subscription.
-    try {
-      const text = (await this.chatCompletion(messages, { temperature: 0.7, maxTokens, timeoutMs })).trim();
-      if (text && text !== 'SKIP') { const checked = validateBlogComment(text, { title, contentSnippet: commentContext, imageSummary }, recentComments); if (checked.ok) return checked.text; this.lastCommentFailure = `AI 응답이 안전성 검증에서 제외됨 (${checked.reasons.join(', ')})`; this.addLog(`Comment rejected: ${checked.reasons.join(', ')}`, 'warn'); }
-      else if (!text) this.lastCommentFailure = 'AI가 빈 응답을 반환했습니다.';
-    } catch (err) {
-      this.lastCommentFailure = `AI 댓글 생성 실패: ${err.message}`;
-      this.addLog(`Comment generation failed, falling back: ${err.message}`, 'warn');
+    // The routed engine (local model, or a connected Claude/Gemini subscription), with one retry when
+    // the first answer is rejected. No fill-in-the-blank fallback: "{word}에 대한 관점을 차분히 풀어주셔서…"
+    // picked words like "인용됐습니다" and the same few sentences showed up on every blog, so the caller
+    // likes the post and skips the comment instead.
+    for (const temperature of [0.7, 0.9]) {
+      try {
+        const text = (await this.chatCompletion(messages, { temperature, maxTokens, timeoutMs })).trim();
+        if (text === 'SKIP') { this.lastCommentFailure = 'AI가 이 글에는 댓글을 달지 않는 게 낫다고 판단했습니다.'; return ''; }
+        if (!text) { this.lastCommentFailure = 'AI가 빈 응답을 반환했습니다.'; continue; }
+        const checked = validateBlogComment(text, { title, contentSnippet: commentContext, imageSummary }, recentComments);
+        if (checked.ok) return checked.text;
+        this.lastCommentFailure = `AI 응답이 안전성 검증에서 제외됨 (${checked.reasons.join(', ')})`;
+        this.addLog(`Comment rejected: ${checked.reasons.join(', ')}`, 'warn');
+      } catch (err) {
+        this.lastCommentFailure = `AI 댓글 생성 실패: ${err.message}`;
+        this.addLog(`Comment generation failed: ${err.message}`, 'warn');
+        break;
+      }
     }
-
-    // 2. Smart Template Fallback when no AI answered
-    const fallback = this.generateSmartTemplateComment({ title, contentSnippet: commentContext, imageSummary, tone, recentComments });
-    const fallbackCheck = validateBlogComment(fallback, { title, contentSnippet: commentContext, imageSummary }, recentComments);
-    if (!fallbackCheck.ok && !this.lastCommentFailure) this.lastCommentFailure = `대체 댓글이 검증에서 제외됨 (${fallbackCheck.reasons.join(', ')})`;
-    return fallbackCheck.ok ? fallback : '';
+    return '';
   }
 
   cleanCommentOutput(text) {
     return normalizeCommentText(text);
-  }
-
-  generateSmartTemplateComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
-    const cleanTitle = title.replace(/[\[\(][^\]\)]*[\]\)]/g, '').trim();
-    const topic = contentKeywords({ title: cleanTitle, contentSnippet, imageSummary })[0] || '';
-    if (!topic) return '';
-    const grounded = [
-      `${topic}에 관해 직접 정리해 주신 부분이 특히 눈에 들어왔어요. 차분하게 잘 읽었습니다.`,
-      `${topic} 이야기를 구체적으로 풀어주셔서 흐름을 이해하기 좋았어요. 정성스러운 글 잘 봤습니다.`,
-      `${topic} 부분이 궁금했는데 글에서 짚어주신 내용이 인상적이네요. 공유해 주셔서 감사합니다.`,
-      `${topic}를 중심으로 핵심을 정리해 주셔서 내용을 따라가기 편했어요. 유익하게 읽고 갑니다.`,
-      `${topic}와 관련된 설명이 명확해서 도움이 됐어요. 다음 글도 기대하며 잘 보고 갑니다.`,
-      `${topic}에 대한 관점을 차분히 풀어주셔서 인상 깊었습니다. 좋은 정보 감사해요.`
-    ];
-    return grounded.find((candidate) => !recentComments.some((previous) => commentSimilarity(candidate, previous) >= 0.72)) || '';
   }
 
   async analyzeBlogTargetKeywords({ texts = [], fallbackKeywords = [] }) {

@@ -495,6 +495,8 @@ class NeighborCleanerManager {
     this.neighborGroupStore = options.neighborGroupStore || null;
     // Optional activity grading (neighbor-health.js) used while screening received requests.
     this.assessActivity = options.assessActivity || null;
+    // Optional per-person record of each real action (accepted / rejected / held / canceled / failed).
+    this.onAction = options.onAction || null;
     this.state = 'idle'; // 'idle' | 'running' | 'paused' | 'stopped' | 'completed' | 'error'
     this.isPaused = false;
     this.shouldStop = false;
@@ -520,6 +522,11 @@ class NeighborCleanerManager {
     this.logs.unshift(entry);
     if (this.logs.length > 300) this.logs.pop();
     console.log(`[NeighborCleaner] [${entry.time}] ${message}`);
+  }
+
+  recordAction(action, item, reason = '') {
+    if (!this.onAction) return;
+    Promise.resolve(this.onAction({ action, blogId: item.targetBlogId, nickname: item.nickname, reason })).catch(() => {});
   }
 
   getState() {
@@ -666,6 +673,7 @@ class NeighborCleanerManager {
 
         if (evaluation.decision === 'hold') {
           if (!dryRun) this.stats.skipped++;
+          this.recordAction('held', req, evaluation.reason);
           continue;
         }
 
@@ -676,6 +684,7 @@ class NeighborCleanerManager {
               await acceptReceivedBuddyRequest(page, req.targetBlogId, { activeGroup });
               this.stats.accepted++;
               this.log(`✅ @${req.targetBlogId} 서로이웃 신청을 수락했습니다. (그룹: ${activeGroup || '기본'})`, 'success');
+              this.recordAction('accepted', req, evaluation.reason);
             } else {
               this.stats.skipped++;
               this.log(`⏩ @${req.targetBlogId} 수락 옵션이 꺼져 있어 건너뜁니다.`, 'info');
@@ -685,6 +694,7 @@ class NeighborCleanerManager {
               await rejectReceivedBuddyRequest(page, req.targetBlogId);
               this.stats.rejected++;
               this.log(`🛡️ @${req.targetBlogId} 광고/매크로 신청을 거절했습니다.`, 'warn');
+              this.recordAction('rejected', req, evaluation.reason);
             } else {
               this.stats.skipped++;
               this.log(`⏩ @${req.targetBlogId} 거절 옵션이 꺼져 있어 건너뜁니다.`, 'info');
@@ -693,6 +703,7 @@ class NeighborCleanerManager {
         } catch (err) {
           this.stats.errors++;
           this.log(`❌ @${req.targetBlogId} 처리 실패: ${err.message}`, 'error');
+          this.recordAction('failed', req, `받은 신청 처리 실패: ${err.message}`);
         }
 
         // Jitter delay between actions
@@ -803,9 +814,11 @@ class NeighborCleanerManager {
           });
           this.stats.canceled++;
           this.log(`🗑️ @${item.targetBlogId} 보낸 신청을 성공적으로 취소하여 슬롯을 복구했습니다.`, 'success');
+          this.recordAction('canceled', item, `${item.daysAgo}일 동안 수락하지 않은 신청`);
         } catch (err) {
           this.stats.errors++;
           this.log(`❌ @${item.targetBlogId} 취소 실패: ${err.message}`, 'error');
+          this.recordAction('failed', item, `보낸 신청 회수 실패: ${err.message}`);
         } finally {
           this.stats.processed++;
         }

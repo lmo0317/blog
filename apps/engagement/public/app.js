@@ -5680,6 +5680,32 @@ function initAutopilot() {
     }
   });
 
+  $('#apReportBtn')?.addEventListener('click', async () => {
+    const button = $('#apReportBtn');
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = '⏳ 정리하는 중...';
+    try {
+      const response = await fetch(`api/activity-report?days=${encodeURIComponent($('#apReportRange')?.value || '7')}`);
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || '엑셀 파일을 만들지 못했습니다.');
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/)?.[1];
+      const filename = encoded ? decodeURIComponent(encoded) : 'activity-report.xlsx';
+      const url = URL.createObjectURL(await response.blob());
+      const link = Object.assign(document.createElement('a'), { href: url, download: filename });
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast('📊 활동 기록 엑셀을 내려받았습니다.');
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  });
+
   $('#copyApLogsBtn')?.addEventListener('click', () => {
     const text = (apStatus?.logs || []).map((entry) => `[${entry.time}] ${entry.message}`).join('\n');
     navigator.clipboard.writeText(text).then(() => toast('자율 주행 로그를 복사했습니다.')).catch(() => toast('로그를 복사하지 못했습니다.', true));

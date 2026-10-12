@@ -46,6 +46,8 @@ export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
 
 const KEYWORD_REUSE_DAYS = 7;
 const MAX_LOGS = 200;
+// Kept long enough (about a month of hourly cycles) for the Excel activity report.
+const MAX_HISTORY = 800;
 const RETRY_DISCONNECTED_MS = 10 * 60 * 1000;
 const RETRY_BUSY_MS = 3 * 60 * 1000;
 
@@ -170,7 +172,7 @@ export class AutopilotManager {
       this.usedKeywords = saved.usedKeywords && typeof saved.usedKeywords === 'object' ? saved.usedKeywords : {};
       this.seedCursor = Number(saved.seedCursor) || 0;
       this.keywordCursor = Number(saved.keywordCursor) || 0;
-      this.history = Array.isArray(saved.history) ? saved.history.slice(0, 20) : [];
+      this.history = Array.isArray(saved.history) ? saved.history.slice(0, MAX_HISTORY) : [];
       this.logs = Array.isArray(saved.logs) ? saved.logs.slice(0, MAX_LOGS) : [];
       // A cycle cut off by an app restart keeps what it finished, marked as interrupted.
       const unfinished = saved.currentCycle;
@@ -193,7 +195,7 @@ export class AutopilotManager {
         usedKeywords: this.usedKeywords,
         seedCursor: this.seedCursor,
         keywordCursor: this.keywordCursor,
-        history: this.history.slice(0, 20),
+        history: this.history.slice(0, MAX_HISTORY),
         currentCycle: this.currentCycle && !this.currentCycle.finishedAt ? this.currentCycle : null,
         logs: this.logs.slice(0, MAX_LOGS)
       }, null, 2), 'utf8');
@@ -205,7 +207,7 @@ export class AutopilotManager {
   addToHistory(cycle) {
     this.history = [cycle, ...this.history.filter((c) => c.number !== cycle.number)]
       .sort((a, b) => b.number - a.number)
-      .slice(0, 20);
+      .slice(0, MAX_HISTORY);
   }
 
   log(message, type = 'info') {

@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css?v=2">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=39">
-  <link rel="stylesheet" href="app-mode.css?v=63">
+  <link rel="stylesheet" href="app-mode.css?v=64">
 </head>
 <body>
   <main class="shell">
@@ -386,6 +386,22 @@
                   <span class="stat-label">오늘 서로이웃</span>
                   <strong class="stat-value" id="apStatNeighbors">0</strong>
                 </div>
+              </div>
+            </div>
+
+            <div class="ap-report">
+              <div class="ap-report-text">
+                <strong>📊 활동 기록 엑셀로 받기</strong>
+                <small>서이추 신청 · 내가 단 댓글 · 대댓글 · 이웃 관리 · 방문 기록을 시트별로 정리합니다</small>
+              </div>
+              <div class="ap-report-actions">
+                <select id="apReportRange" class="desktop-select ap-report-range" aria-label="기간">
+                  <option value="1">오늘</option>
+                  <option value="7" selected>최근 7일</option>
+                  <option value="30">최근 30일</option>
+                  <option value="0">전체</option>
+                </select>
+                <button type="button" class="button primary ap-report-btn" id="apReportBtn">📥 엑셀 다운로드</button>
               </div>
             </div>
 
@@ -2909,6 +2925,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=68"></script>
+  <script type="module" src="app.js?v=69"></script>
 </body>
 </html>

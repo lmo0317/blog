@@ -1706,6 +1706,7 @@ export class NaverBrowserSession {
         const opener = page.locator('button[class*="comment"], a[class*="comment"], [data-click-area="pst.re"]').first();
         if (await opener.isVisible().catch(() => false)) await opener.click({ force: true }).catch(() => {});
         await page.waitForTimeout(500);
+        const postSnippet = (await page.locator('.se-main-container, #viewTypeSelector, .post_ct').first().innerText().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 400);
         const postTitle = ((await page.locator('meta[property="og:title"]').getAttribute('content').catch(() => '')) || (await page.locator('.se-title-text, .pcol1 .itemSubjectBoldfont, [class*="post_title"]').first().innerText().catch(() => ''))).replace(/\s+/g, ' ').trim();
         const rows = await page.locator('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]').evaluateAll((elements, ownerId) => elements.map((element, index) => {
           const authorLink = element.querySelector('.u_cbox_name a, a[href*="blog.naver.com"], a[href*="m.blog.naver.com"]');
@@ -1717,7 +1718,11 @@ export class NaverBrowserSession {
           const authorName = (element.querySelector('.u_cbox_nick, .u_cbox_name, [class*="nickname"], [class*="name"]')?.textContent || '').replace(/\s+/g, ' ').trim();
           const text = (element.querySelector('.u_cbox_contents, .u_cbox_text_wrap, [class*="comment_text"], [class*="contents"]')?.textContent || '').replace(/차단된 사용자의 댓글입니다\.?/g, '').replace(/\s+/g, ' ').trim();
           const dateText = (element.querySelector('.u_cbox_date, time, [class*="date"]')?.textContent || '').replace(/\s+/g, ' ').trim();
-          const rawId = element.getAttribute('data-comment-no') || element.dataset?.commentNo || element.id || '';
+          // Naver's own comment number (data-info="commentNo:'…'" / class naverComment__comment_…): the only
+          // id that stays the same when new comments or replies push this one down the list.
+          const rawId = element.getAttribute('data-comment-no') || element.dataset?.commentNo
+            || (element.getAttribute('data-info') || '').match(/commentNo:'?(\d+)/)?.[1]
+            || String(element.className || '').match(/comment_(\d{6,})/)?.[1] || '';
           const isReply = /reply|replied/i.test(element.className) || !!element.closest('.u_cbox_reply_area');
           const isMine = authorId.toLowerCase() === String(ownerId).toLowerCase() || element.matches('.u_cbox_comment_my, .u_cbox_mine, [data-is-mine="true"]');
           const hasOwnerReply = [...element.querySelectorAll('.u_cbox_reply_area a[href*="blogId="], .u_cbox_reply_area a[href*="blog.naver.com"]')].some((link) => {
@@ -1736,8 +1741,9 @@ export class NaverBrowserSession {
           if (!row.text || row.isReply || row.isMine || row.hasOwnerReply || !row.hasReplyButton) continue;
           const safeAuthor = String(row.authorId || row.authorName || '').replace(/[\uD800-\uDFFF]/g, '');
           const safeText = String(row.text || '').slice(0, 30).replace(/[\uD800-\uDFFF]/g, '');
-          const commentId = row.rawId || `${logNo}-${row.index}-${encodeURIComponent(safeAuthor)}-${encodeURIComponent(safeText)}`;
-          comments.push({ ...row, commentId, postUrl: `https://blog.naver.com/${myBlogId}/${logNo}`, postTitle, myBlogId });
+          // No list position in the fallback id: it shifts every time a reply is added above.
+          const commentId = row.rawId || `${logNo}-${encodeURIComponent(safeAuthor)}-${encodeURIComponent(safeText)}`;
+          comments.push({ ...row, commentId, postUrl: `https://blog.naver.com/${myBlogId}/${logNo}`, postTitle, postSnippet, myBlogId });
           if (comments.length >= Math.min(Math.max(Number(commentLimit) || 100, 1), 300)) break;
         }
         if (comments.length >= commentLimit) break;
@@ -1771,11 +1777,24 @@ export class NaverBrowserSession {
       const items = page.locator('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]');
       let target = null;
       const count = await items.count().catch(() => 0);
+      // Match by Naver's comment number. Text or nickname alone matched an earlier comment with the same
+      // words (people who leave "잘 보고 갑니다" on every post) and stacked replies under that one.
+      const wantedNo = /^\d{6,}$/.test(String(commentId)) ? String(commentId) : '';
+      const wantedText = String(commentText || '').replace(/\s+/g, ' ').trim();
       for (let index = 0; index < count; index += 1) {
         const item = items.nth(index);
-        const rawId = await item.getAttribute('data-comment-no').catch(() => '') || await item.getAttribute('id').catch(() => '');
-        const body = (await item.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
-        if ((rawId && String(commentId).includes(rawId)) || (commentText && body.includes(String(commentText).slice(0, 25))) || (authorName && body.includes(authorName))) {
+        const info = await item.evaluate((element) => ({
+          no: element.getAttribute('data-comment-no') || (element.getAttribute('data-info') || '').match(/commentNo:'?(\d+)/)?.[1]
+            || String(element.className || '').match(/comment_(\d{6,})/)?.[1] || '',
+          isReply: !!element.closest('.u_cbox_reply_area'),
+          author: (element.querySelector('.u_cbox_nick, .u_cbox_name')?.textContent || '').replace(/\s+/g, ' ').trim(),
+          text: (element.querySelector('.u_cbox_contents, .u_cbox_text_wrap')?.textContent || '').replace(/\s+/g, ' ').trim()
+        })).catch(() => null);
+        if (!info || info.isReply) continue;
+        const matched = wantedNo
+          ? info.no === wantedNo
+          : Boolean(wantedText) && info.text === wantedText && (!authorName || info.author === authorName);
+        if (matched) {
           target = item;
           break;
         }

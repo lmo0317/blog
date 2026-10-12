@@ -9,7 +9,19 @@ export class CommentReplyStore {
     this.loaded = true;
   }
   key(postUrl, commentId) { return `${String(postUrl).replace(/[?#].*$/, '')}::${String(commentId)}`; }
-  async has(postUrl, commentId) { await this.load(); const key = this.key(postUrl, commentId); return this.records.some((item) => item.key === key && (item.replied || item.status === 'completed')); }
+  async has(postUrl, commentId) { await this.load(); const key = this.key(postUrl, commentId); return this.records.some((item) => item.key === key && (item.replied || item.status === 'completed' || item.status === 'duplicate')); }
+  // The same person leaving the same words again on the same post (macro "잘 보고 갑니다"): one reply is enough.
+  async repliedSame({ postUrl, authorId, authorName, text }) {
+    await this.load();
+    const post = String(postUrl).replace(/[?#].*$/, '');
+    const who = String(authorId || authorName || '').toLowerCase();
+    const words = String(text || '').replace(/\s+/g, '');
+    if (!who || !words) return false;
+    return this.records.some((item) => item.replied && item.key.startsWith(`${post}::`)
+      && String(item.authorId || item.authorName || '').toLowerCase() === who
+      && String(item.text || '').replace(/\s+/g, '') === words);
+  }
+  async recentReplies(limit = 12) { await this.load(); return this.records.filter((item) => item.replied && item.replyText).slice(0, limit).map((item) => item.replyText); }
   async add(record) {
     await this.load();
     const saved = { ...record, key: this.key(record.postUrl, record.commentId), repliedAt: new Date().toISOString() };

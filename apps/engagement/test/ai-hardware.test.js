@@ -56,7 +56,7 @@ test('ModelManager handles local models catalog and active model selection', asy
   await rm(testConfigPath, { force: true }).catch(() => {});
 });
 
-test('EmbeddedLlamaServer generates clean human-like comment templates', async () => {
+test('EmbeddedLlamaServer skips the comment when no AI answers and cleans AI output', async () => {
   const server = new EmbeddedLlamaServer({ modelManager: null, fallbackExternalUrl: '' });
   const comment = await server.generateBlogComment({
     title: '강남역 수플레 팬케이크 맛집 탐방',
@@ -64,7 +64,8 @@ test('EmbeddedLlamaServer generates clean human-like comment templates', async (
     tone: 'friendly'
   });
 
-  assert.ok(comment.length > 5);
+  assert.equal(comment, '');
+  assert.ok(server.lastCommentFailure);
   assert.equal(server.cleanCommentOutput('"정말 맛있는 후기네요!"'), '정말 맛있는 후기네요!');
   assert.equal(server.cleanCommentOutput('댓글 : 유익한 정보 감사합니다.'), '유익한 정보 감사합니다.');
 });

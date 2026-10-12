@@ -344,8 +344,9 @@ export async function deleteBuddiesOnPage(page, blogId, pageNo, buddyBlogNos) {
 const LIST_CACHE_MS = 30 * 60 * 1000;
 
 export class NeighborHealthManager {
-  constructor({ browserSession, statePath = '', getProtectedIds = async () => new Set() }) {
+  constructor({ browserSession, statePath = '', getProtectedIds = async () => new Set(), onAction = null }) {
     this.browserSession = browserSession;
+    this.onAction = onAction;
     this.statePath = statePath;
     this.getProtectedIds = getProtectedIds;
     this.state = 'idle';
@@ -505,7 +506,10 @@ export class NeighborHealthManager {
         }
         result.deleted.forEach((no) => deletedNos.add(no));
         for (const n of group) {
-          if (result.deleted.includes(n.buddyBlogNo)) this.log(`🧹 @${n.blogId} (${n.nickname}) 정리 · ${n.reason}`, 'success');
+          if (result.deleted.includes(n.buddyBlogNo)) {
+            this.log(`🧹 @${n.blogId} (${n.nickname}) 정리 · ${n.reason}`, 'success');
+            if (this.onAction) Promise.resolve(this.onAction({ action: 'removed', blogId: n.blogId, nickname: n.nickname, reason: n.reason })).catch(() => {});
+          }
           else this.log(`⚠️ @${n.blogId} 정리를 확인하지 못했습니다.`, 'warn');
         }
         this.progress = { phase: 'prune', done: deletedNos.size, total: targets.length };

@@ -21,6 +21,9 @@ import { EngagementAutomationManager } from './lib/engagement-automation.js';
 import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
 import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from './lib/ai-image-generator.js';
 import { CommentReplyStore } from './lib/comment-replies.js';
+import { NeighborActionStore } from './lib/neighbor-actions.js';
+import { buildActivityReport, REPORT_RANGES } from './lib/activity-report.js';
+import { buildXlsx } from './lib/xlsx.js';
 import { returnVisitCommenter } from './lib/return-visit.js';
 import { AutopilotManager } from './lib/autopilot.js';
 import { BlogActivityCache, NeighborHealthManager } from './lib/neighbor-health.js';
@@ -93,11 +96,13 @@ const feedManager = new FeedEngagementManager({
     return { likes: summary.todayLikes, comments: summary.todayComments };
   }
 });
+const neighborActionStore = new NeighborActionStore(dataPath('neighbor-actions.json'));
 const neighborCleanerManager = new NeighborCleanerManager({
   browserSession,
   embeddedLlama,
   neighborGroupStore: browserSession.groupStore,
-  assessActivity
+  assessActivity,
+  onAction: (action) => neighborActionStore.add(action)
 });
 const licenseClient = new LicenseClientManager({
   cachePath: dataPath('license-cache.json')
@@ -1028,6 +1033,7 @@ app.post('/api/cleaner/received/accept', async (req, res, next) => {
         ? browserSession.groupStore.getActiveGroupName?.() || ''
         : '';
       const result = await acceptReceivedBuddyRequest(page, targetBlogId, { activeGroup });
+      await neighborActionStore.add({ action: 'accepted', blogId: targetBlogId, nickname: target.nickname, reason: '직접 수락' });
       res.json({ ...result, nickname: target.nickname || targetBlogId, activeGroup });
     } finally {
       await page.close().catch(() => {});
@@ -1212,6 +1218,12 @@ async function processMyBlogComments(comments, { requestNeighbor = true, returnV
         continue;
       }
 
+      if (await commentReplyStore.repliedSame(comment)) {
+        console.log(`[CommentManagement] 같은 사람이 같은 글에 같은 댓글을 다시 남겨 건너뜀 (${comment.commentId})`);
+        results.push(await commentReplyStore.add({ ...comment, replyText: '', replied: false, status: 'duplicate', message: '같은 댓글에 이미 답했습니다.' }));
+        continue;
+      }
+
       let replyText = '';
       let replyResult = { replied: false };
       let neighborResult = { status: 'not_requested', message: '서로이웃 신청 안 함' };
@@ -1220,8 +1232,10 @@ async function processMyBlogComments(comments, { requestNeighbor = true, returnV
         console.log(`[CommentManagement] AI 대댓글 생성 중... (게시글: ${comment.postTitle || '무제'})`);
         replyText = await embeddedLlama.generateCommentReply({
           postTitle: comment.postTitle,
+          postSnippet: comment.postSnippet,
           commentText: comment.text,
-          commenterName: comment.authorName
+          commenterName: comment.authorName,
+          recentReplies: await commentReplyStore.recentReplies(12)
         });
         console.log(`[CommentManagement] 생성된 대댓글: "${replyText}"`);
 
@@ -1341,7 +1355,31 @@ const neighborHealthManager = new NeighborHealthManager({
   browserSession,
   statePath: dataPath('neighbor-health.json'),
   // People who commented on my posts are kept even when they rarely post.
-  getProtectedIds: async () => new Set((await commentReplyStore.list()).map((record) => String(record.authorId || '').toLowerCase()).filter(Boolean))
+  getProtectedIds: async () => new Set((await commentReplyStore.list()).map((record) => String(record.authorId || '').toLowerCase()).filter(Boolean)),
+  onAction: (action) => neighborActionStore.add(action)
+});
+
+// Excel report of everything the app did: neighbor requests, comments, replies, neighbor management, visits, cycles.
+app.get('/api/activity-report', async (req, res, next) => {
+  try {
+    const days = Object.hasOwn(REPORT_RANGES, String(req.query.days)) ? Number(req.query.days) : 7;
+    await Promise.all([engagementHistoryStore.load(), feedHistoryStore.load(), historyStore.load()]);
+    const { sheets } = buildActivityReport({
+      engagement: engagementHistoryStore.data.records,
+      feed: feedHistoryStore.data.records,
+      replies: await commentReplyStore.list(),
+      neighborActions: await neighborActionStore.list(),
+      neighborHistory: historyStore.data.records,
+      cycles: autopilot.history
+    }, { days });
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+    const filename = `이웃메이트_활동기록_${REPORT_RANGES[days].replace(/\s+/g, '')}_${today}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="activity-report-${today}.xlsx"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.send(buildXlsx(sheets));
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/neighbor-health/status', (_req, res) => {
