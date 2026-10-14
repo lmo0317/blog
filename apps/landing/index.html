@@ -43,11 +43,10 @@
       </div>
       <div class="phone-wrap" id="video">
         <div class="phone">
-          <video id="promo" src="assets/neighbormate-shorts.mp4" poster="assets/shorts-poster.webp" muted loop playsinline preload="metadata"
-            aria-label="이웃메이트 44초 홍보 영상"></video>
-          <button class="sound-btn" type="button" id="soundBtn">🔊 소리 켜고 처음부터</button>
+          <video id="promo" src="assets/neighbormate-shorts.mp4?v=20261014" poster="assets/shorts-poster.webp?v=20261014" muted loop playsinline preload="metadata"
+            aria-label="이웃메이트 20초 홍보 영상"></video>
         </div>
-        <p class="phone-cap">44초 홍보 영상 · 자막으로도 볼 수 있어요</p>
+        <p class="phone-cap">20초 홍보 영상 · 실제 앱 화면과 실제 AI 댓글</p>
       </div>
     </div>
   </section>
@@ -195,21 +194,9 @@
   }, { threshold: 0.12 }) : null;
   document.querySelectorAll('.reveal').forEach((el) => io ? io.observe(el) : el.classList.add('in'));
 
-  // The promo video plays muted on its own; one click restarts it with sound.
+  // The promo video (captions only, no sound) plays on its own.
   const video = document.getElementById('promo');
-  const soundBtn = document.getElementById('soundBtn');
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) video.play().catch(() => {});
-  soundBtn.addEventListener('click', () => {
-    if (video.muted) {
-      video.muted = false;
-      video.currentTime = 0;
-      video.play().catch(() => {});
-      soundBtn.textContent = '🔇 소리 끄기';
-    } else {
-      video.muted = true;
-      soundBtn.textContent = '🔊 소리 켜기';
-    }
-  });
 </script>
 <script src="assets/sheet-mock.js?v=20261012"></script>
 <a class="kakao-float" href="https://open.kakao.com/o/sxZ1kQRi" target="_blank" rel="noopener" aria-label="카카오톡 오픈채팅으로 문의하기"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.53 2 10.9c0 2.82 1.87 5.3 4.69 6.7l-.96 3.53c-.08.31.27.56.54.38l4.2-2.78c.5.06 1.01.09 1.53.09 5.52 0 10-3.53 10-7.92S17.52 3 12 3z"/></svg><span>카톡 문의</span></a>
