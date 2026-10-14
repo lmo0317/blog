@@ -144,6 +144,16 @@
   .vitem b { flex-shrink: 0; color: var(--title); font-variant-numeric: tabular-nums; }
   .vitem small { color: var(--hint); font-weight: 600; margin-left: 4px; }
   .vempty { font-size: 12.5px; color: var(--hint); padding: 8px 2px; }
+  .vlog .row { align-items: flex-start; }
+  .vlog .row.mine { background: var(--surface); }
+  .vlog .row-title { font-size: 13.5px; }
+  .vlog .when { font-variant-numeric: tabular-nums; }
+  .vlog .path { color: var(--body); font-weight: 600; }
+  .vlog .from { color: var(--info); font-weight: 700; text-decoration: none; }
+  .vlog .from:hover { text-decoration: underline; }
+  .vlog .row-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .vlog .ip { font-family: 'JetBrains Mono', Consolas, monospace; }
+  .check-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--body); cursor: pointer; white-space: nowrap; }
 
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 11px 16px; border-radius: 12px; background: #0f172a; color: #fff; font-weight: 600; font-size: 13px; box-shadow: 0 10px 25px rgba(0,0,0,.2); transition: all .2s; pointer-events: none; z-index: 20; max-width: calc(100% - 32px); }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -228,6 +238,21 @@
               <div class="vlist" id="vCampaigns"></div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="card visits vlog">
+        <div class="card-head">
+          <h2>🧾 방문 기록</h2>
+          <div class="vhead-side">
+            <span class="meta" id="vLogMeta"></span>
+            <label class="check-inline"><input type="checkbox" id="vLogMine"> 내 방문도 보기</label>
+            <button class="btn btn-sm" type="button" id="vLogRefresh">새로고침</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="list" id="vLog"></div>
+          <div class="hint">같은 브라우저가 30분 안에 본 페이지는 한 줄로 묶었습니다. 이 관리자 페이지를 연 브라우저와 집 와이파이(192.168.x)는 자동으로 <b>나</b>로 표시되고 위 숫자에서 빠집니다.</div>
         </div>
       </section>
 
@@ -371,7 +396,10 @@
     $('#gate').classList.add('hidden');
     $('#app').classList.remove('hidden');
     loadVouchers();
-    loadVisits().catch((err) => toast(`방문자 통계를 불러오지 못했습니다: ${err.message}`, true));
+    markMe().finally(() => {
+      loadVisits().catch((err) => toast(`방문자 통계를 불러오지 못했습니다: ${err.message}`, true));
+      loadVisitLog().catch((err) => toast(`방문 기록을 불러오지 못했습니다: ${err.message}`, true));
+    });
   }
 
   $('#gateForm').addEventListener('submit', async (e) => {
@@ -419,7 +447,9 @@
     $('#vWeekViews').textContent = `페이지 ${n(visits.week.views)}회`;
     $('#vTotal').textContent = `${n(visits.total.visitors)}명`;
     $('#vTotalViews').textContent = `페이지 ${n(visits.total.views)}회`;
-    $('#visitSince').textContent = visits.since ? `${visits.since.replace(/-/g, '.')}부터 집계` : '아직 방문 기록이 없습니다';
+    $('#visitSince').textContent = visits.since
+      ? `${visits.since.replace(/-/g, '.')}부터 집계${visits.mine ? ` · 내 방문 ${n(visits.mine)}회 제외` : ''}`
+      : '아직 방문 기록이 없습니다';
 
     const max = Math.max(1, ...visits.days.map((d) => d.visitors));
     const last = visits.days.length - 1;
@@ -442,6 +472,64 @@
       ? visits.referrers.map((r) => `<div class="vitem"><span>${esc(r.host)}</span><b>${n(r.visitors)}명</b></div>`).join('')
       : '<div class="vempty">아직 다른 사이트에서 들어온 방문이 없습니다. (주소를 직접 입력한 방문은 빠집니다)</div>';
   }
+
+  // ---- Visit log ----
+  // The promo site and this page share an origin, so the visitor id the site gave this browser is here
+  // too; marking it as "나" keeps the owner's own clicks out of the numbers.
+  async function markMe() {
+    let id = '';
+    try {
+      id = localStorage.getItem('nm-visitor') || '';
+      if (!id && window.crypto?.randomUUID) { id = crypto.randomUUID(); localStorage.setItem('nm-visitor', id); }
+    } catch {}
+    if (id) await api('api/admin/visits/owner', { method: 'POST', body: { visitor: id } }).catch(() => {});
+  }
+
+  const SHORT_PAGES = { home: '홈', about: '기능 소개', qna: '질문 게시판' };
+  async function loadVisitLog() {
+    const mine = $('#vLogMine').checked;
+    const data = await api(`api/admin/visits/list?limit=200&mine=${mine ? 1 : 0}`);
+    $('#vLogMeta').textContent = `방문 ${n(data.total - data.mine)}회${data.mine ? ` · 내 방문 ${n(data.mine)}회` : ''}`;
+    $('#vLog').innerHTML = data.sessions.length ? data.sessions.map((v) => {
+      const from = v.from
+        ? `<a class="from" href="${esc(v.from.link)}" target="_blank" rel="noopener noreferrer" title="${esc(v.from.url)}">🔗 ${esc(v.from.label)}</a>`
+        : '<span>🔗 직접 접속 (주소 입력·즐겨찾기·앱)</span>';
+      return `<div class="row${v.mine ? ' mine' : ''}">
+        <div class="row-main">
+          <div class="row-title">
+            <span class="when">${esc(fmt(v.startedAt))}</span>
+            ${v.mine ? '<span class="badge gray">나</span>' : ''}
+            <span class="path">${v.pages.map((p) => esc(SHORT_PAGES[p] || p)).join(' → ') || '-'}</span>
+            ${v.download ? '<span class="badge ok">⬇️ 설치 파일</span>' : ''}
+            ${v.buy ? '<span class="badge warn">💬 구매 문의</span>' : ''}
+          </div>
+          <div class="row-meta">
+            ${from}
+            ${v.campaign ? `<span>🏷️ ${esc(v.campaign)}</span>` : ''}
+            <span class="ip">IP ${esc(v.ip || '기록 없음')}</span>
+            ${v.device ? `<span>${esc(v.device)}</span>` : ''}
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-sm${v.mine ? ' btn-ghost' : ''}" type="button" data-owner="${esc(v.visitor)}" data-mine="${v.mine ? '0' : '1'}">${v.mine ? '내 방문 아님' : '나로 표시'}</button>
+        </div>
+      </div>`;
+    }).join('') : `<div class="empty"><strong>${mine ? '아직 방문 기록이 없습니다' : '아직 다른 사람의 방문이 없습니다'}</strong>홍보 글·영상에 홈페이지 링크를 걸면 여기 한 줄씩 쌓입니다.</div>`;
+  }
+  $('#vLogMine').addEventListener('change', () => loadVisitLog().catch((err) => toast(err.message, true)));
+  $('#vLogRefresh').addEventListener('click', () => {
+    loadVisits().catch(() => {});
+    loadVisitLog().then(() => toast('🔄 방문 기록을 새로 불러왔습니다.')).catch((err) => toast(err.message, true));
+  });
+  $('#vLog').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-owner]'); if (!btn) return;
+    btn.disabled = true;
+    try {
+      await api('api/admin/visits/owner', { method: 'POST', body: { visitor: btn.dataset.owner, mine: btn.dataset.mine === '1' } });
+      toast(btn.dataset.mine === '1' ? '🙋 내 방문으로 표시했습니다. 숫자에서 빠집니다.' : '방문자 숫자에 다시 넣었습니다.');
+      await Promise.all([loadVisits(), loadVisitLog()]);
+    } catch (err) { toast(err.message, true); btn.disabled = false; }
+  });
 
   // ---- Issue ----
   let days = 30;

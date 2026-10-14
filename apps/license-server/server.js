@@ -125,8 +125,8 @@ export function createLicenseServer(db = null, options = {}) {
 
   // ---- Visitor counts for the promo site: each page sends one beacon per view ----
   app.post('/api/visit', (req, res) => {
-    const { visitor, page, referrer, source, campaign } = req.body || {};
-    const result = visits.record({ visitor, page, referrer, source, campaign, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
+    const { visitor, page, referrer, source, campaign, content } = req.body || {};
+    const result = visits.record({ visitor, page, referrer, source, campaign, content, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
     res.status(result.ok ? 204 : 400).end();
   });
 
@@ -167,6 +167,9 @@ export function createLicenseServer(db = null, options = {}) {
   app.post('/api/admin/users/:id/reset-device', requireAdmin, (req, res) => send(res, service.adminResetDevice(req.params.id)));
 
   app.get('/api/admin/visits', requireAdmin, (_req, res) => send(res, visits.stats()));
+  app.get('/api/admin/visits/list', requireAdmin, (req, res) => send(res, visits.sessions({ limit: req.query.limit, includeMine: req.query.mine !== '0' })));
+  // The admin page marks the browser it is opened in as the owner's ("나"); rows can be marked by hand too
+  app.post('/api/admin/visits/owner', requireAdmin, (req, res) => send(res, visits.setOwner(req.body?.visitor, req.body?.mine !== false)));
   app.get('/api/admin/qna', requireAdmin, (req, res) => send(res, qna.adminList({ status: req.query.status })));
   app.post('/api/admin/qna/:id/answer', requireAdmin, (req, res) => send(res, qna.adminAnswer(req.params.id, req.body?.answer)));
   app.post('/api/admin/qna/:id/delete', requireAdmin, (req, res) => send(res, qna.adminDelete(req.params.id)));

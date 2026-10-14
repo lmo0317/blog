@@ -584,3 +584,51 @@ test('Site visitors: campaign links and download / purchase clicks are counted a
     db.close();
   }
 });
+
+test('Site visitors: the visit list shows IP, the exact blog that sent them, and leaves the owner out of the counts', async () => {
+  const db = new LicenseDatabase(':memory:');
+  let now = Date.parse('2026-10-14T03:00:00Z');
+  const { app } = createLicenseServer(db, { adminSecret: 'admin-test-secret', visits: { now: () => now } });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const admin = { 'Content-Type': 'application/json', 'x-admin-secret': 'admin-test-secret' };
+  const visit = (body, ip = '203.0.113.7', ua = 'Mozilla/5.0 (Linux; Android 14) Mobile NAVER(inapp; search)') =>
+    fetch(`${baseUrl}/api/visit`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': ua, 'X-Forwarded-For': ip }, body: JSON.stringify(body) });
+
+  try {
+    await visit({ visitor: 'reader-0001', page: 'home', referrer: 'https://m.blog.naver.com/PostView.naver?blogId=cook_mom&logNo=2240001&navType=by', source: 'naverblog', campaign: 'launch-2610', content: 'plus694' });
+    now += 60_000;
+    await visit({ visitor: 'reader-0001', page: 'about', referrer: 'https://minohlee.mooo.com/neighbormate-app/' });
+    await visit({ visitor: 'reader-0001', page: 'download' });
+    await visit({ visitor: 'owner-00001', page: 'home' }, '198.51.100.9', 'Mozilla/5.0 (Windows NT 10.0) Chrome/150');
+    await visit({ visitor: 'homepc-0001', page: 'home' }, '192.168.219.1');
+    now += 2 * 60 * 60 * 1000;
+    await visit({ visitor: 'reader-0001', page: 'qna', referrer: 'https://search.naver.com/search.naver?query=%EC%84%9C%EC%9D%B4%EC%B6%94+%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%A8' });
+
+    assert.strictEqual((await fetch(`${baseUrl}/api/admin/visits/owner`, { method: 'POST', headers: admin, body: JSON.stringify({ visitor: 'owner-00001' }) })).status, 200);
+    const { visits } = await (await fetch(`${baseUrl}/api/admin/visits`, { headers: admin })).json();
+    assert.deepStrictEqual(visits.total, { visitors: 1, views: 3 });
+    assert.strictEqual(visits.mine, 2);
+
+    const list = await (await fetch(`${baseUrl}/api/admin/visits/list`, { headers: admin })).json();
+    assert.strictEqual(list.total, 4);
+    assert.strictEqual(list.mine, 2);
+    const [later, , , first] = list.sessions;
+    assert.strictEqual(later.from.label, '네이버 검색 · 서이추 프로그램');
+    assert.deepStrictEqual(first.pages, ['home', 'about']);
+    assert.strictEqual(first.ip, '203.0.113.7');
+    assert.strictEqual(first.device, '모바일 · 네이버 앱');
+    assert.strictEqual(first.download, true);
+    assert.strictEqual(first.campaign, 'naverblog · launch-2610 · plus694');
+    assert.deepStrictEqual([first.from.label, first.from.link], ['네이버 블로그 · cook_mom · 글 2240001', 'https://blog.naver.com/cook_mom/2240001']);
+    assert.deepStrictEqual(list.sessions.filter((s) => s.mine).map((s) => s.visitor).sort(), ['homepc-0001', 'owner-00001']);
+
+    const others = await (await fetch(`${baseUrl}/api/admin/visits/list?mine=0`, { headers: admin })).json();
+    assert.ok(others.sessions.every((s) => !s.mine) && others.sessions.length === 2);
+    await fetch(`${baseUrl}/api/admin/visits/owner`, { method: 'POST', headers: admin, body: JSON.stringify({ visitor: 'owner-00001', mine: false }) });
+    assert.strictEqual((await (await fetch(`${baseUrl}/api/admin/visits`, { headers: admin })).json()).visits.total.visitors, 2);
+  } finally {
+    server.close();
+    db.close();
+  }
+});

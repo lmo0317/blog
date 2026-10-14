@@ -1,5 +1,5 @@
 // Visitor count for the seller admin page: one beacon per page view with a random id this browser
-// keeps, plus one per installer download and purchase-button click. The utm_source / utm_campaign of
+// keeps, plus one per installer download and purchase-button click. The utm_source / campaign / content of
 // the link that brought the visitor are remembered, so later pages and clicks count for that campaign.
 (() => {
   const page = document.currentScript?.dataset.page || '';
@@ -15,14 +15,14 @@
 
   const params = new URLSearchParams(location.search);
   if (params.get('utm_source')) {
-    store('nm-utm', JSON.stringify({ source: params.get('utm_source'), campaign: params.get('utm_campaign') || '' }));
+    store('nm-utm', JSON.stringify({ source: params.get('utm_source'), campaign: params.get('utm_campaign') || '', content: params.get('utm_content') || '' }));
   }
   let utm = {};
   try { utm = JSON.parse(store('nm-utm') || '{}'); } catch {}
 
   const send = (name) => fetch('/license/api/visit', {
     method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ visitor, page: name, referrer: document.referrer, source: utm.source, campaign: utm.campaign })
+    body: JSON.stringify({ visitor, page: name, referrer: document.referrer, source: utm.source, campaign: utm.campaign, content: utm.content })
   }).catch(() => {});
 
   if (page) send(page);
