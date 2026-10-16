@@ -1,4 +1,4 @@
-export const COMMENT_PROMPT_VERSION = 'comment-system-v1';
+export const COMMENT_PROMPT_VERSION = 'comment-system-v2';
 export const COMMENT_DUPLICATE_THRESHOLD = 0.72;
 
 const COMMENT_STOPWORDS = new Set([
@@ -43,7 +43,7 @@ export function validateBlogComment(comment, context = {}, recentComments = []) 
   if (/[<>\[\]{}]|https?:\/\/|www\.|```|\b(?:system|assistant|user)\b/i.test(raw)) reasons.push('artifact');
   if (/([!?.ㅋㅎㅠㅜ])\1{3,}/.test(text)) reasons.push('noise');
   if (/(?:제가|저도).*?(?:가봤|다녀왔|먹어봤|써봤|구매했|사용해봤)/.test(text) && !/(?:다녀왔|방문했|먹어봤|구매했|사용했)/.test(String(context.contentSnippet || ''))) reasons.push('unsupported_experience');
-  if (/(?:제가|저는|저도).*?(?:찾고 있었|고민하고 있었|궁금했|필요했|사려고 했|구매하려 했|가려고 했|해보려고 했)|(?:찾고|고민하고?) 있었는데|고민이었는데|(?:써|사용해|먹어|가|다녀)보니|(?:좋|편하|유용하)더라고요/.test(text)) reasons.push('unsupported_reader_context');
+  if (/(?:제가|저는|저도).*?(?:찾고 있었|고민하고 있었|궁금했|필요했|사려고 했|구매하려 했|가려고 했|해보려고 했)|(?:찾고|고민하고?) 있었는데|고민이었는데|궁금했는데|궁금했어요|궁금하던 참|고민했는데|찾던 중|(?:써|사용해|먹어|가|다녀)보니|(?:좋|편하|유용하)더라고요/.test(text)) reasons.push('unsupported_reader_context');
   if (/(?:유명|좋|맛있|괜찮|효과적).*?(?:다고|라고) 들었/.test(text)) reasons.push('unsupported_hearsay');
   const keywords = contentKeywords(context);
   if (keywords.length && !keywords.slice(0, 30).some((word) => text.toLowerCase().includes(word.toLowerCase()))) reasons.push('irrelevant');
@@ -51,7 +51,7 @@ export function validateBlogComment(comment, context = {}, recentComments = []) 
   return { ok: reasons.length === 0, text, reasons, keywords, action: 'comment' };
 }
 
-export function buildBlogCommentMessages({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] } = {}) {
+export function buildBlogCommentMessages({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [], guidance = [] } = {}) {
   const tones = {
     friendly: '따뜻하고 친근한 해요체',
     polite: '정중하고 차분한 해요체',
@@ -63,9 +63,11 @@ export function buildBlogCommentMessages({ title = '', contentSnippet = '', imag
 1. 제공된 글에 실제로 나온 구체적 대상이나 경험을 하나 이상 언급합니다.
 2. 글에 없는 방문, 구매, 사용, 맛, 효과를 경험한 것처럼 지어내지 않습니다.
 3. 최근 댓글의 문구와 문장 구조를 반복하지 않습니다.
-4. 따뜻한 한국어 1~2문장, 35~100자로 씁니다. 이모지는 최대 1개입니다.
+4. 따뜻한 한국어 1~2문장, 35~100자로 씁니다. 이모지는 0~1개입니다.
 5. 홍보, URL, 자기소개, 이웃 신청, 답변 해설을 쓰지 않습니다.
-6. 내용이 부족하거나 안전하게 맞춤 댓글을 쓸 수 없으면 SKIP만 출력합니다.
+6. "좋은 정보", "잘 보고 갑니다", "큰 도움이 됐어요", "정말 중요할 것 같아요"처럼 아무 글에나 붙는 말은 쓰지 않습니다.
+7. "궁금했는데", "찾고 있었는데"처럼 내 사정을 지어내지 않습니다.
+8. 내용이 부족하거나 안전하게 맞춤 댓글을 쓸 수 없으면 SKIP만 출력합니다.
 
 댓글 본문 또는 SKIP만 출력합니다.`;
   const user = `[제목]
@@ -81,7 +83,10 @@ ${normalizeCommentText(imageSummary) || '없음'}
 ${recentComments.slice(0, 8).map((comment) => `- ${normalizeCommentText(comment)}`).join('\n') || '- 없음'}
 
 [말투]
-${tones[tone] || tones.friendly}`;
+${tones[tone] || tones.friendly}${guidance.length ? `
+
+[이번 댓글 작성 지침]
+${guidance.map((hint) => `- ${hint}`).join('\n')}` : ''}`;
   return [{ role: 'system', content: system }, { role: 'user', content: user }];
 }
 

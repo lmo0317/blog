@@ -4,7 +4,7 @@ import { COMMENT_PROMPT_VERSION, buildBlogCommentMessages, validateBlogComment }
 
 test('comment prompt is versioned and uses stable structured fields', () => {
   const messages = buildBlogCommentMessages({ title: '성수 소금빵', contentSnippet: '오전 대기 20분', imageSummary: '소금빵 단면', recentComments: ['맛있어 보여요'] });
-  assert.equal(COMMENT_PROMPT_VERSION, 'comment-system-v1');
+  assert.equal(COMMENT_PROMPT_VERSION, 'comment-system-v2');
   assert.equal(messages.length, 2);
   assert.match(messages[1].content, /\[제목\]\n성수 소금빵/);
   assert.match(messages[1].content, /\[최근 사용 댓글\]/);

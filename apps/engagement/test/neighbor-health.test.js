@@ -80,7 +80,10 @@ test('classifyNeighbors splits active, inactive and newly added neighbors', () =
 
 test('NeighborHealthManager reads the list once, re-filters instantly, and prunes only from the latest result', async () => {
   let reads = 0;
-  const html = `<table><tbody>${row('2', 'mutual', 'sleepy', '26.05.01.', '26.01.01.')}${row('1', 'mutual', 'fresh', '26.10.08.', '26.01.01.')}</tbody></table>`;
+  // 'fresh' posted yesterday, so it stays active for the 7-day filter whatever day the test runs.
+  const y = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const yesterday = `${String(y.getFullYear()).slice(2)}.${String(y.getMonth() + 1).padStart(2, '0')}.${String(y.getDate()).padStart(2, '0')}.`;
+  const html = `<table><tbody>${row('2', 'mutual', 'sleepy', '26.05.01.', '26.01.01.')}${row('1', 'mutual', 'fresh', yesterday, '26.01.01.')}</tbody></table>`;
   const fakePage = {
     goto: async () => { reads += 1; },
     waitForTimeout: async () => {},

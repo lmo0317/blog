@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { detectGpuSpecs } from './hardware.js';
-import { buildBlogCommentMessages, buildNeighborMessagePrompt, commentSimilarity, normalizeCommentText, validateBlogComment, validateNeighborMessage } from './comment-prompt.js';
+import { buildBlogCommentMessages, buildNeighborMessagePrompt, normalizeCommentText, validateNeighborMessage } from './comment-prompt.js';
+import { checkComment, checkReply, replyGuidance, runHarness, styleGuidance } from './comment-harness.js';
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
 export class EmbeddedLlamaServer extends EventEmitter {
@@ -420,46 +421,58 @@ export class EmbeddedLlamaServer extends EventEmitter {
     return { summary: '최근 글에서 반복해서 나타난 주제를 기준으로 분석했습니다.', audience: '해당 주제에 관심 있는 네이버 블로그 독자', targets: fallbackKeywords.map((keyword, index) => ({ keyword, reason: '최근 글에서 반복적으로 확인된 주제', score: Math.max(55, 85 - index * 5) })), method: 'fallback' };
   }
 
-  // A reply to a comment on my post. Throws when no engine writes one that is new: the same stock
-  // sentence under every comment is worse than replying on the next cycle.
+  // Everything written in this session, newest first: the feed, keyword and return-visit jobs keep separate
+  // histories, so without this one list they repeat each other's sentences.
+  rememberOutput(kind, text) {
+    if (!this.recentOutputs) this.recentOutputs = { comment: [], reply: [] };
+    const list = this.recentOutputs[kind];
+    list.unshift(normalizeCommentText(text));
+    if (list.length > 40) list.length = 40;
+  }
+
+  recentOutputsOf(kind, extra = []) {
+    const seen = new Set();
+    return [...(this.recentOutputs?.[kind] || []), ...extra.map((text) => normalizeCommentText(text))]
+      .filter((text) => text && !seen.has(text) && seen.add(text))
+      .slice(0, 40);
+  }
+
+  // A reply to a comment on my post, through the comment harness (lib/comment-harness.js): written as the
+  // author, answering what the comment actually said, nothing made up, not like the recent replies.
+  // Throws when no attempt passes: the same stock sentence under every comment is worse than replying
+  // on the next cycle.
   async generateCommentReply({ postTitle = '', postSnippet = '', commentText = '', commenterName = '', recentReplies = [] }) {
     const source = normalizeCommentText(commentText);
     if (!source) throw new Error('답글을 만들 댓글 내용이 없습니다.');
-    const recent = recentReplies.map((reply) => normalizeCommentText(reply)).filter(Boolean).slice(0, 12);
+    const recent = this.recentOutputsOf('reply', recentReplies).slice(0, 15);
     const system = [
-      '당신은 이 글을 직접 쓴 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 글쓴이로서 자연스러운 한국어 대댓글 1~2문장을 씁니다. 글을 처음 읽는 독자처럼 말하지 마세요.',
-      '- 상대가 쓴 구체적인 말(질문, 요청, 경험, 상황)에 먼저 답하세요. 질문이나 요청이 있으면 그 내용에 직접 답하세요.',
-      '- "잘 보고 갑니다"처럼 짧은 인사 댓글이면 내 글 내용 중 한 가지를 짚어 이야기를 이어가세요.',
-      '- "도움이 되셨다니 다행", "궁금한 점 있으시면 언제든", "더 유용한 정보로 찾아뵐게요" 같은 상투적인 문장은 쓰지 마세요.',
-      '- [최근에 쓴 대댓글]과 비슷한 문장 구조나 표현을 다시 쓰지 마세요.',
-      '- 내 글에 없는 사실(출시·배포 여부, 일정, 가격, 지원 범위)을 지어내거나 약속하지 마세요. 그런 요청은 잘 받았다고만 답하세요.',
-      '- 매번 질문으로 끝내지 마세요. 과장하거나 경험을 지어내지 마세요. 이모지는 0~1개, 해시태그·URL·따옴표·자기소개 금지. 답글만 출력하세요.'
+      '당신은 이 글을 직접 쓴 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 글쓴이로서 자연스러운 한국어 대댓글 1~2문장을 씁니다.',
+      '- 글쓴이 시점을 지키세요. "정리해 주셔서", "좋은 글 감사합니다", "덕분에 알게 됐어요" 같은 독자 말투는 쓰지 않습니다.',
+      '- 상대가 실제로 쓴 말에만 답하세요. 상대가 하지 않은 말을 했다고("~하신다는 말씀", "~셨다니") 쓰지 마세요.',
+      '- 댓글과 내 글에 없는 사물·사건·기능을 지어내지 마세요. 출시·배포 여부, 일정, 가격, 지원 범위를 약속하지 마세요.',
+      '- 상대가 묻지 않은 충고나 훈계("너무 의존하지 않는 게 중요해요")를 하지 마세요.',
+      '- "도움이 되셨다니 다행", "궁금한 점 있으시면 언제든" 같은 상투적인 문장, 최근 대댓글과 비슷한 문장은 쓰지 마세요.',
+      '- 이모지는 0~1개, 해시태그·URL·따옴표·자기소개 금지. 답글만 출력하세요.'
     ].join('\n');
     const user = [
       `[내 글 제목]\n${postTitle}`,
       postSnippet ? `[내 글 앞부분]\n${String(postSnippet).slice(0, 400)}` : '',
       `[댓글 작성자]\n${commenterName}`,
       `[받은 댓글]\n${source}`,
-      recent.length ? `[최근에 쓴 대댓글]\n${recent.map((reply) => `- ${reply}`).join('\n')}` : ''
+      recent.length ? `[최근에 쓴 대댓글]\n${recent.slice(0, 10).map((reply) => `- ${reply}`).join('\n')}` : '',
+      `[이번 답글 지침]\n${replyGuidance(source, recent).map((hint) => `- ${hint}`).join('\n')}`
     ].filter(Boolean).join('\n');
-    const stock = /도움이 되셨다니|궁금한 점 있으시면|궁금하신 점 있으면|유용한 정보로 찾아뵐|따뜻한 댓글 감사/;
-    let reason = '';
-    for (const temperature of [0.75, 0.95]) {
-      try {
-        const text = normalizeCommentText(await this.chatCompletion(
-          [{ role: 'system', content: system }, { role: 'user', content: user }],
-          { temperature, maxTokens: 140, timeoutMs: this.acceleration !== 'GPU' ? 45000 : 15000 }
-        ));
-        if (text.length < 10 || text.length > 150 || /https?:\/\/|www\.|[#<>\[\]{}]/i.test(text)) reason = '형식 오류';
-        else if (stock.test(text)) reason = '상투적인 문장';
-        else if (recent.some((reply) => commentSimilarity(text, reply) >= 0.6)) reason = '최근 대댓글과 비슷함';
-        else return text;
-        this.addLog(`Reply rejected: ${reason} (${text})`, 'warn');
-      } catch (err) {
-        reason = err.message;
-      }
-    }
-    throw new Error(`AI가 새 대댓글을 만들지 못했습니다 (${reason}). 다음 차례에 다시 시도합니다.`);
+    let lastError = '';
+    const result = await runHarness({
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      complete: (messages, { temperature }) => this.chatCompletion(messages, { temperature, maxTokens: 140, timeoutMs: this.acceleration !== 'GPU' ? 45000 : 15000 })
+        .catch((err) => { lastError = err.message; return ''; }),
+      check: (text) => checkReply(text, { commentText: source, postTitle, postSnippet }, recent),
+      onReject: (text, reasons, attempt) => this.addLog(`Reply rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
+    });
+    if (result.text) { this.rememberOutput('reply', result.text); return result.text; }
+    const why = result.attempts.at(-1)?.reasons.map((item) => item.code).join(', ') || lastError || '응답 없음';
+    throw new Error(`AI가 조건에 맞는 대댓글을 만들지 못했습니다 (${why}). 다음 차례에 다시 시도합니다.`);
   }
 
   // A personal 서로이웃 message for the post just read; '' when no engine answers acceptably,
@@ -479,34 +492,35 @@ export class EmbeddedLlamaServer extends EventEmitter {
     return '';
   }
 
+  // A comment on someone else's post, through the comment harness: about this post, no invented
+  // experience, and not sounding like the last comments (same opening, ending, 정말, 😊 every time).
+  // '' when no attempt passes, so the caller likes the post and skips the comment.
   async generateBlogComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
     const cpuMode = this.acceleration !== 'GPU';
     // Integrated graphics uses the CPU runtime. Keep its prompt compact and
     // give the first-token generation enough time on ordinary laptops.
     const commentContext = String(contentSnippet || '').slice(0, cpuMode ? 360 : 500);
-    const messages = buildBlogCommentMessages({ title, contentSnippet: commentContext, imageSummary, tone, recentComments });
+    const recent = this.recentOutputsOf('comment', recentComments);
+    const messages = buildBlogCommentMessages({ title, contentSnippet: commentContext, imageSummary, tone, recentComments: recent, guidance: styleGuidance(recent) });
     const timeoutMs = cpuMode ? 60000 : 25000;
     const maxTokens = cpuMode ? 90 : 150;
     this.lastCommentFailure = '';
-
-    // The routed engine (local model, or a connected Claude/Gemini subscription), with one retry when
-    // the first answer is rejected. No fill-in-the-blank fallback: "{word}에 대한 관점을 차분히 풀어주셔서…"
-    // picked words like "인용됐습니다" and the same few sentences showed up on every blog, so the caller
-    // likes the post and skips the comment instead.
-    for (const temperature of [0.7, 0.9]) {
-      try {
-        const text = (await this.chatCompletion(messages, { temperature, maxTokens, timeoutMs })).trim();
-        if (text === 'SKIP') { this.lastCommentFailure = 'AI가 이 글에는 댓글을 달지 않는 게 낫다고 판단했습니다.'; return ''; }
-        if (!text) { this.lastCommentFailure = 'AI가 빈 응답을 반환했습니다.'; continue; }
-        const checked = validateBlogComment(text, { title, contentSnippet: commentContext, imageSummary }, recentComments);
-        if (checked.ok) return checked.text;
-        this.lastCommentFailure = `AI 응답이 안전성 검증에서 제외됨 (${checked.reasons.join(', ')})`;
-        this.addLog(`Comment rejected: ${checked.reasons.join(', ')}`, 'warn');
-      } catch (err) {
-        this.lastCommentFailure = `AI 댓글 생성 실패: ${err.message}`;
-        this.addLog(`Comment generation failed: ${err.message}`, 'warn');
-        break;
-      }
+    let failed = false;
+    const result = await runHarness({
+      messages,
+      complete: async (turn, { temperature }) => {
+        if (failed) return '';
+        try { return await this.chatCompletion(turn, { temperature, maxTokens, timeoutMs }); }
+        catch (err) { failed = true; this.lastCommentFailure = `AI 댓글 생성 실패: ${err.message}`; this.addLog(`Comment generation failed: ${err.message}`, 'warn'); return ''; }
+      },
+      check: (text) => checkComment(text, { title, contentSnippet: commentContext, imageSummary }, recent),
+      onReject: (text, reasons, attempt) => this.addLog(`Comment rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
+    });
+    if (result.skipped) { this.lastCommentFailure = 'AI가 이 글에는 댓글을 달지 않는 게 낫다고 판단했습니다.'; return ''; }
+    if (result.text) { this.rememberOutput('comment', result.text); return result.text; }
+    if (!this.lastCommentFailure) {
+      const last = result.attempts.at(-1);
+      this.lastCommentFailure = last?.reasons.length ? `AI 댓글이 검사를 3번 통과하지 못함 (${last.reasons.map((item) => item.code).join(', ')})` : 'AI가 빈 응답을 반환했습니다.';
     }
     return '';
   }
