@@ -40,11 +40,11 @@ test('a repeated comment from the same person on the same post is answered once'
 test('comment replies avoid stock sentences and recent replies, and never fall back to a fixed one', async () => {
   const { EmbeddedLlamaServer } = await import('../lib/embedded-llama.js');
   const llama = new EmbeddedLlamaServer({ modelManager: null });
-  const answers = ['도움이 되셨다니 다행이에요 😊 궁금한 점 있으시면 언제든 찾아주세요!', '들러 주셔서 고마워요. 카메라 사진은 백업 순서만 지켜도 정리가 훨씬 빨라져요.'];
+  const answers = ['도움이 되셨다니 다행이에요 😊 궁금한 점 있으시면 언제든 찾아주세요!', '들러 주셔서 고마워요. 편안한 저녁 보내세요.'];
   const prompts = [];
   llama.chatCompletion = async (messages) => { prompts.push(messages[1].content); return answers.shift(); };
   const reply = await llama.generateCommentReply({ postTitle: '사진 백업 정리', postSnippet: '카메라 사진을 한 번에 백업하는 방법', commentText: '잘보고갑니다', commenterName: '뚜벅이', recentReplies: ['응원해주셔서 감사해요!'] });
-  assert.match(reply, /백업 순서/);
+  assert.match(reply, /들러 주셔서/);
   assert.match(prompts[0], /\[내 글 앞부분\]/);
   assert.match(prompts[0], /\[최근에 쓴 대댓글\]\n- 응원해주셔서 감사해요!/);
 

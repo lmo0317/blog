@@ -115,7 +115,7 @@ test('generateBlogComment skips after three rejected answers and remembers what 
 test('generateCommentReply retries with the reasons and throws when nothing passes', async () => {
   const server = new EmbeddedLlamaServer({ appRoot: process.cwd() });
   const prompts = [];
-  const replies = ['네, 이웃 관리하는 데 시간 많이 쓰신다는 말씀에 저도 크게 공감했어요.', '찾아와 주셔서 반가워요. 자율 주행은 저도 매일 켜 두고 쓰는 기능이에요.'];
+  const replies = ['네, 이웃 관리하는 데 시간 많이 쓰신다는 말씀에 저도 크게 공감했어요.', '찾아와 주셔서 반가워요. 오늘도 좋은 하루 보내세요.'];
   server.chatCompletion = async (messages) => { prompts.push(messages); return replies[prompts.length - 1]; };
   const reply = await server.generateCommentReply({ ...myPost, commentText: '포스팅 잘봤습니다.', commenterName: '이웃' });
   assert.equal(reply, replies[1]);
@@ -148,4 +148,22 @@ test('the last attempt may break only a style rule, never a content rule', async
   assert.deepEqual(result.relaxed, ['overused_word']);
   const stock = await runHarness({ messages: [], complete: async () => '좋은 정보 잘 보고 갑니다! 인덕원역 기대돼요.', check: (text) => checkComment(text, context, []) });
   assert.equal(stock.text, '');
+});
+
+test('a reply must answer the comment, and a greeting gets a greeting, not my post', () => {
+  // Real failure on 2026-10-17 under the 서이추 guide post.
+  const guide = { postTitle: '서이추 하루 제한 100명, 거절 안 당하는 서로이웃 신청 멘트와 이웃 정리법', postSnippet: '서로이웃 신청은 하루 100명까지 보낼 수 있습니다.' };
+  const hello = '포스팅 잘 보고 갑니다~\n당신을 응원합니다~\n좋은 가을 날씨네요.\n행복한  주말보내세요~^^ 🌿';
+  assert.equal(classifyComment(hello), 'greeting');
+  const bad = checkReply('저도 하루 제한 걸린 걸 직접 겪어보니 이 부분이 정말 중요하더라고요.', { ...guide, commentText: hello });
+  assert.ok(codes(bad).includes('post_on_greeting'), codes(bad).join());
+  const topic = checkReply('서로이웃 신청 멘트는 짧게 쓰는 게 좋더라고요.', { ...guide, commentText: hello });
+  assert.ok(codes(topic).includes('post_on_greeting'), codes(topic).join());
+  for (const good of ['응원 감사해요! 선선한 가을 날씨처럼 행복한 주말 보내세요.', '따뜻한 인사 고마워요. 이웃님도 좋은 주말 되세요.']) {
+    assert.deepEqual(codes(checkReply(good, { ...guide, commentText: hello })), [], good);
+  }
+  const remark = '정리가 쉽지않아요 ㅋㅋ ~';
+  assert.deepEqual(codes(checkReply('맞아요, 이웃 정리가 생각보다 손이 많이 가더라고요.', { ...guide, commentText: remark })), []);
+  const changed = checkReply('서로이웃 신청은 하루 100명까지라서 천천히 늘리는 게 좋아요.', { ...guide, commentText: '캠핑 장비 고르는 게 제일 어렵더라고요' });
+  assert.ok(codes(changed).includes('unresponsive'), codes(changed).join());
 });

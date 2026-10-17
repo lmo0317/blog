@@ -5,7 +5,7 @@
 // (94 of 150 ended with 😊, 98 used "정말", 25 ended with "것 같아요").
 import { commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
-export const HARNESS_VERSION = 'comment-harness-v1';
+export const HARNESS_VERSION = 'comment-harness-v2';
 export const MAX_ATTEMPTS = 3;
 
 const EMOJI = /\p{Extended_Pictographic}/gu;
@@ -50,8 +50,13 @@ const PRESUMPTION = /관심이 (?:많으신|많으시|있으신)|좋아하시는
 const META = /^(?:답글|대댓글|댓글|답변)\s*[:：]|글에 언급된 내용은|이 글은 .{2,40}(?:에 대한|에 관한) 내용|(?:요청|댓글)하신 내용은/;
 // Words of a plain greeting ("안녕하세요! 따뜻한 글 잘 읽고 갑니다", "포스팅 잘보고 가요 오늘도 화이팅").
 const GREETING_WORD = /^(?:안녕|반가|따뜻|정성|읽고|읽었|잘|좋은|좋아요|즐거운|행복|감사|고마|보고|봤|갑니다|가요|가네요|하세요|되세요|보내세요|포스팅|정보|오늘도|항상|들렀|다녀|응원|힘내|화이팅|파이팅|소통|이웃님|흥미|유익|유용|재밌|재미|기대|다음|자주|또|ㅎ|ㅋ|\^)/;
+// Small talk that rides along with a greeting ("좋은 가을 날씨네요", "행복한 주말보내세요", "당신을 응원합니다").
+const SMALL_TALK = /^(?:당신|가을|봄|여름|겨울|날씨|주말|휴일|연휴|명절|추석|설날|한주|일주일|하루|저녁|아침|오후|월요일|화요일|수요일|목요일|금요일|토요일|일요일|불금|쌀쌀|선선|추운|추워|더운|더워|맑|비가|비오|눈이|평안|편안|건강하|즐겁|힘찬|활기)/;
+// A reply to a greeting may answer with greeting words instead of repeating the commenter's.
+const GREETING_REPLY = /감사|고맙|고마|반가|응원|와 ?주|들러 ?주|찾아 ?주|찾아올|들고 올|뵐게|뵙|방문|봐 ?주|읽어 ?주|힘이|기쁘|기뻐|뿌듯|하루|주말|한 주|저녁|시간 보내|보내세요|되세요|바랍니다|바랄게요|행복/;
 // Style rules: on the last attempt an answer that breaks only these is still better than skipping.
-export const SOFT_CODES = new Set(['same_opening', 'same_ending', 'overused_word', 'emoji_habit']);
+// A greeting gets a short thank-you, so a reply like the last one is fine when nothing else passes.
+export const SOFT_CODES = new Set(['same_opening', 'same_ending', 'overused_word', 'emoji_habit', 'similar_greeting']);
 // Words too general to prove the commenter said something.
 const CLAIM_STOP = new Set(['말씀', '정말', '너무', '많이', '조금', '이렇게', '그렇게', '저도', '제가']);
 
@@ -133,8 +138,8 @@ export function classifyComment(text) {
   const clean = normalizeCommentText(text);
   if (/\?|어떻게|어디서|어디에|언제|얼마|되나요|있나요|인가요|할까요|건가요/.test(clean)) return 'question';
   if (/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|부탁|주세요|주실 수|가능할까|가능한가|문의/.test(clean)) return 'request';
-  const words = stems(clean).filter((word) => !COMMON_WORDS.has(word) && !GREETING_WORD.test(word));
-  if ((words.length === 0 && clean.length < 80) || (words.length <= 1 && clean.length < 30)) return 'greeting';
+  const words = stems(clean).filter((word) => !COMMON_WORDS.has(word) && !GREETING_WORD.test(word) && !SMALL_TALK.test(word));
+  if ((words.length === 0 && clean.length < 120) || (words.length <= 1 && clean.length < 40)) return 'greeting';
   return 'remark';
 }
 
@@ -165,7 +170,11 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   if (STOCK_REPLY.test(clean)) reasons.push(reason('stock', '"도움이 되셨다니", "궁금한 점 있으시면 언제든" 같은 상투적인 문장을 빼세요.'));
   if (READER_VOICE.test(clean)) reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. "정리해 주셔서", "좋은 글 감사" 같은 독자 말투를 쓰지 마세요.'));
   if (UNSOLICITED_ADVICE.test(clean)) reasons.push(reason('unsolicited_advice', '상대가 묻지 않은 충고나 훈계("~하지 않는 게 중요해요")를 하지 마세요.'));
-  if (recentReplies.some((reply) => commentSimilarity(clean, reply) >= 0.6)) reasons.push(reason('duplicate', '최근 대댓글과 너무 비슷합니다. 문장 구조를 바꾸세요.'));
+  const similar = recentReplies.find((reply) => commentSimilarity(clean, reply) >= 0.6);
+  if (similar) {
+    const exact = commentSimilarity(clean, similar) >= 0.7;
+    reasons.push(reason(!exact && classifyComment(commentText) === 'greeting' ? 'similar_greeting' : 'duplicate', '최근 대댓글과 너무 비슷합니다. 문장 구조를 바꾸세요.'));
+  }
 
   // Nothing in the reply may be made up: its nouns must come from the comment or my post.
   const source = normalizeCommentText(`${commentText} ${postTitle} ${postSnippet}`).replace(/\s/g, '');
@@ -185,7 +194,26 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
     }
   }
 
+  // The reply must answer this comment: pick up something the commenter said, or answer a greeting with
+  // a greeting. 2026-10-17: "포스팅 잘 보고 갑니다~ 좋은 가을 날씨네요. 행복한 주말보내세요" got
+  // "저도 하루 제한 걸린 걸 직접 겪어보니 이 부분이 정말 중요하더라고요." (about my post, not the comment).
   const type = classifyComment(commentText);
+  const said = stems(commentText).filter((word) => !CLAIM_STOP.has(word));
+  const picksUp = stems(clean).filter((word) => !CLAIM_STOP.has(word))
+    .some((word) => comment.includes(word.slice(0, 2)) || said.some((other) => other.slice(0, 2) === word.slice(0, 2)));
+  if (comment && !picksUp && !(type === 'greeting' && GREETING_REPLY.test(clean))) {
+    reasons.push(reason('unresponsive', `상대 댓글("${normalizeCommentText(commentText).slice(0, 30)}")에 답하세요. 상대가 쓴 말을 받아서 답하고, 상대가 꺼내지 않은 이야기로 바꾸지 마세요.`));
+  }
+  if (type === 'greeting') {
+    // Nouns of my post the commenter never mentioned ("하루 제한", "AI 툴로 썸네일"); not describing words ("가득한").
+    const postText = normalizeCommentText(`${postTitle} ${postSnippet}`).replace(/\s/g, '');
+    const offTopic = stems(clean).filter((word) => !COMMON_WORDS.has(word) && !GREETING_WORD.test(word) && !SMALL_TALK.test(word)
+      && !(word.length >= 3 && /(?:한|하게|하고|해서|하는|스러운|로운|운|던|었|았|겠)$/.test(word))
+      && !comment.includes(word.slice(0, 2)) && postText.includes(word.length >= 4 ? word.slice(0, 3) : word));
+    if (offTopic.length || /저도 .{0,20}(?:겪어|해 ?보니|써 ?보니|직접)/.test(clean)) {
+      reasons.push(reason('post_on_greeting', `상대는 인사만 했습니다. 내 글 내용(${offTopic.slice(0, 2).join(', ') || '내 경험'})을 꺼내지 말고 인사에 인사로 답하세요.`));
+    }
+  }
   if ((type === 'question' || type === 'request')) {
     const asked = stems(commentText).filter((word) => !COMMON_WORDS.has(word));
     const answered = asked.some((word) => clean.includes(word) || clean.includes(word.slice(0, 2)));
