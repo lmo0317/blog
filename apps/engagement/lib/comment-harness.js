@@ -137,9 +137,11 @@ export function checkComment(text, context = {}, recent = []) {
 export function classifyComment(text) {
   const clean = normalizeCommentText(text);
   if (/\?|어떻게|어디서|어디에|언제|얼마|되나요|있나요|인가요|할까요|건가요/.test(clean)) return 'question';
-  if (/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|부탁|주세요|주실 수|가능할까|가능한가|문의/.test(clean)) return 'request';
-  const words = stems(clean).filter((word) => !COMMON_WORDS.has(word) && !GREETING_WORD.test(word) && !SMALL_TALK.test(word));
-  if ((words.length === 0 && clean.length < 120) || (words.length <= 1 && clean.length < 40)) return 'greeting';
+  if (/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|부탁|주세요|주실 수|가능할까|가능한가|문의|요청(?:드립|합니|해요|드려)/.test(clean)) return 'request';
+  // Words glued without spaces ("해주셔서잘보고갑니다") still count as greeting when they carry a greeting phrase.
+  const words = stems(clean).filter((word) => !COMMON_WORDS.has(word) && !GREETING_WORD.test(word) && !SMALL_TALK.test(word)
+    && !/잘보고|잘봤|잘읽고|감사|고맙|응원|보내세요|되세요|갑니다/.test(word));
+  if (words.length === 0 && clean.length < 120) return 'greeting';
   return 'remark';
 }
 
@@ -218,6 +220,9 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
     const asked = stems(commentText).filter((word) => !COMMON_WORDS.has(word));
     const answered = asked.some((word) => clean.includes(word) || clean.includes(word.slice(0, 2)));
     if (asked.length && !answered) reasons.push(reason('ignored_request', `댓글의 ${type === 'question' ? '질문' : '요청'}("${normalizeCommentText(commentText).slice(0, 30)}")에 먼저 답하세요.`));
+  }
+  if (/답방|놀러 ?와|와 ?주실/.test(commentText) && !/답방|들를|갈게|가 ?볼게|찾아갈|놀러 ?갈|방문할/.test(clean)) {
+    reasons.push(reason('ignored_request', '상대가 답방을 청했습니다. 들르겠다고 답하세요("꼭 들를게요").'));
   }
   if (type === 'greeting' && /\?[\s\p{Extended_Pictographic}]*$/u.test(clean)) reasons.push(reason('question_on_greeting', '인사만 한 사람에게 질문으로 끝내지 마세요.'));
   if (PRESUMPTION.test(clean) && !/관심|좋아|궁금/.test(commentText)) reasons.push(reason('presumption', '인사만 한 사람의 관심이나 마음을 넘겨짚지 마세요("관심이 많으신 것 같네요"). 인사에 화답하세요.'));

@@ -163,7 +163,13 @@ test('a reply must answer the comment, and a greeting gets a greeting, not my po
     assert.deepEqual(codes(checkReply(good, { ...guide, commentText: hello })), [], good);
   }
   const remark = '정리가 쉽지않아요 ㅋㅋ ~';
+  assert.equal(classifyComment(remark), 'remark');
+  assert.ok(codes(checkReply('바쁘신 와중에 들러주셔서 감사해요.', { ...guide, commentText: remark })).includes('unresponsive'));
   assert.deepEqual(codes(checkReply('맞아요, 이웃 정리가 생각보다 손이 많이 가더라고요.', { ...guide, commentText: remark })), []);
+  const visit = '오늘도 좋은글 감사해요~~답방 와주실거죠?💚';
+  assert.ok(codes(checkReply('네, 방문해주셔서 감사해요.', { ...guide, commentText: visit })).includes('ignored_request'));
+  assert.ok(!codes(checkReply('찾아와 주셔서 감사해요. 저도 꼭 들를게요!', { ...guide, commentText: visit })).includes('ignored_request'));
+  assert.equal(classifyComment('카멜클라우드 pc용 배포 요청드립니다.'), 'request');
   const changed = checkReply('서로이웃 신청은 하루 100명까지라서 천천히 늘리는 게 좋아요.', { ...guide, commentText: '캠핑 장비 고르는 게 제일 어렵더라고요' });
   assert.ok(codes(changed).includes('unresponsive'), codes(changed).join());
 });
