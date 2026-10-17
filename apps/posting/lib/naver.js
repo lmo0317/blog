@@ -68,8 +68,8 @@ export function classifyLoginPage({ authenticated = false, text = '' } = {}) {
 export function normalizePublishCategoryName(value) {
   const categoryName = String(value || '').trim();
   if (!categoryName) return '';
-  if (!['건강', '생활', 'IT', '개발', '자동화'].includes(categoryName)) {
-    throw new Error('발행 카테고리는 건강, 생활, IT, 개발 또는 자동화만 선택할 수 있습니다.');
+  if (!['블로그 운영', '건강', '생활', 'IT', '이웃메이트', '개발', '자동화'].includes(categoryName)) {
+    throw new Error('발행 카테고리는 블로그 운영, 건강, 생활, IT, 이웃메이트, 개발 또는 자동화만 선택할 수 있습니다.');
   }
   return categoryName;
 }
