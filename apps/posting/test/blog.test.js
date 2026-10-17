@@ -139,7 +139,7 @@ test('publish category accepts the configured health and living categories only'
   assert.equal(normalizePublishCategoryName(''), '');
   assert.equal(normalizePublishCategoryName('IT'), 'IT');
   assert.equal(normalizePublishCategoryName('블로그 운영'), '블로그 운영');
-  assert.throws(() => normalizePublishCategoryName('기본'), /블로그 운영, 건강, 생활, IT, 이웃메이트, 개발 또는 자동화/);
+  assert.throws(() => normalizePublishCategoryName('기본'), /블로그 운영, 건강, 생활, IT, 개발 또는 자동화/);
 });
 
 test('local LLM client generates deals blog post from Algumon rankings', async () => {

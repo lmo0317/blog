@@ -27,7 +27,7 @@ Use this reference for live posting to Naver Blog. The primary route is Playwrig
 ## Category and final publish
 
 1. Open the publish panel via `[data-click-area="tpb.publish"]`.
-2. Select the exact category (`블로그 운영`, `IT`, `건강`, `생활`) using the category dropdown trigger and verify selection. (Never use `이웃메이트` or `프로젝트`).
+2. Select the exact category (`블로그 운영`, `IT`, `건강`, `생활`) using the category dropdown trigger and verify selection. (Never use `자동화` or `프로젝트`).
 3. Apply up to 10 relevant tags.
 4. Click the final publish confirmation button and wait for Naver's redirection to the published post page.
 
