@@ -1688,16 +1688,27 @@ export class NaverBrowserSession {
     try {
       const myBlogId = await this.resolveMyBlogId(page);
 
-      await page.goto(`https://blog.naver.com/PostList.naver?blogId=${encodeURIComponent(myBlogId)}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await page.waitForTimeout(1200);
-      const listFrame = page.frames().find((frame) => frame.name() === 'mainFrame') || page.mainFrame();
-      const postUrls = await listFrame.evaluate((blogId) => [...new Set([...document.querySelectorAll('a[href]')]
-        .map((anchor) => anchor.href || '')
-        .filter((href) => new RegExp(`blog\\.naver\\.com\\/(?:PostView\\.naver\\?.*blogId=${blogId}.*logNo=\\d+|${blogId}\\/\\d+)`, 'i').test(href))
-        .map((href) => {
-          const logNo = href.match(/[?&]logNo=(\d+)/i)?.[1] || href.match(/\/(\d{8,20})(?:[/?#]|$)/)?.[1];
-          return logNo ? `https://m.blog.naver.com/${blogId}/${logNo}` : '';
-        }).filter(Boolean))], myBlogId).catch(() => []);
+      // My latest posts from the mobile post-list API. Blogs on Naver's newer layout have no mainFrame and
+      // no post links on PostList.naver, so the old link scrape found nothing there (a trial user, 2026-10-17).
+      await page.goto(`https://m.blog.naver.com/${encodeURIComponent(myBlogId)}`, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+      let postUrls = await page.evaluate(async (blogId) => {
+        const response = await fetch(`/api/blogs/${encodeURIComponent(blogId)}/post-list?categoryNo=0&itemCount=30&page=1`, { credentials: 'include' });
+        if (!response.ok) return [];
+        const items = (await response.json())?.result?.items || [];
+        return items.map((item) => item.logNo).filter(Boolean).map((logNo) => `https://m.blog.naver.com/${blogId}/${logNo}`);
+      }, myBlogId).catch(() => []);
+      if (!postUrls.length) {
+        await page.goto(`https://blog.naver.com/PostList.naver?blogId=${encodeURIComponent(myBlogId)}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForTimeout(1200);
+        const listFrame = page.frames().find((frame) => frame.name() === 'mainFrame') || page.mainFrame();
+        postUrls = await listFrame.evaluate((blogId) => [...new Set([...document.querySelectorAll('a[href]')]
+          .map((anchor) => anchor.href || '')
+          .filter((href) => new RegExp(`blog\\.naver\\.com\\/(?:PostView\\.naver\\?.*blogId=${blogId}.*logNo=\\d+|${blogId}\\/\\d+)`, 'i').test(href))
+          .map((href) => {
+            const logNo = href.match(/[?&]logNo=(\d+)/i)?.[1] || href.match(/\/(\d{8,20})(?:[/?#]|$)/)?.[1];
+            return logNo ? `https://m.blog.naver.com/${blogId}/${logNo}` : '';
+          }).filter(Boolean))], myBlogId).catch(() => []);
+      }
 
       const comments = [];
       for (const postUrl of postUrls.slice(0, Math.min(Math.max(Number(postLimit) || 10, 1), 30))) {
