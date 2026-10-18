@@ -162,6 +162,12 @@ test('a reply must answer the comment, and a greeting gets a greeting, not my po
   for (const good of ['응원 감사해요! 선선한 가을 날씨처럼 행복한 주말 보내세요.', '따뜻한 인사 고마워요. 이웃님도 좋은 주말 되세요.']) {
     assert.deepEqual(codes(checkReply(good, { ...guide, commentText: hello })), [], good);
   }
+  const busy = '즐겁고 보람찬하루 보내세요';
+  assert.equal(classifyComment('포스팅 잘 보고 갑니당 ~~♥'), 'greeting');
+  assert.deepEqual(codes(checkReply('들러 주셔서 고마워요. 또르르님도 좋은 하루 보내세요!', { ...guide, commentText: '포스팅 잘 보고 갑니당 ~~♥' })), []);
+  assert.equal(classifyComment(busy), 'greeting');
+  assert.ok(codes(checkReply('뚜벅이리포터님도 오늘 기분 좋은 하루 보내시길 바라요. 포스팅에 적어둔 AI 툴로 썸네일을 직접 만들어 보시면 작업 시간 줄이는 데 제법 쏠쏠할 거예요.',
+    { postTitle: '포토샵 없이 1분 만에 블로그 썸네일과 상품 이미지 만드는 생성형 AI 활용 가이드', postSnippet: '', commentText: busy })).includes('post_on_greeting'));
   const remark = '정리가 쉽지않아요 ㅋㅋ ~';
   assert.equal(classifyComment(remark), 'remark');
   assert.ok(codes(checkReply('바쁘신 와중에 들러주셔서 감사해요.', { ...guide, commentText: remark })).includes('unresponsive'));

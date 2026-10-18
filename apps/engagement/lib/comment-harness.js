@@ -140,7 +140,7 @@ export function classifyComment(text) {
   if (/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|부탁|주세요|주실 수|가능할까|가능한가|문의|요청(?:드립|합니|해요|드려)/.test(clean)) return 'request';
   // Words glued without spaces ("해주셔서잘보고갑니다") still count as greeting when they carry a greeting phrase.
   const words = stems(clean).filter((word) => !COMMON_WORDS.has(word) && !GREETING_WORD.test(word) && !SMALL_TALK.test(word)
-    && !/잘보고|잘봤|잘읽고|감사|고맙|응원|보내세요|되세요|갑니다/.test(word));
+    && !/잘보고|잘봤|잘읽고|감사|고맙|응원|보내세요|되세요|갑니|가요|가용|하루|주말|휴일|저녁|보람/.test(word));
   if (words.length === 0 && clean.length < 120) return 'greeting';
   return 'remark';
 }
