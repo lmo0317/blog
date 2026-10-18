@@ -37,3 +37,8 @@
 
 ## 🧠 3. 온디바이스 AI 및 0원 API 원칙
 * **초경량 특화 AI (Gemma 4 E2B)**: 외부 유료 클라우드 API를 쓰지 않고, 사용자 로컬 PC(일반 내장 그래픽/CPU)에서 0.5초 이내에 자연스러운 한국어 댓글을 생성한다.
+
+---
+
+## 🛠️ 4. 고객 대응 (Operator 스킬)
+* 고객 버그 신고·질문(블로그 댓글/답글, 메일, Q&A), 이용권 연장, 고객에게 답글·메일 보내기는 **[operator 스킬](file:///D:/work/dev/blog/.agents/skills/operator/SKILL.md)** 절차와 스크립트(`.agents/skills/operator/scripts/`)를 따른다.
