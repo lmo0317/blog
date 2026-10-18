@@ -44,11 +44,12 @@ export class LicenseService {
   }
 
   // Applies paid days to an account: extends the latest license or creates one.
-  grantDays(userId, days, { orderId = null, channel = 'direct' } = {}) {
+  // keepPlan leaves a trial a trial (a goodwill extension is not a purchase).
+  grantDays(userId, days, { orderId = null, channel = 'direct', keepPlan = false } = {}) {
     const license = this.db.getLicenseByUserId(userId);
     if (license) {
       const extended = this.db.extendLicense(license.id, days);
-      if (extended.plan_type === 'free_trial') {
+      if (extended.plan_type === 'free_trial' && !keepPlan) {
         this.db.db.prepare('UPDATE licenses SET plan_type = ? WHERE id = ?').run('monthly_paid', extended.id);
         return this.db.getLicenseById(extended.id);
       }
@@ -536,7 +537,7 @@ export class LicenseService {
     if (!Number.isFinite(dayCount) || dayCount < 1 || dayCount > 730) {
       return { ok: false, error: 'INVALID_DAYS', message: '연장 기간은 1~730일 사이여야 합니다.' };
     }
-    const license = this.grantDays(user.id, dayCount, { channel: 'admin' });
+    const license = this.grantDays(user.id, dayCount, { channel: 'admin', keepPlan: true });
     this.db.logAudit({ userId: user.id, action: 'ADMIN_EXTEND', details: `+${dayCount}d` });
     return { ok: true, expiresAt: license.expires_at, daysLeft: this.calcDaysLeft(license.expires_at) };
   }

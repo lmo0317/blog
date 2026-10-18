@@ -632,3 +632,16 @@ test('Site visitors: the visit list shows IP, the exact blog that sent them, and
     db.close();
   }
 });
+
+test('An admin extension keeps a trial a trial; a purchase makes it paid', () => {
+  const db = new LicenseDatabase(':memory:');
+  const service = new LicenseService(db, { defaultTrialDays: 3 });
+  const reg = service.register({ email: 'trial@test.com', password: 'password123', hwid: 'hwid-trial' });
+  assert.ok(reg.ok);
+  const userId = reg.user.id;
+  const extended = service.adminExtendUser(userId, 3);
+  assert.strictEqual(extended.daysLeft, 6);
+  assert.strictEqual(db.getLicenseByUserId(userId).plan_type, 'free_trial');
+  service.grantDays(userId, 30);
+  assert.strictEqual(db.getLicenseByUserId(userId).plan_type, 'monthly_paid');
+});
