@@ -209,6 +209,7 @@ function organizeCommentCategory() {
       });
       feedMount?.classList.toggle('hidden', mode !== 'neighbor-feed');
       ownPostMount?.classList.toggle('hidden', mode !== 'own-post-reply');
+      reportScreen('mode', mode);
       if (mode === 'neighbor-feed') {
         if (typeof refreshFeedSummary === 'function') refreshFeedSummary();
       }
@@ -217,6 +218,11 @@ function organizeCommentCategory() {
 }
 
 organizeCommentCategory();
+
+// Which screens the customer opens goes to the seller's admin page with the rest of the usage report.
+function reportScreen(kind, name) {
+  fetch('/api/telemetry/ui', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, name }) }).catch(() => {});
+}
 
 function setActiveTab(tabName, moveFocus = false) {
   workspaceTabs.forEach((tab) => {
@@ -229,6 +235,7 @@ function setActiveTab(tabName, moveFocus = false) {
   document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
     panel.classList.toggle('hidden', panel.dataset.tabPanel !== tabName);
   });
+  reportScreen('tab', tabName);
   if (tabName === 'comments') {
     const feedModeActive = $('.category-mode-tab[data-comment-mode="neighbor-feed"]')?.classList.contains('active');
     if (feedModeActive) {

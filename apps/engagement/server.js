@@ -2,7 +2,7 @@ import express from 'express';
 import { createWebAuth } from './lib/web-auth.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
 import { NaverBrowserSession, normalizeAutocompleteKeywords } from './lib/naver.js';
 import { discoverGoldenKeywords, analyzeSingleKeyword } from './lib/golden-keyword.js';
@@ -31,6 +31,8 @@ import { fetchNeighborFeedPosts, FeedEngagementHistoryStore, FeedEngagementManag
 import { acceptReceivedBuddyRequest, fetchReceivedBuddyRequests, fetchAllSentBuddyRequests, evaluateBuddyRequestWithAI, NeighborCleanerManager } from './lib/naver-neighbor-cleaner.js';
 import { LicenseClientManager, createLicenseGuard } from './lib/license-client.js';
 import { CloudLlmManager, CLOUD_PROVIDERS } from './lib/cloud-llm.js';
+import { TelemetryReporter, summarizeValues } from './lib/telemetry.js';
+import os from 'node:os';
 import { INSTALLED, dataPath, playwrightPath, imagesDir, modelsDir, llamaBinDir } from './lib/app-paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -131,6 +133,89 @@ modelManager.on('download_complete', async ({ modelId }) => {
 });
 licenseClient.startHeartbeat();
 
+const appVersion = (() => { try { return JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version; } catch { return ''; } })();
+const startedAt = new Date().toISOString();
+let hardwareSummary = null;
+let blogIdTriedAt = 0;
+const statusOf = (manager) => { try { return manager?.getStatus?.() || null; } catch { return null; } };
+const todayKey = () => new Date().toLocaleDateString('sv-SE');
+// Everything the admin page needs to see whether this customer is set up right and actually using the program.
+async function collectTelemetryStatus() {
+  if (!hardwareSummary) hardwareSummary = await getSystemHardwareSummary().catch(() => ({}));
+  if (browserSession.connected && !browserSession.myBlogId && Date.now() - blogIdTriedAt > 6 * 60 * 60 * 1000) {
+    blogIdTriedAt = Date.now();
+    await browserSession.resolveMyBlogId().catch(() => {});
+  }
+  const activeModel = await modelManager.getActiveModel().catch(() => null);
+  const [engagement, feed, neighbors] = await Promise.all([
+    engagementHistoryStore.getSummary().catch(() => null),
+    feedHistoryStore.getSummary().catch(() => null),
+    historyStore.getSummary().catch(() => null)
+  ]);
+  await commentReplyStore.load().catch(() => {});
+  const today = todayKey();
+  const repliesToday = (commentReplyStore.records || []).filter((r) => r.replied && String(r.repliedAt || '').startsWith(today)).length;
+  const autopilotStatus = await Promise.resolve(statusOf(autopilot)).catch(() => null);
+  const license = licenseClient.getStatus();
+  return {
+    appVersion: appUpdater?.getState?.().currentVersion || appVersion,
+    installed: INSTALLED,
+    startedAt,
+    uptimeMin: Math.round(process.uptime() / 60),
+    platform: { os: `${os.type()} ${os.release()}`, arch: os.arch(), node: process.versions.node, electron: process.versions.electron || '' },
+    hardware: summarizeHardware(hardwareSummary),
+    ai: {
+      engine: cloudLlm.settings?.engine || 'local',
+      runtime: embeddedLlama.getStatus?.().status,
+      acceleration: embeddedLlama.acceleration,
+      model: embeddedLlama.currentModelId || activeModel?.id || '',
+      modelDownloaded: Boolean(activeModel?.actualPath)
+    },
+    naver: { connected: Boolean(browserSession.connected), blogId: browserSession.myBlogId || '', loginType: browserSession.connectedId || '' },
+    license: { status: license.status, planType: license.planType, daysLeft: license.daysLeft },
+    today: {
+      date: today,
+      engagement: engagement && { likes: engagement.todayLikes, comments: engagement.todayComments, neighbors: engagement.todayNeighbors, total: engagement.todayTotal, allTime: engagement.totalRecords },
+      feed: feed && { likes: feed.todayLikes, comments: feed.todayComments, allTime: feed.totalRecords },
+      neighborRequests: neighbors && { today: neighbors.todayCount, allTime: neighbors.totalCount },
+      replies: { today: repliesToday, allTime: (commentReplyStore.records || []).filter((r) => r.replied).length }
+    },
+    automation: {
+      engagement: summarizeValues(statusOf(engagementManager)),
+      feed: summarizeValues(statusOf(feedManager)),
+      neighbors: summarizeValues(statusOf(automationManager)),
+      cleaner: summarizeValues(statusOf(neighborCleanerManager)),
+      health: summarizeValues(statusOf(neighborHealthManager)),
+      autopilot: summarizeValues(autopilotStatus)
+    },
+    telemetry: { queued: telemetry.queue.length, lastSentAt: telemetry.lastSentAt, lastError: telemetry.lastError }
+  };
+}
+function summarizeHardware(hw = {}) {
+  return {
+    cpu: String(hw.cpu?.model || '').trim(),
+    cores: hw.cpu?.cores || 0,
+    ramGb: hw.ram?.totalGb || Math.round(os.totalmem() / 1024 ** 3),
+    vramMb: hw.gpu?.totalVramMb || 0,
+    gpus: (hw.gpu?.gpus || []).map((g) => ({ name: g.name, vramMb: g.vramMb, vendor: g.vendor })).slice(0, 4),
+    recommendedModel: hw.recommendedModel?.id || ''
+  };
+}
+const telemetry = new TelemetryReporter({
+  licenseClient,
+  queuePath: dataPath('telemetry-queue.json'),
+  collectStatus: collectTelemetryStatus,
+  logSources: {
+    engagement: () => engagementManager,
+    feed: () => feedManager,
+    neighbors: () => automationManager,
+    cleaner: () => neighborCleanerManager,
+    health: () => neighborHealthManager,
+    autopilot: () => autopilot
+  }
+});
+telemetry.track('app_start', { version: appVersion, installed: INSTALLED });
+
 async function resolveActiveLlmEndpoint() {
   if (embeddedLlama.remoteUrl) {
     if (embeddedLlama.status !== 'running') await embeddedLlama.start();
@@ -184,6 +269,8 @@ app.use((req, res, next) => {
   });
   next();
 });
+// Sends what the screen does (API calls, results, errors) to the seller's admin page; see lib/telemetry.js.
+app.use(telemetry.middleware());
 app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 }));
 // Packaged builds (or NEIGHBORMATE_ENFORCE_LICENSE=1) refuse automation actions without an active subscription.
 let licenseEnforced = process.env.NEIGHBORMATE_ENFORCE_LICENSE === '1';
@@ -198,6 +285,11 @@ app.post('/api/app-update/check', async (_req, res) => {
 app.post('/api/app-update/install', async (_req, res) => {
   const started = appUpdater ? await appUpdater.install() : false;
   if (!started) return res.status(409).json({ error: '설치할 업데이트가 아직 준비되지 않았습니다.' });
+  res.json({ ok: true });
+});
+app.post('/api/telemetry/ui', (req, res) => {
+  const { kind, name } = req.body || {};
+  if (typeof kind === 'string' && typeof name === 'string') telemetry.track('ui', { kind: kind.slice(0, 20), name: name.slice(0, 40) });
   res.json({ ok: true });
 });
 app.use(createLicenseGuard(licenseClient, () => licenseEnforced));
@@ -2193,6 +2285,7 @@ export function startServer(customPort = port, { enforceLicense = false, updater
           if (cloudLlm.settings.engine !== 'local') return;
           startActiveEmbeddedModel().catch((error) => console.warn(`Local AI startup deferred: ${error.message}`));
         });
+        telemetry.start();
         resolve({ server, port: actualPort });
       });
 
@@ -2213,6 +2306,9 @@ export function startServer(customPort = port, { enforceLicense = false, updater
 export async function shutdown() {
   try {
     licenseClient.stopHeartbeat();
+    telemetry.track('app_stop', { uptimeMin: Math.round(process.uptime() / 60) });
+    telemetry.stop();
+    await Promise.race([telemetry.flush(), new Promise((r) => setTimeout(r, 3000))]);
     // Waking the rest timer here would start a fresh cycle just to cut it off.
     autopilot.halt();
     await browserSession.close();
@@ -2232,10 +2328,12 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
 
 process.on('uncaughtException', (err) => {
   console.error(`[${new Date().toISOString()}] Uncaught Exception:`, err);
+  telemetry.track('crash', { kind: 'uncaughtException', error: String(err?.stack || err).slice(0, 600) });
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error(`[${new Date().toISOString()}] Unhandled Rejection:`, reason);
+  telemetry.track('crash', { kind: 'unhandledRejection', error: String(reason?.stack || reason).slice(0, 600) });
 });
 
 // Timers (session keep-alive, license heartbeat, autopilot) keep Node alive, so exit once cleanup ends.

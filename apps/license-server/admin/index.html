@@ -159,12 +159,83 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.error { background: var(--danger); }
 
+  /* Customers */
+  .cust { margin-bottom: 18px; }
+  .cust-row { cursor: pointer; align-items: flex-start; }
+  .cust-row:hover { border-color: var(--green-border); background: #fcfffd; }
+  .cust-row.mine { background: #f8fafc; }
+  .cust-lines { display: flex; flex-direction: column; gap: 3px; }
+  .cust-lines .row-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .cust-today { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  .mini { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; color: var(--body); font-weight: 600; white-space: nowrap; }
+  .mini b { color: var(--title); font-variant-numeric: tabular-nums; }
+  .cust-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; text-align: right; }
+  .cust-side small { font-size: 11.5px; color: var(--hint); font-weight: 600; white-space: nowrap; }
+
+  /* Customer detail drawer */
+  .drawer-back { position: fixed; inset: 0; z-index: 20; background: rgba(15,23,42,.35); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .drawer-back.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 21; width: min(760px, 100%); background: var(--surface); box-shadow: -20px 0 25px -5px rgba(0,0,0,.1); transform: translateX(100%); transition: transform .25s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; background: #fff; border-bottom: 1px solid var(--border); }
+  .drawer-head h3 { margin: 0 0 6px; font-size: 16px; font-weight: 800; color: var(--title); overflow-wrap: anywhere; }
+  .drawer-head .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+  .drawer-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; background: #fff; border-bottom: 1px solid var(--border); }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px 32px; display: flex; flex-direction: column; gap: 14px; }
+  .dsec { background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+  .dsec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; flex-wrap: wrap; }
+  .dsec-head h4 { margin: 0; font-size: 14px; font-weight: 800; color: var(--title); }
+  .dsec-head small { color: var(--hint); font-size: 12px; font-weight: 600; }
+  .dsec-body { padding: 12px 16px 14px; }
+  .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+  .kv div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .kv span { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+  .kv b { font-size: 13px; color: var(--title); font-weight: 700; overflow-wrap: anywhere; }
+  .kv b.bad { color: var(--danger); } .kv b.good { color: var(--ok); } .kv b.warn { color: var(--warn); }
+  .dstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .dstats .vstat strong { font-size: 20px; }
+  .auto-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .auto-item { padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); min-width: 0; }
+  .auto-item .t { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-weight: 700; color: var(--title); font-size: 13px; }
+  .auto-item .m { margin-top: 4px; font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .dchart { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; align-items: end; height: 110px; }
+  .dbar { display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; height: 100%; gap: 1px; }
+  .dbar b { text-align: center; font-size: 10.5px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dbar i { display: block; min-height: 2px; border-radius: 5px 5px 2px 2px; background: linear-gradient(180deg, #34d399, var(--green)); }
+  .dbar i.err { min-height: 0; border-radius: 2px; background: #f87171; }
+  .ddays { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin-top: 4px; }
+  .ddays span { text-align: center; font-size: 10.5px; color: var(--hint); font-weight: 600; white-space: nowrap; }
+  .legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+  .rank { display: flex; flex-direction: column; gap: 6px; }
+  .rank .vitem span { white-space: normal; }
+  .rank .vitem.err { background: var(--danger-bg); }
+  .tl-filter { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tl-filter .chip { height: 28px; padding: 0 10px; font-size: 12px; }
+  .timeline { max-height: 460px; overflow-y: auto; border-radius: 12px; background: #0f172a; padding: 6px 0; font-size: 12.5px; }
+  .tl { display: grid; grid-template-columns: 64px 20px minmax(0, 1fr); gap: 8px; padding: 4px 12px; color: #e2e8f0; line-height: 1.5; }
+  .tl:hover { background: #1e293b; }
+  .tl time { color: #64748b; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11.5px; white-space: nowrap; padding-top: 1px; }
+  .tl .what { min-width: 0; overflow-wrap: anywhere; }
+  .tl .what small { color: #94a3b8; margin-left: 6px; }
+  .tl.error .what { color: #fca5a5; } .tl.warn .what { color: #fcd34d; } .tl.success .what { color: #86efac; } .tl.ui .what { color: #a5b4fc; }
+  .tl-day { padding: 8px 12px 4px; color: #94a3b8; font-size: 11px; font-weight: 700; }
+  .tl-more { display: flex; justify-content: center; padding: 8px; }
+  .tl-more .btn { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  .tl-empty { padding: 24px 12px; text-align: center; color: #94a3b8; }
+  .note { font-size: 12.5px; color: var(--info); line-height: 1.55; padding: 10px 12px; border-radius: 10px; background: var(--info-bg); border: 1px solid #bfdbfe; }
+  .note.warn { color: #92400e; background: var(--warn-bg); border-color: var(--warn-border); }
+
   @media (max-width: 1024px) {
     .grid { grid-template-columns: 1fr; }
     .vrow { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 720px) {
     .topbar-inner, .main { padding-left: 16px; padding-right: 16px; }
+    .cust-side { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+    .kv, .auto-grid { grid-template-columns: minmax(0, 1fr); }
+    .dstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .drawer-head, .drawer-actions, .drawer-body { padding-left: 16px; padding-right: 16px; }
     .stats, .vstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .vdays span:nth-child(odd) { visibility: hidden; }
     .row { flex-direction: column; align-items: stretch; }
@@ -206,6 +277,29 @@
         <div class="stat warn"><span>🎟️ 안 쓴 이용권</span><strong id="statUnused">-</strong></div>
       </div>
 
+      <section class="card cust">
+        <div class="card-head">
+          <h2>👥 고객 현황</h2>
+          <div class="vhead-side">
+            <span class="meta" id="custMeta"></span>
+            <button class="btn btn-sm" type="button" id="custRefresh">새로고침</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="toolbar">
+            <div class="seg chips" id="custFilter">
+              <button type="button" class="chip active" data-filter="all">전체</button>
+              <button type="button" class="chip" data-filter="attention">⚠️ 챙길 고객</button>
+              <button type="button" class="chip" data-filter="trial">🎁 체험 중</button>
+              <button type="button" class="chip" data-filter="paid">💳 유료</button>
+              <button type="button" class="chip" data-filter="mine">🙋 내 계정</button>
+            </div>
+            <input class="input search" id="userSearch" placeholder="이메일·블로그 아이디로 찾기">
+          </div>
+          <div class="list" id="userList"></div>
+          <div class="hint">고객 PC의 이웃메이트(1.0.22부터)가 몇 분마다 사용 기록을 보냅니다. 줄을 누르면 프로그램 환경, 오늘 사용량, 최근 활동 기록이 열립니다.</div>
+        </div>
+      </section>
       <section class="card visits">
         <div class="card-head">
           <h2>📈 홈페이지 방문자</h2>
@@ -296,7 +390,6 @@
           <div class="card-head">
             <div class="tabs" role="tablist">
               <button type="button" class="tab active" data-tab="vouchers" role="tab">이용권</button>
-              <button type="button" class="tab" data-tab="users" role="tab">고객</button>
               <button type="button" class="tab" data-tab="qna" role="tab">질문<span class="tab-count hidden" id="qnaCount"></span></button>
             </div>
             <button class="btn btn-sm" type="button" id="refreshBtn">새로고침</button>
@@ -311,12 +404,6 @@
                 </div>
               </div>
               <div class="list" id="voucherList"></div>
-            </div>
-            <div class="hidden" id="usersPanel">
-              <div class="toolbar">
-                <input class="input search" id="userSearch" placeholder="이메일로 찾기">
-              </div>
-              <div class="list" id="userList"></div>
             </div>
             <div class="hidden" id="qnaPanel">
               <div class="toolbar">
@@ -333,6 +420,19 @@
       </div>
     </main>
   </div>
+
+  <div class="drawer-back" id="drawerBack"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle" aria-hidden="true">
+    <div class="drawer-head">
+      <div style="min-width:0">
+        <h3 id="dTitle">고객</h3>
+        <div class="badges" id="dBadges"></div>
+      </div>
+      <button class="btn btn-sm" type="button" id="drawerClose" aria-label="닫기">✕ 닫기</button>
+    </div>
+    <div class="drawer-actions" id="dActions"></div>
+    <div class="drawer-body" id="dBody"></div>
+  </aside>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -396,6 +496,7 @@
     $('#gate').classList.add('hidden');
     $('#app').classList.remove('hidden');
     loadVouchers();
+    loadUsers();
     markMe().finally(() => {
       loadVisits().catch((err) => toast(`방문자 통계를 불러오지 못했습니다: ${err.message}`, true));
       loadVisitLog().catch((err) => toast(`방문 기록을 불러오지 못했습니다: ${err.message}`, true));
@@ -588,18 +689,18 @@
 
   // ---- Lists ----
   let currentTab = 'vouchers';
-  const loaders = { vouchers: () => loadVouchers(), users: () => loadUsers(), qna: () => loadQna() };
+  const loaders = { vouchers: () => loadVouchers(), qna: () => loadQna() };
   $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
     currentTab = tab.dataset.tab;
     $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
     $('#vouchersPanel').classList.toggle('hidden', currentTab !== 'vouchers');
-    $('#usersPanel').classList.toggle('hidden', currentTab !== 'users');
     $('#qnaPanel').classList.toggle('hidden', currentTab !== 'qna');
     loaders[currentTab]();
   }));
   $('#refreshBtn').addEventListener('click', () => {
     loadSummary().catch((err) => toast(err.message, true));
     loadVisits().catch(() => {});
+    loadUsers();
     loaders[currentTab]();
   });
   $('#voucherFilter').addEventListener('click', (e) => {
@@ -649,60 +750,392 @@
     } catch (err) { toast(err.message, true); }
   });
 
+  // ---- Customers ----
+  // Names for what the customer's program did, by the API path its screen called.
+  const ACTION_NAMES = {
+    '/api/autopilot/start': '🚗 자율 주행 켜기', '/api/autopilot/stop': '자율 주행 끄기', '/api/autopilot/settings': '자율 주행 설정 바꿈',
+    '/api/engagement/start': '💬 소통 시작', '/api/engagement/pause': '소통 일시정지', '/api/engagement/resume': '소통 다시 시작', '/api/engagement/stop': '소통 중지',
+    '/api/engagement/history': '소통 기록 보기', '/api/engagement/history/csv': '소통 기록 내려받기', '/api/engagement/neighbor-quota': '서로이웃 한도 확인',
+    '/api/engagement/training-review': '댓글 검토', '/api/engagement/training-export': '댓글 학습 데이터 내려받기',
+    '/api/feed/start': '📰 이웃 새글 댓글 시작', '/api/feed/engage-single': '이웃 글 하나에 소통', '/api/feed/pause': '이웃 새글 일시정지', '/api/feed/resume': '이웃 새글 다시 시작', '/api/feed/stop': '이웃 새글 중지', '/api/feed/preview': '이웃 새글 미리보기', '/api/feed/summary': '이웃 새글 현황',
+    '/api/comment-management/scan': '💬 내 글 댓글 조회', '/api/comment-management/process': '↩️ 대댓글·답방 실행', '/api/comment-management/history': '대댓글 기록 보기',
+    '/api/cleaner/received/preview': '받은 이웃 요청 조회', '/api/cleaner/received/start': '받은 요청 정리 시작', '/api/cleaner/received/accept': '받은 요청 수락',
+    '/api/cleaner/sent/preview': '보낸 신청 조회', '/api/cleaner/sent/start': '보낸 신청 정리 시작', '/api/cleaner/stop': '이웃 정리 중지', '/api/cleaner/pause': '이웃 정리 일시정지', '/api/cleaner/resume': '이웃 정리 다시 시작',
+    '/api/neighbor-health/query': '이웃 활동도 조회', '/api/neighbor-health/prune': '🧹 휴면 이웃 정리', '/api/neighbor-health/stop': '이웃 활동도 조회 중지',
+    '/api/neighbors/auto/start': '🤝 서로이웃 자동 신청 시작', '/api/neighbors/auto/stop': '서로이웃 신청 중지', '/api/neighbors/auto/pause': '서로이웃 신청 일시정지', '/api/neighbors/auto/resume': '서로이웃 신청 다시 시작',
+    '/api/neighbors/add': '서로이웃 신청', '/api/neighbors/open': '블로그 열기', '/api/neighbors/summary': '이웃 현황 보기', '/api/neighbors/group': '이웃 그룹 설정',
+    '/api/neighbors/history': '서로이웃 기록 보기', '/api/neighbors/history/export': '서로이웃 기록 내려받기', '/api/neighbors/history/clear': '서로이웃 기록 지움', '/api/search': '블로그 검색',
+    '/api/naver/qr': '📱 네이버 QR 로그인', '/api/naver/check': '네이버 연결 확인', '/api/naver/restore': '네이버 로그인 복구', '/api/naver/open-login': '네이버 로그인 창 열기',
+    '/api/naver/open-login-window': '네이버 로그인 창 열기', '/api/naver/login': '네이버 로그인', '/api/naver/logout': '네이버 로그아웃', '/api/naver/cookies': '네이버 쿠키 로그인', '/api/naver/inject-cookies': '네이버 쿠키 로그인',
+    '/api/license/login': '🔑 이용권 로그인', '/api/license/register': '회원가입', '/api/license/activate': '이용권 키 등록', '/api/license/logout': '이용권 로그아웃', '/api/license/verify': '이용권 확인',
+    '/api/models/download': '🤖 AI 모델 다운로드', '/api/models/select': 'AI 모델 선택', '/api/models/delete': 'AI 모델 삭제', '/api/models/cancel': 'AI 모델 다운로드 취소', '/api/models/list': 'AI 모델 목록',
+    '/api/ai-engine': 'AI 엔진 설정', '/api/hardware/specs': 'PC 사양 확인', '/api/settings': '설정 화면',
+    '/api/activity-report': '📊 활동 보고서 내려받기', '/api/app-update/install': '⬆️ 업데이트 설치', '/api/app-update/check': '업데이트 확인',
+    '/api/blog/golden-keywords': '🔑 황금 키워드 찾기', '/api/blog/keyword-detail': '키워드 자세히', '/api/blog/related-keywords': '연관 키워드', '/api/blog/trends': '트렌드 보기',
+    '/api/blog/trend-board': '트렌드 보드', '/api/blog/topic-ideas': '주제 추천', '/api/blog/my-recommendations': '내 블로그 맞춤 추천', '/api/engagement/summary': '소통 현황', '/api/engagement/training-summary': '댓글 학습 현황'
+  };
+  const SCREEN_NAMES = { autopilot: '자율 주행', engagement: '소통', keyword: '키워드', comments: '댓글', 'comment-management': '이웃 관리', settings: '설정', neighbor: '서로이웃 추가', publish: 'AI 자동 포스팅', 'neighbor-feed': '이웃 새글', 'own-post-reply': '내 글 대댓글' };
+  const SOURCE_NAMES = { engagement: '소통', feed: '이웃 새글', neighbors: '서로이웃 신청', cleaner: '이웃 관리', health: '이웃 활동도', autopilot: '자율 주행' };
+  const AUDIT_NAMES = { REGISTER: '🆕 가입', LOGIN_SUCCESS: '🔑 로그인', LOGIN_REJECTED_HWID: '⛔ 다른 PC 로그인 거부', ACTIVATE_KEY: '🎟️ 이용권 키 등록', PURCHASE_APPLIED: '💳 결제 반영', ADMIN_EXTEND: '➕ 관리자 연장', ADMIN_RESET_DEVICE: '🖥️ 관리자 PC 초기화', RESET_DEVICE: '🖥️ PC 변경' };
+  const ENGINE_NAMES = { local: '내 PC AI', claude: 'Claude 구독', gemini: 'Gemini 구독', codex: 'ChatGPT 구독' };
+  const STATE_NAMES = { running: '실행 중', paused: '일시정지', idle: '대기', stopped: '멈춤', completed: '완료', finished: '완료', error: '오류' };
+  const STAT_NAMES = { processed: '처리', liked: '공감', likes: '공감', commented: '댓글', comments: '댓글', replied: '대댓글', skipped: '건너뜀', failed: '실패', errors: '오류', requested: '이웃 신청', neighborRequested: '이웃 신청', accepted: '수락', rejected: '거절', canceled: '취소', removed: '정리', visited: '방문', total: '전체', cycle: '회차' };
+  const RUNTIME_NAMES = { running: '실행 중', starting: '켜는 중', stopped: '꺼짐', error: '오류' };
+  const CHANNEL_NAMES = { trial: '가입 시 지급', admin: '관리자', kmong: '크몽', toss: '토스 결제', direct: '직접', manual: '수동' };
+  const actionName = (p) => ACTION_NAMES[p] || (/^\/api\/ai-engine\/[^/]+\/login$/.test(p) ? 'AI 구독 로그인' : p);
+
+  const ago = (iso) => {
+    if (!iso) return '-';
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (min < 1) return '방금';
+    if (min < 60) return `${min}분 전`;
+    if (min < 60 * 24) return `${Math.floor(min / 60)}시간 전`;
+    return `${Math.floor(min / 1440)}일 전`;
+  };
+  const verNum = (v) => String(v || '0').split('.').map((x) => Number(x) || 0).reduce((a, x) => a * 1000 + x, 0);
+  let latestVersion = '';
+  async function loadLatestVersion() {
+    try {
+      const text = await (await fetch('/updates/neighbormate/latest.yml', { cache: 'no-store' })).text();
+      latestVersion = (text.match(/^version:\s*([\d.]+)/m) || [])[1] || '';
+    } catch { latestVersion = ''; }
+  }
+
+  // One look at a customer: is the program set up, running and working for them right now?
+  function health(u) {
+    const c = u.client;
+    if (!c || !c.lastReportAt) return { key: 'none', badge: '<span class="badge gray">⚪ 사용 기록 없음</span>', attention: Boolean(u.planType && u.daysLeft > 0) };
+    const offMin = (Date.now() - new Date(c.lastReportAt).getTime()) / 60000;
+    const errors = c.errors24h || 0;
+    const busy = (c.actions24h || 0) > 0 || sumToday(c.today) > 0;
+    const old = latestVersion && c.appVersion && verNum(c.appVersion) < verNum(latestVersion);
+    const parts = [];
+    if (offMin > 30) parts.push(`<span class="badge gray">💤 꺼짐 · ${esc(ago(c.lastReportAt))}</span>`);
+    else if (busy) parts.push('<span class="badge ok">🟢 사용 중</span>');
+    else parts.push('<span class="badge warn">🟡 켜두기만</span>');
+    if (errors) parts.push(`<span class="badge danger">🔴 오류 ${errors}건</span>`);
+    if (c.naverConnected === false && offMin <= 30) parts.push('<span class="badge warn">네이버 미연결</span>');
+    if (old) parts.push(`<span class="badge warn">구버전 ${esc(c.appVersion)}</span>`);
+    const expiring = u.planType && u.daysLeft > 0 && u.daysLeft <= 1;
+    return { key: 'reported', badge: parts.join(''), attention: Boolean(errors || old || expiring || (c.naverConnected === false) || (!busy && offMin <= 30) || (offMin > 60 * 24 && u.daysLeft > 0)) };
+  }
+  const sumToday = (t) => !t ? 0 : [t.engagement?.total, t.feed?.likes, t.feed?.comments, t.neighborRequests?.today, t.replies?.today].reduce((a, x) => a + (Number(x) || 0), 0);
+
+  function todayChips(t) {
+    if (!t) return '';
+    const items = [
+      ['❤️ 공감', (t.engagement?.likes || 0) + (t.feed?.likes || 0)],
+      ['💬 댓글', (t.engagement?.comments || 0) + (t.feed?.comments || 0)],
+      ['🤝 이웃 신청', (t.neighborRequests?.today || 0) + (t.engagement?.neighbors || 0)],
+      ['↩️ 대댓글', t.replies?.today || 0]
+    ];
+    return `<div class="cust-today">${items.map(([label, value]) => `<span class="mini">${label} <b>${n(value)}</b></span>`).join('')}</div>`;
+  }
+
+  let custFilter = 'all';
+  let users = [];
+  $('#custFilter').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    custFilter = chip.dataset.filter;
+    $$('#custFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
+    renderUsers();
+  });
   let searchTimer = null;
-  $('#userSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadUsers, 250); });
+  $('#userSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderUsers, 150); });
+  $('#custRefresh').addEventListener('click', () => loadUsers().then(() => toast('🔄 고객 현황을 새로 불러왔습니다.')));
 
   function planBadge(u) {
     if (!u.planType) return '<span class="badge gray">이용권 없음</span>';
     if (u.daysLeft <= 0) return '<span class="badge danger">만료</span>';
-    if (u.planType === 'free_trial') return `<span class="badge info">무료체험 · ${u.daysLeft}일 남음</span>`;
-    return `<span class="badge ok">유료 · ${u.daysLeft}일 남음</span>`;
+    if (u.planType === 'free_trial') return `<span class="badge info">🎁 체험 · ${u.daysLeft}일 남음</span>`;
+    return `<span class="badge ok">💳 유료 · ${u.daysLeft}일 남음</span>`;
   }
 
   async function loadUsers() {
     const list = $('#userList');
     try {
-      const { users } = await api(`api/admin/users?q=${encodeURIComponent($('#userSearch').value.trim())}`);
-      if (!users.length) {
-        list.innerHTML = '<div class="empty"><strong>고객이 없습니다</strong>앱에서 회원가입한 고객이 여기에 나옵니다.</div>';
-        return;
-      }
-      list.innerHTML = users.map((u) => `<div class="row">
-        <div class="row-main">
-          <div class="row-title">${esc(u.email)} ${planBadge(u)}</div>
-          <div class="row-meta">가입 ${esc(fmtDay(u.createdAt))} · 만료 ${esc(fmtDay(u.expiresAt))} · ${u.hasDevice ? 'PC 등록됨' : 'PC 미등록'} · 최근 사용 ${esc(fmt(u.lastSeenAt))}</div>
-        </div>
-        <div class="row-actions">
-          <button class="btn btn-sm" type="button" data-extend="${u.id}">+30일</button>
-          ${u.hasDevice ? `<button class="btn btn-sm" type="button" data-reset="${u.id}" title="고객이 PC를 바꿨을 때 눌러주세요">PC 초기화</button>` : ''}
-        </div>
-      </div>`).join('');
+      if (!latestVersion) await loadLatestVersion();
+      ({ users } = await api('api/admin/users'));
+      renderUsers();
     } catch (err) {
       list.innerHTML = `<div class="empty"><strong>고객 목록을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
     }
   }
 
-  $('#userList').addEventListener('click', async (e) => {
-    const extend = e.target.closest('[data-extend]');
-    const reset = e.target.closest('[data-reset]');
-    const btn = extend || reset; if (!btn) return;
-    if (btn.dataset.confirm !== '1') {
+  function renderUsers() {
+    const list = $('#userList');
+    const q = $('#userSearch').value.trim().toLowerCase();
+    const last = (u) => new Date(u.client?.lastReportAt || u.lastSeenAt || u.createdAt || 0).getTime();
+    const rows = [...users].sort((x, y) => (x.owner - y.owner) || (last(y) - last(x))).map((u) => ({ u, h: health(u) })).filter(({ u, h }) => {
+      if (q && !`${u.email} ${u.client?.blogId || ''} ${u.name || ''}`.toLowerCase().includes(q)) return false;
+      if (custFilter === 'mine') return u.owner;
+      if (u.owner && custFilter !== 'all') return false;
+      if (custFilter === 'trial') return u.planType === 'free_trial' && u.daysLeft > 0;
+      if (custFilter === 'paid') return u.planType && u.planType !== 'free_trial' && u.daysLeft > 0;
+      if (custFilter === 'attention') return h.attention;
+      return true;
+    });
+    const customers = users.filter((u) => !u.owner);
+    const active = customers.filter((u) => u.client?.lastReportAt && Date.now() - new Date(u.client.lastReportAt).getTime() < 30 * 60000).length;
+    const attention = customers.filter((u) => health(u).attention).length;
+    $('#custMeta').textContent = `고객 ${n(customers.length)}명 · 지금 켜둔 사람 ${n(active)}명 · 챙길 고객 ${n(attention)}명${latestVersion ? ` · 최신 ${latestVersion}` : ''}`;
+    if (!rows.length) {
+      const empty = { attention: '지금 챙길 고객이 없습니다', mine: '내 계정으로 표시한 계정이 없습니다', trial: '체험 중인 고객이 없습니다', paid: '유료 고객이 아직 없습니다' }[custFilter] || '고객이 없습니다';
+      list.innerHTML = `<div class="empty"><strong>${empty}</strong>${custFilter === 'mine' ? '고객 상세에서 [내 계정으로 표시]를 누르면 숫자에서 빠지고 여기로 옵니다.' : '앱에서 회원가입한 고객이 여기에 나옵니다.'}</div>`;
+      return;
+    }
+    list.innerHTML = rows.map(({ u, h }) => {
+      const c = u.client || {};
+      const blog = c.blogId ? `<a href="https://blog.naver.com/${esc(c.blogId)}" target="_blank" rel="noopener" data-stop>🌐 ${esc(c.blogId)}</a>` : '<span>🌐 블로그 모름</span>';
+      const ai = c.aiEngine ? `<span>🤖 ${esc(ENGINE_NAMES[c.aiEngine] || c.aiEngine)}${c.aiEngine === 'local' && c.acceleration ? ` · ${esc(c.acceleration)}` : ''}</span>` : '';
+      const last = c.lastAction ? `<span>🖱️ 마지막 행동: ${esc(actionName(c.lastAction))} · ${esc(ago(c.lastActionAt))}</span>` : '';
+      return `<div class="row cust-row${u.owner ? ' mine' : ''}" data-user="${u.id}" tabindex="0" role="button" aria-label="${esc(u.email)} 자세히 보기">
+        <div class="row-main cust-lines">
+          <div class="row-title">${esc(u.email)} ${planBadge(u)} ${u.owner ? '<span class="badge gray">🙋 나</span>' : ''} ${h.badge}</div>
+          <div class="row-meta">${blog}${c.appVersion ? `<span>📦 ${esc(c.appVersion)}</span>` : ''}${ai}${last}</div>
+          ${todayChips(c.today)}
+        </div>
+        <div class="cust-side">
+          <small>가입 ${esc(fmtDay(u.createdAt))}</small>
+          <small>최근 접속 ${esc(ago(c.lastReportAt || u.lastSeenAt))}</small>
+          <span class="btn btn-sm">자세히 →</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  $('#userList').addEventListener('click', (e) => {
+    if (e.target.closest('[data-stop]')) return;
+    const row = e.target.closest('[data-user]'); if (row) openCustomer(Number(row.dataset.user));
+  });
+  $('#userList').addEventListener('keydown', (e) => {
+    const row = e.target.closest('[data-user]');
+    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openCustomer(Number(row.dataset.user)); }
+  });
+
+  // ---- Customer detail drawer ----
+  let openId = null;
+  let detail = null;
+  let tlFilter = '';
+  let tlEvents = [];
+  function closeDrawer() {
+    $('#drawer').classList.remove('open'); $('#drawerBack').classList.remove('open');
+    $('#drawer').setAttribute('aria-hidden', 'true');
+    openId = null;
+  }
+  $('#drawerClose').addEventListener('click', closeDrawer);
+  $('#drawerBack').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && openId) closeDrawer(); });
+
+  async function openCustomer(id) {
+    openId = id; tlFilter = '';
+    const u = users.find((x) => x.id === id);
+    $('#dTitle').textContent = u?.email || '고객';
+    $('#dBadges').innerHTML = u ? planBadge(u) + health(u).badge : '';
+    $('#dActions').innerHTML = '';
+    $('#dBody').innerHTML = '<div class="empty"><strong>불러오는 중…</strong></div>';
+    $('#drawer').classList.add('open'); $('#drawerBack').classList.add('open');
+    $('#drawer').setAttribute('aria-hidden', 'false');
+    $('#drawerClose').focus();
+    try {
+      detail = await api(`api/admin/users/${id}?limit=300`);
+      if (openId !== id) return;
+      tlEvents = detail.events;
+      renderDetail(u);
+    } catch (err) {
+      $('#dBody').innerHTML = `<div class="empty"><strong>불러오지 못했습니다</strong>${esc(err.message)}</div>`;
+    }
+  }
+
+  const kv = (pairs) => `<div class="kv">${pairs.filter(Boolean).map(([k, v, cls = '']) => `<div><span>${esc(k)}</span><b class="${cls}">${v}</b></div>`).join('')}</div>`;
+  const sec = (title, body, side = '') => `<section class="dsec"><div class="dsec-head"><h4>${title}</h4>${side}</div><div class="dsec-body">${body}</div></section>`;
+
+  function renderDetail(listRow) {
+    const d = detail;
+    const st = d.status;
+    const lic = d.licenses[0];
+    const u = listRow || {};
+    $('#dTitle').textContent = d.user.email;
+    $('#dBadges').innerHTML = (listRow ? planBadge(listRow) + health(listRow).badge : '') + (d.owner ? '<span class="badge gray">🙋 내 계정</span>' : '');
+    $('#dActions').innerHTML = `
+      <button class="btn btn-sm" type="button" data-dext="3">+3일 (서비스)</button>
+      <button class="btn btn-sm" type="button" data-dext="30">+30일</button>
+      ${d.user.hasDevice ? '<button class="btn btn-sm" type="button" data-dreset title="고객이 PC를 바꿨을 때">🖥️ PC 초기화</button>' : ''}
+      <button class="btn btn-sm" type="button" data-dcopy="${esc(d.user.email)}">📋 이메일 복사</button>
+      ${st?.naver?.blogId ? `<a class="btn btn-sm" href="https://blog.naver.com/${esc(st.naver.blogId)}" target="_blank" rel="noopener">🌐 블로그 열기 ↗</a>` : ''}
+      <button class="btn btn-sm btn-ghost" type="button" data-downer="${d.owner ? '0' : '1'}">${d.owner ? '고객으로 되돌리기' : '🙋 내 계정으로 표시'}</button>`;
+
+    const parts = [];
+    if (!st) {
+      parts.push('<div class="note warn">이 고객의 프로그램에서 아직 사용 기록이 오지 않았습니다. 1.0.22 이전 버전이거나, 가입 후 프로그램을 켜지 않았거나, 로그인하지 않은 상태입니다. 아래는 서버에 남은 계정 정보입니다.</div>');
+    } else {
+      const offMin = (Date.now() - new Date(st.lastReportAt).getTime()) / 60000;
+      const t = st.today || {};
+      parts.push(sec('📊 오늘 사용량', `<div class="dstats">
+        <div class="vstat hot"><span>❤️ 공감</span><strong>${n((t.engagement?.likes || 0) + (t.feed?.likes || 0))}</strong><small>소통 ${n(t.engagement?.likes)} · 이웃 새글 ${n(t.feed?.likes)}</small></div>
+        <div class="vstat"><span>💬 댓글</span><strong>${n((t.engagement?.comments || 0) + (t.feed?.comments || 0))}</strong><small>소통 ${n(t.engagement?.comments)} · 이웃 새글 ${n(t.feed?.comments)}</small></div>
+        <div class="vstat"><span>🤝 이웃 신청</span><strong>${n((t.neighborRequests?.today || 0) + (t.engagement?.neighbors || 0))}</strong><small>누적 ${n(t.neighborRequests?.allTime)}</small></div>
+        <div class="vstat"><span>↩️ 대댓글</span><strong>${n(t.replies?.today)}</strong><small>누적 ${n(t.replies?.allTime)}</small></div>
+      </div>`, `<small>${esc(t.date || '')} 기준 · ${esc(ago(st.lastReportAt))} 보고</small>`));
+
+      const gpus = (st.hardware?.gpus || []).map((g) => `${g.name}${g.vramMb ? ` (${Math.round(g.vramMb / 1024)}GB)` : ''}`).join(', ');
+      const aiOk = st.ai?.engine !== 'local' || st.ai?.runtime === 'running';
+      parts.push(sec('🖥️ 프로그램 환경', kv([
+        ['프로그램 버전', `${esc(st.appVersion || '-')}${latestVersion && verNum(st.appVersion) < verNum(latestVersion) ? ` <span class="badge warn">최신 ${esc(latestVersion)}</span>` : ''}`],
+        ['상태', offMin > 30 ? `💤 꺼짐 (${esc(ago(st.lastReportAt))})` : `🟢 켜져 있음 · ${n(st.uptimeMin)}분째`, offMin > 30 ? '' : 'good'],
+        ['네이버', st.naver?.connected ? `연결됨${st.naver.blogId ? ` · ${esc(st.naver.blogId)}` : ''}` : '연결 안 됨', st.naver?.connected ? 'good' : 'bad'],
+        ['AI 엔진', `${esc(ENGINE_NAMES[st.ai?.engine] || st.ai?.engine || '-')}${st.ai?.engine === 'local' ? ` · ${esc(RUNTIME_NAMES[st.ai?.runtime] || st.ai?.runtime || '-')} · ${esc(st.ai?.acceleration || '')}` : ''}`, aiOk ? '' : 'bad'],
+        ['AI 모델', st.ai?.engine && st.ai.engine !== 'local' ? '구독 AI 사용 (내 PC 모델 안 씀)' : esc(st.ai?.model || (st.ai?.modelDownloaded ? '받음' : '없음 · 다운로드 필요')), st.ai?.engine === 'local' && !st.ai?.modelDownloaded ? 'bad' : ''],
+        ['운영체제', esc(st.platform?.os || '-')],
+        ['CPU / RAM', `${esc(st.hardware?.cpu || '-')} · ${n(st.hardware?.cores)}코어 · ${n(st.hardware?.ramGb)}GB`],
+        ['그래픽카드', esc(gpus || '없음 (내장 그래픽)')],
+        ['처음 보고', esc(fmt(st.firstReportAt))],
+        ['접속 IP', esc(st.ip || '-')],
+        st.telemetry?.lastError ? ['전송 오류', esc(st.telemetry.lastError), 'bad'] : null
+      ])));
+
+      const auto = st.automation || {};
+      const autoNames = { autopilot: '🚗 자율 주행', engagement: '💬 소통', feed: '📰 이웃 새글', neighbors: '🤝 서로이웃 신청', cleaner: '🧹 이웃 관리', health: '📈 이웃 활동도' };
+      parts.push(sec('⚙️ 자동 작업 상태', `<div class="auto-grid">${Object.entries(autoNames).map(([key, label]) => {
+        const a = auto[key] || {};
+        const state = key === 'autopilot' ? (a.enabled ? (a.running ? 'running' : 'idle') : 'off') : (a.state || a.status || 'idle');
+        const badge = state === 'running' ? '<span class="badge ok">실행 중</span>' : state === 'off' ? '<span class="badge gray">꺼짐</span>' : state === 'paused' ? '<span class="badge warn">일시정지</span>' : `<span class="badge gray">${esc(STATE_NAMES[state] || state)}</span>`;
+        const stats = a.stats && typeof a.stats === 'object' ? Object.entries(a.stats).filter(([k, v]) => typeof v === 'number' && v && STAT_NAMES[k]).slice(0, 5).map(([k, v]) => `${STAT_NAMES[k]} ${n(v)}`).join(' · ') : '';
+        const extra = key === 'autopilot' && a.nextRunAt ? `다음 실행 ${fmt(a.nextRunAt)}` : '';
+        return `<div class="auto-item"><div class="t">${label}${badge}</div><div class="m">${esc([stats, extra].filter(Boolean).join(' · ') || '기록 없음')}</div></div>`;
+      }).join('')}</div>`));
+    }
+
+    // 14-day activity
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+      const day = new Date(Date.now() - i * 86400000 + 9 * 3600000).toISOString().slice(0, 10);
+      days.push({ day, ...(d.daily.find((x) => x.day === day) || { actions: 0, errors: 0, successes: 0, starts: 0 }) });
+    }
+    const max = Math.max(1, ...days.map((x) => (x.actions || 0) + (x.successes || 0)));
+    parts.push(sec('📅 최근 14일 활동', `<div class="dchart">${days.map((x) => {
+      const work = (x.actions || 0) + (x.successes || 0);
+      return `<div class="dbar" title="${esc(x.day)} · 행동 ${n(x.actions)} · 성공한 자동 작업 ${n(x.successes)} · 오류 ${n(x.errors)} · 실행 ${n(x.starts)}회"><b>${work || ''}</b>${work ? `<i style="height:${Math.max(3, Math.round((work / max) * 80))}%"></i>` : ''}${x.errors ? `<i class="err" style="height:${Math.min(20, 4 + x.errors)}%"></i>` : ''}</div>`;
+    }).join('')}</div><div class="ddays">${days.map((x, i) => `<span>${i === 13 ? '오늘' : (x.day.slice(8) === '01' ? `${Number(x.day.slice(5, 7))}/${Number(x.day.slice(8))}` : Number(x.day.slice(8)))}</span>`).join('')}</div>`,
+      '<div class="legend"><span><i style="background:var(--green)"></i>행동·성공</span><span><i style="background:#f87171"></i>오류</span></div>'));
+
+    parts.push(sec('🖱️ 많이 쓴 기능 (최근 7일)', d.topActions.length
+      ? `<div class="rank">${d.topActions.map((a) => `<div class="vitem${a.errors ? ' err' : ''}"><span>${esc(actionName(a.name))}${a.errors ? ` · 실패 ${n(a.errors)}` : ''}</span><b>${n(a.n)}회<small>${esc(ago(a.lastAt))}</small></b></div>`).join('')}</div>`
+      : '<div class="vempty">아직 누른 기능이 없습니다.</div>'));
+
+    parts.push(sec('🚨 자주 난 오류·경고 (최근 7일)', d.topErrors.length
+      ? `<div class="rank">${d.topErrors.map((e) => `<div class="vitem err"><span>${esc(actionName(String(e.message || '')))}</span><b>${n(e.n)}회<small>${esc(ago(e.lastAt))}</small></b></div>`).join('')}</div>`
+      : '<div class="vempty">오류가 없습니다. 👍</div>'));
+
+    parts.push(sec('🧾 활동 기록', `<div class="tl-filter" id="tlFilter">
+        ${[['', '전체'], ['action', '🖱️ 행동'], ['error', '🚨 오류'], ['log', '⚙️ 자동 작업'], ['ui', '👀 화면']].map(([k, label]) => `<button type="button" class="chip${k === tlFilter ? ' active' : ''}" data-tl="${k}">${label}</button>`).join('')}
+      </div><div class="timeline" id="timeline" style="margin-top:10px">${timelineHtml(tlEvents)}</div>`, '<small>최근 것부터 · 60일 보관</small>'));
+
+    const licRows = d.licenses.map((l) => `<div class="vitem"><span>${l.planType === 'free_trial' ? '🎁 체험' : '💳 유료'} · ${esc(l.planType !== 'free_trial' && l.channel === 'trial' ? '체험에서 전환' : (CHANNEL_NAMES[l.channel] || l.channel || '-'))}${l.orderId ? ` · ${esc(l.orderId)}` : ''}</span><b>${esc(fmtDay(l.expiresAt))}까지<small>${l.daysLeft}일 남음</small></b></div>`).join('');
+    parts.push(sec('🎟️ 계정·이용권', kv([
+      ['가입', esc(fmt(d.user.createdAt))],
+      ['만료', lic ? `${esc(fmt(lic.expiresAt))} (${lic.daysLeft}일 남음)` : '이용권 없음', lic && lic.daysLeft <= 1 ? 'warn' : ''],
+      ['PC 등록', d.user.hasDevice ? '등록됨' : '미등록'],
+      ['PC 바꾼 날', esc(fmt(d.user.deviceChangedAt))],
+      ['마지막 확인', esc(fmt(lic?.lastSeenAt))],
+      ['마지막 IP', esc(lic?.lastIp || '-')]
+    ]) + (licRows ? `<div class="rank" style="margin-top:12px">${licRows}</div>` : '') + (d.vouchers.length ? `<div class="rank" style="margin-top:8px">${d.vouchers.map((v) => `<div class="vitem"><span>🎟️ ${esc(v.code)} · ${esc(CHANNEL_NAMES[v.channel] || v.channel || '')}${v.order_id ? ` · ${esc(v.order_id)}` : ''}</span><b>${esc(daysLabel(v.days))}<small>${esc(fmtDay(v.redeemed_at))}</small></b></div>`).join('')}</div>` : '')));
+
+    parts.push(sec('📜 계정 이력', d.audit.length
+      ? `<div class="rank">${d.audit.map((a) => `<div class="vitem"><span>${esc(AUDIT_NAMES[a.action] || a.action)}${a.details && !/hwid=/.test(a.details) ? ` · ${esc(a.details)}` : ''}</span><b>${esc(fmt(a.at))}<small>${esc(a.ip || '')}</small></b></div>`).join('')}</div>`
+      : '<div class="vempty">기록이 없습니다.</div>'));
+
+    $('#dBody').innerHTML = parts.join('');
+  }
+
+  function eventLine(e) {
+    const d = e.data || {};
+    if (e.type === 'log') return { cls: e.level === 'error' ? 'error' : e.level === 'warn' ? 'warn' : e.level === 'success' ? 'success' : '', icon: '⚙️', text: `[${SOURCE_NAMES[d.source] || d.source || '자동'}] ${d.message || ''}` };
+    if (e.type === 'ui') return { cls: 'ui', icon: '👀', text: `${SCREEN_NAMES[d.name] || d.name} 화면 열기` };
+    if (e.type === 'app_start') return { cls: 'success', icon: '▶️', text: `프로그램 시작${d.version ? ` · ${d.version}` : ''}` };
+    if (e.type === 'app_stop') return { cls: '', icon: '⏹️', text: `프로그램 종료 · ${n(d.uptimeMin)}분 사용` };
+    if (e.type === 'crash') return { cls: 'error', icon: '💥', text: `프로그램 오류 ${String(d.error || '').split('\n')[0]}` };
+    if (e.type === 'api' || e.type === 'api_error') {
+      const detailBits = [];
+      const r = d.result || {};
+      for (const [k, v] of Object.entries(r)) {
+        if (k === 'ok') continue;
+        if (typeof v === 'number') detailBits.push(`${k} ${v}`);
+        else if (v && typeof v === 'object' && typeof v.count === 'number') detailBits.push(`${k} ${v.count}개`);
+        if (detailBits.length >= 4) break;
+      }
+      const req = d.request ? Object.entries(d.request).filter(([, v]) => typeof v !== 'object').slice(0, 3).map(([k, v]) => `${k}=${v}`).join(' ') : '';
+      const extra = [req, detailBits.join(' · '), d.repeat ? `${d.repeat}번` : '', d.ms > 3000 ? `${(d.ms / 1000).toFixed(1)}초` : ''].filter(Boolean).join(' · ');
+      return e.type === 'api_error'
+        ? { cls: 'error', icon: '🚨', text: `${actionName(d.path)} 실패: ${d.error || d.status}`, extra }
+        : { cls: d.method === 'GET' ? '' : 'success', icon: d.method === 'GET' ? '·' : '🖱️', text: actionName(d.path), extra };
+    }
+    return { cls: '', icon: '·', text: `${e.type} ${JSON.stringify(d).slice(0, 120)}` };
+  }
+
+  function timelineHtml(events) {
+    if (!events.length) return '<div class="tl-empty">기록이 없습니다.</div>';
+    let lastDay = '';
+    const out = [];
+    for (const e of events) {
+      const dt = new Date(e.at);
+      const day = dt.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+      if (day !== lastDay) { out.push(`<div class="tl-day">${esc(day)}</div>`); lastDay = day; }
+      const line = eventLine(e);
+      const clock = [dt.getHours(), dt.getMinutes(), dt.getSeconds()].map((x) => String(x).padStart(2, '0')).join(':');
+      out.push(`<div class="tl ${line.cls}"><time>${clock}</time><span>${line.icon}</span><span class="what">${esc(line.text)}${line.extra ? `<small>${esc(line.extra)}</small>` : ''}</span></div>`);
+    }
+    if (events.length >= 300 && events.length % 300 === 0) out.push('<div class="tl-more"><button class="btn btn-sm" type="button" data-tlmore>더 오래된 기록 보기</button></div>');
+    return out.join('');
+  }
+
+  $('#drawer').addEventListener('click', async (e) => {
+    const chip = e.target.closest('[data-tl]');
+    if (chip) {
+      tlFilter = chip.dataset.tl;
+      $$('#tlFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
+      $('#timeline').innerHTML = '<div class="tl-empty">불러오는 중…</div>';
+      try {
+        const r = await api(`api/admin/users/${openId}?limit=300${tlFilter ? `&type=${tlFilter}` : ''}`);
+        tlEvents = r.events;
+        $('#timeline').innerHTML = timelineHtml(tlEvents);
+      } catch (err) { $('#timeline').innerHTML = `<div class="tl-empty">${esc(err.message)}</div>`; }
+      return;
+    }
+    if (e.target.closest('[data-tlmore]')) {
+      const before = tlEvents.at(-1)?.at;
+      try {
+        const r = await api(`api/admin/users/${openId}?limit=300${tlFilter ? `&type=${tlFilter}` : ''}&before=${encodeURIComponent(before)}`);
+        tlEvents = tlEvents.concat(r.events);
+        $('#timeline').innerHTML = timelineHtml(tlEvents);
+      } catch (err) { toast(err.message, true); }
+      return;
+    }
+    const copyBtn = e.target.closest('[data-dcopy]');
+    if (copyBtn) return copy(copyBtn.dataset.dcopy, '이메일을 복사했습니다.');
+    const btn = e.target.closest('[data-dext], [data-dreset], [data-downer]');
+    if (!btn) return;
+    if (!btn.matches('[data-downer]') && btn.dataset.confirm !== '1') {
       btn.dataset.confirm = '1';
       const original = btn.textContent;
-      btn.textContent = extend ? '30일 연장 확인' : '초기화 확인';
+      btn.textContent = btn.matches('[data-dext]') ? `${btn.dataset.dext}일 연장 확인` : '초기화 확인';
       setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ''; btn.textContent = original; } }, 3000);
       return;
     }
+    btn.disabled = true;
     try {
-      if (extend) {
-        const r = await api(`api/admin/users/${extend.dataset.extend}/extend`, { method: 'POST', body: { days: 30 } });
-        toast(`30일 연장했습니다. (남은 기간 ${r.daysLeft}일)`);
-      } else {
-        await api(`api/admin/users/${reset.dataset.reset}/reset-device`, { method: 'POST' });
+      if (btn.matches('[data-dext]')) {
+        const r = await api(`api/admin/users/${openId}/extend`, { method: 'POST', body: { days: Number(btn.dataset.dext) } });
+        toast(`${btn.dataset.dext}일 연장했습니다. (남은 기간 ${r.daysLeft}일)`);
+      } else if (btn.matches('[data-dreset]')) {
+        await api(`api/admin/users/${openId}/reset-device`, { method: 'POST' });
         toast('PC 등록을 초기화했습니다. 새 PC에서 로그인하면 등록됩니다.');
+      } else {
+        await api(`api/admin/users/${openId}/owner`, { method: 'POST', body: { mine: btn.dataset.downer === '1' } });
+        toast(btn.dataset.downer === '1' ? '🙋 내 계정으로 표시했습니다. 고객 숫자에서 빠집니다.' : '고객 숫자에 다시 넣었습니다.');
       }
-      loadUsers(); loadSummary().catch(() => {});
-    } catch (err) { toast(err.message, true); }
+      await loadUsers(); loadSummary().catch(() => {});
+      if (openId) openCustomer(openId);
+    } catch (err) { toast(err.message, true); btn.disabled = false; }
   });
 
   // ---- Q&A ----

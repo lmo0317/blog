@@ -118,6 +118,9 @@ export class LicenseDatabase {
         created_at TEXT NOT NULL
       );
 
+      -- Accounts the seller uses for testing; left out of the customer counts.
+      CREATE TABLE IF NOT EXISTS owner_accounts (user_id INTEGER PRIMARY KEY, created_at TEXT NOT NULL);
+
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_licenses_user_id ON licenses(user_id);
       CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(license_key);
@@ -314,9 +317,9 @@ export class LicenseDatabase {
     const now = new Date().toISOString();
     const one = (sql, ...args) => Number(this.db.prepare(sql).get(...args)?.n || 0);
     return {
-      users: one('SELECT COUNT(*) AS n FROM users'),
-      paidActive: one("SELECT COUNT(DISTINCT user_id) AS n FROM licenses WHERE expires_at > ? AND plan_type != 'free_trial' AND status = 'active'", now),
-      trialActive: one("SELECT COUNT(DISTINCT user_id) AS n FROM licenses WHERE expires_at > ? AND plan_type = 'free_trial' AND status = 'active'", now),
+      users: one('SELECT COUNT(*) AS n FROM users WHERE id NOT IN (SELECT user_id FROM owner_accounts)'),
+      paidActive: one("SELECT COUNT(DISTINCT user_id) AS n FROM licenses WHERE expires_at > ? AND plan_type != 'free_trial' AND status = 'active' AND user_id NOT IN (SELECT user_id FROM owner_accounts)", now),
+      trialActive: one("SELECT COUNT(DISTINCT user_id) AS n FROM licenses WHERE expires_at > ? AND plan_type = 'free_trial' AND status = 'active' AND user_id NOT IN (SELECT user_id FROM owner_accounts)", now),
       unusedVouchers: one('SELECT COUNT(*) AS n FROM vouchers WHERE redeemed_by IS NULL'),
       unansweredQuestions: one('SELECT COUNT(*) AS n FROM questions WHERE answer IS NULL')
     };

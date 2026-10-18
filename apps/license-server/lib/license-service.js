@@ -530,6 +530,24 @@ export class LicenseService {
     return { ok: true, users };
   }
 
+  // Everything the license server itself knows about one customer: account, licenses and the audit trail.
+  adminUserDetail(id) {
+    const user = this.db.getUserById(Number(id));
+    if (!user) return { ok: false, error: 'NOT_FOUND', message: '고객을 찾을 수 없습니다.' };
+    const licenses = this.db.db.prepare('SELECT id, plan_type, status, expires_at, last_heartbeat_at, last_heartbeat_ip, order_id, channel, created_at FROM licenses WHERE user_id = ? ORDER BY id DESC').all(user.id)
+      .map((l) => ({ id: l.id, planType: l.plan_type, status: l.status, expiresAt: l.expires_at, daysLeft: this.calcDaysLeft(l.expires_at), lastSeenAt: l.last_heartbeat_at, lastIp: l.last_heartbeat_ip, orderId: l.order_id, channel: l.channel, createdAt: l.created_at }));
+    const audit = this.db.db.prepare('SELECT action, details, ip, created_at FROM audit_logs WHERE user_id = ? ORDER BY id DESC LIMIT 100').all(user.id)
+      .map((a) => ({ action: a.action, details: a.details, ip: a.ip, at: a.created_at }));
+    const vouchers = this.db.db.prepare('SELECT code, days, channel, order_id, redeemed_at FROM vouchers WHERE redeemed_by = ? ORDER BY redeemed_at DESC').all(user.id);
+    return {
+      ok: true,
+      user: { id: user.id, email: user.email, name: user.name, createdAt: user.created_at, hasDevice: Boolean(user.hwid), deviceChangedAt: user.hwid_changed_at || null },
+      licenses,
+      audit,
+      vouchers
+    };
+  }
+
   adminExtendUser(id, days) {
     const user = this.db.getUserById(Number(id));
     const dayCount = Math.trunc(Number(days));

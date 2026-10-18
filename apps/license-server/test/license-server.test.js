@@ -645,3 +645,61 @@ test('An admin extension keeps a trial a trial; a purchase makes it paid', () =>
   service.grantDays(userId, 30);
   assert.strictEqual(db.getLicenseByUserId(userId).plan_type, 'monthly_paid');
 });
+
+test('The app reports its status and activity; the admin sees them per customer', async () => {
+  const db = new LicenseDatabase(':memory:');
+  const { app, service } = createLicenseServer(db, { adminSecret: 'admin-test-secret' });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const admin = (method, url, body) => fetch(`${baseUrl}${url}`, {
+    method, headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'admin-test-secret' }, body: body ? JSON.stringify(body) : undefined
+  });
+  try {
+    const reg = service.register({ email: 'trial@test.com', password: 'password123', hwid: 'PC-T' });
+    const report = (body, token = reg.token) => fetch(`${baseUrl}/api/client/report`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body)
+    });
+    assert.strictEqual((await report({ hwid: 'PC-T', events: [] }, 'bad-token')).status, 401);
+    assert.strictEqual((await report({ hwid: 'OTHER-PC', events: [] })).status, 401);
+    const now = new Date().toISOString();
+    const ok = await (await report({
+      hwid: 'PC-T',
+      status: { appVersion: '1.0.22', naver: { connected: true, blogId: 'trialblog' }, ai: { engine: 'local', acceleration: 'CPU' }, today: { replies: { today: 2 } } },
+      events: [
+        { at: now, type: 'app_start', data: { version: '1.0.22' } },
+        { at: now, type: 'api', data: { method: 'GET', path: '/api/comment-management/scan', status: 200, ok: true, result: { posts: 0, comments: { count: 0 } } } },
+        { at: now, type: 'api', data: { method: 'POST', path: '/api/engagement/start', status: 200, ok: true } },
+        { at: now, type: 'api_error', data: { method: 'POST', path: '/api/feed/start', status: 500, ok: false, error: '네이버 로그인이 필요합니다.' } },
+        { at: now, type: 'log', data: { source: 'engagement', level: 'success', message: '댓글 작성 완료' } }
+      ]
+    })).json();
+    assert.strictEqual(ok.stored, 5);
+
+    const list = await (await admin('GET', '/api/admin/users')).json();
+    const row = list.users.find((u) => u.email === 'trial@test.com');
+    assert.strictEqual(row.client.appVersion, '1.0.22');
+    assert.strictEqual(row.client.blogId, 'trialblog');
+    assert.strictEqual(row.client.errors24h, 1);
+    assert.strictEqual(row.client.lastAction, '/api/feed/start');
+
+    const detail = await (await admin('GET', `/api/admin/users/${row.id}`)).json();
+    assert.strictEqual(detail.user.email, 'trial@test.com');
+    assert.strictEqual(detail.status.naver.blogId, 'trialblog');
+    assert.strictEqual(detail.events.length, 5);
+    assert.strictEqual(detail.audit[0].action, 'REGISTER');
+    assert.strictEqual(detail.daily.at(-1).errors, 1);
+    assert.strictEqual(detail.daily.at(-1).actions, 2);
+    assert.ok(detail.topErrors.some((e) => e.message === '네이버 로그인이 필요합니다.'));
+    const errorsOnly = await (await admin('GET', `/api/admin/users/${row.id}?type=error`)).json();
+    assert.strictEqual(errorsOnly.events.length, 1);
+
+    // A test account of the seller stops counting as a customer.
+    assert.strictEqual((await (await admin('GET', '/api/admin/summary')).json()).summary.users, 1);
+    await admin('POST', `/api/admin/users/${row.id}/owner`, { mine: true });
+    assert.strictEqual((await (await admin('GET', '/api/admin/summary')).json()).summary.users, 0);
+    assert.strictEqual((await (await admin('GET', '/api/admin/users')).json()).users[0].owner, true);
+  } finally {
+    server.close();
+    db.close();
+  }
+});

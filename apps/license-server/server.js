@@ -5,6 +5,7 @@ import { LicenseDatabase } from './lib/db.js';
 import { LicenseService } from './lib/license-service.js';
 import { QnaService } from './lib/qna-service.js';
 import { VisitService } from './lib/visit-service.js';
+import { ClientReportService } from './lib/client-report-service.js';
 
 export function createLicenseServer(db = null, options = {}) {
   const app = express();
@@ -12,6 +13,7 @@ export function createLicenseServer(db = null, options = {}) {
   const service = new LicenseService(database, options);
   const qna = new QnaService(database, options.qna);
   const visits = new VisitService(database, options.visits);
+  const reports = new ClientReportService(database, service, options.reports);
 
   app.use(express.json({ limit: '2mb' }));
 
@@ -75,6 +77,13 @@ export function createLicenseServer(db = null, options = {}) {
     const ip = getClientIp(req);
     const result = service.heartbeat({ token, hwid, ip });
     res.status(result.ok ? 200 : 401).json(result);
+  });
+
+  // Program status and activity, sent every few minutes by the customer's app (see engagement lib/telemetry.js).
+  app.post('/api/client/report', (req, res) => {
+    const { hwid, status, events } = req.body || {};
+    const result = reports.receive({ token: getBearerToken(req), hwid, status, events, ip: getClientIp(req) });
+    res.status(result.ok ? 200 : (result.error === 'TOO_MANY_REPORTS' ? 429 : 401)).json(result);
   });
 
   // License: Activate key (logged-in account only)
@@ -162,7 +171,18 @@ export function createLicenseServer(db = null, options = {}) {
   app.get('/api/admin/vouchers', requireAdmin, (req, res) => send(res, service.adminListVouchers({ status: req.query.status })));
   app.post('/api/admin/vouchers', requireAdmin, (req, res) => send(res, service.adminIssueVouchers(req.body || {})));
   app.post('/api/admin/vouchers/:id/delete', requireAdmin, (req, res) => send(res, service.adminDeleteVoucher(req.params.id)));
-  app.get('/api/admin/users', requireAdmin, (req, res) => send(res, service.adminListUsers({ query: req.query.q })));
+  app.get('/api/admin/users', requireAdmin, (req, res) => {
+    const result = service.adminListUsers({ query: req.query.q });
+    const { map, owners } = reports.overview();
+    if (result.ok) result.users = result.users.map((u) => ({ ...u, owner: owners.has(u.id), client: map.get(u.id) || null }));
+    send(res, result);
+  });
+  app.get('/api/admin/users/:id', requireAdmin, (req, res) => {
+    const base = service.adminUserDetail(req.params.id);
+    if (!base.ok) return send(res, base);
+    send(res, { ...base, ...reports.detail(req.params.id, { limit: req.query.limit, type: req.query.type, before: req.query.before }) });
+  });
+  app.post('/api/admin/users/:id/owner', requireAdmin, (req, res) => send(res, reports.setOwner(req.params.id, req.body?.mine !== false)));
   app.post('/api/admin/users/:id/extend', requireAdmin, (req, res) => send(res, service.adminExtendUser(req.params.id, req.body?.days)));
   app.post('/api/admin/users/:id/reset-device', requireAdmin, (req, res) => send(res, service.adminResetDevice(req.params.id)));
 
