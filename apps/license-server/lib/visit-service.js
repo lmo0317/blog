@@ -1,8 +1,11 @@
 import crypto from 'node:crypto';
 
 const PAGES = new Set(['home', 'about', 'qna']);
-// Clicks counted alongside page views: the installer download and the purchase (KakaoTalk) button.
-const ACTIONS = new Set(['download', 'buy']);
+// Clicks counted alongside page views: the installer download, the purchase (KakaoTalk) button and the promo video.
+const ACTIONS = new Set(['download', 'buy', 'video']);
+// Sent when a page is left (or hidden): how long it was read, how far it was scrolled, which sections were seen.
+const LEAVE = 'leave';
+const SECTION = /^[a-z0-9-]{1,20}$/;
 // The site owner's own visits (browsers marked from the admin page, and the home network) are kept in
 // the visit list but left out of every count.
 const MINE = "(visitor IN (SELECT value FROM site_owners) OR ip LIKE '192.168.%' OR ip LIKE '10.%')";
@@ -108,8 +111,11 @@ export class VisitService {
     const columns = new Set(this.db.prepare('PRAGMA table_info(site_visits)').all().map((c) => c.name));
     if (!columns.has('utm_source')) this.db.exec('ALTER TABLE site_visits ADD COLUMN utm_source TEXT');
     if (!columns.has('utm_campaign')) this.db.exec('ALTER TABLE site_visits ADD COLUMN utm_campaign TEXT');
-    for (const column of ['utm_content', 'ip', 'referrer_url', 'device']) {
+    for (const column of ['utm_content', 'ip', 'referrer_url', 'device', 'view_id', 'seen']) {
       if (!columns.has(column)) this.db.exec(`ALTER TABLE site_visits ADD COLUMN ${column} TEXT`);
+    }
+    for (const column of ['seconds', 'depth']) {
+      if (!columns.has(column)) this.db.exec(`ALTER TABLE site_visits ADD COLUMN ${column} INTEGER`);
     }
     // Browsers the owner marked as "나" (the admin page marks the browser it is opened in).
     this.db.exec('CREATE TABLE IF NOT EXISTS site_owners (value TEXT PRIMARY KEY, created_at TEXT NOT NULL)');
@@ -124,9 +130,9 @@ export class VisitService {
     return { ok: true };
   }
 
-  record({ visitor, page, referrer, source, campaign, content, ip = '', userAgent = '' } = {}) {
+  record({ visitor, page, referrer, source, campaign, content, view, seconds, depth, seen, ip = '', userAgent = '' } = {}) {
     const name = String(page || '');
-    if (!PAGES.has(name) && !ACTIONS.has(name)) return { ok: false, error: 'INVALID_PAGE' };
+    if (!PAGES.has(name) && !ACTIONS.has(name) && name !== LEAVE) return { ok: false, error: 'INVALID_PAGE' };
     if (/bot|crawl|spider|slurp|preview|headless/i.test(String(userAgent))) return { ok: true, skipped: true };
 
     // One IP cannot pad the numbers.
@@ -141,11 +147,50 @@ export class VisitService {
     const id = /^[A-Za-z0-9-]{8,64}$/.test(String(visitor || ''))
       ? String(visitor)
       : `ip-${crypto.createHash('sha256').update(`${ip}|${userAgent}|${kstDay(now)}`).digest('hex').slice(0, 24)}`;
+    const cleanIp = String(ip).replace(/^::ffff:/, '').slice(0, 64) || null;
+    if (name === LEAVE) {
+      // One reading record per page view; a page hidden and shown again sends it again with the totals so far.
+      const viewId = String(view || '');
+      if (!/^[A-Za-z0-9-]{8,64}$/.test(viewId)) return { ok: false, error: 'INVALID_VIEW' };
+      const secs = Math.max(0, Math.min(7200, Math.round(Number(seconds) || 0)));
+      const pct = Math.max(0, Math.min(100, Math.round(Number(depth) || 0)));
+      const sections = [...new Set(String(seen || '').split(',').map((x) => x.trim().toLowerCase()).filter((x) => SECTION.test(x)))].slice(0, 16).join(',');
+      this.db.prepare('DELETE FROM site_visits WHERE page = ? AND visitor = ? AND view_id = ?').run(LEAVE, id, viewId);
+      this.db.prepare(`INSERT INTO site_visits (visitor, page, day, ip, device, view_id, seconds, depth, seen, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, LEAVE, kstDay(now), cleanIp, deviceLabel(userAgent), viewId, secs, pct, sections || null, new Date(now).toISOString());
+      return { ok: true };
+    }
     this.db.prepare(`INSERT INTO site_visits (visitor, page, day, referrer, referrer_url, utm_source, utm_campaign, utm_content, ip, device, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, name, kstDay(now), referrerHost(referrer) || null, referrerUrl(referrer), utmValue(source), utmValue(campaign), utmValue(content),
-        String(ip).replace(/^::ffff:/, '').slice(0, 64) || null, deviceLabel(userAgent), new Date(now).toISOString());
+        cleanIp, deviceLabel(userAgent), new Date(now).toISOString());
     return { ok: true };
+  }
+
+  /** Per day for the last `count` days: people who looked at a page, and people who downloaded the installer. */
+  daily(count = 30) {
+    const now = this.now();
+    const first = kstDay(now - (count - 1) * DAY_MS);
+    const rows = new Map(this.db.prepare(`
+      SELECT day, COUNT(DISTINCT CASE WHEN page IN ('home', 'about', 'qna') THEN visitor END) AS visitors,
+        COUNT(DISTINCT CASE WHEN page = 'download' THEN visitor END) AS downloads
+      FROM site_visits WHERE day >= ?${NOT_MINE} GROUP BY day
+    `).all(first).map((r) => [r.day, { visitors: Number(r.visitors), downloads: Number(r.downloads) }]));
+    return Array.from({ length: count }, (_, i) => {
+      const day = kstDay(now - (count - 1 - i) * DAY_MS);
+      return { day, ...(rows.get(day) || { visitors: 0, downloads: 0 }) };
+    });
+  }
+
+  /** People (not the owner) who looked at a page / downloaded since an ISO time. */
+  countSince(sinceIso) {
+    const row = this.db.prepare(`
+      SELECT COUNT(DISTINCT CASE WHEN page IN ('home', 'about', 'qna') THEN visitor END) AS visitors,
+        COUNT(DISTINCT CASE WHEN page = 'download' THEN visitor END) AS downloads
+      FROM site_visits WHERE created_at > ?${NOT_MINE}
+    `).get(String(sinceIso || ''));
+    return { visitors: Number(row.visitors), downloads: Number(row.downloads) };
   }
 
   /** Totals, today, the last 14 days, per page, the top referring sites, campaigns and download / purchase clicks. */
@@ -214,8 +259,50 @@ export class VisitService {
    * it is the owner's own visit.
    */
   sessions({ limit = 100, includeMine = true } = {}) {
+    const done = this.allSessions();
+    const list = done.filter((v) => includeMine || !v.mine).reverse().slice(0, Math.max(1, Math.min(500, Number(limit) || 100)));
+    return { ok: true, sessions: list, total: done.length, mine: done.filter((v) => v.mine).length };
+  }
+
+  /**
+   * One row per person (browser), newest first: how many times they came, what they read and for how long,
+   * whether they downloaded or pressed buy, where they first came from, and the IPs they used (to match
+   * them with a signup).
+   */
+  people({ includeMine = false } = {}) {
+    const byVisitor = new Map();
+    for (const v of this.allSessions()) {
+      if (v.mine && !includeMine) continue;
+      let p = byVisitor.get(v.visitor);
+      if (!p) {
+        p = { visitor: v.visitor, mine: v.mine, firstAt: v.startedAt, lastAt: v.endedAt, visits: 0, pages: [], download: false, buy: false, video: false,
+          seconds: 0, depth: 0, seen: [], from: null, campaign: null, device: v.device, ips: [], sessions: [] };
+        byVisitor.set(v.visitor, p);
+      }
+      p.visits += 1;
+      p.lastAt = v.endedAt;
+      p.download ||= v.download; p.buy ||= v.buy; p.video ||= v.video;
+      p.seconds += v.seconds;
+      p.depth = Math.max(p.depth, v.depth);
+      for (const x of v.pages) if (!p.pages.includes(x)) p.pages.push(x);
+      for (const x of v.seen) if (!p.seen.includes(x)) p.seen.push(x);
+      p.from ||= v.from;
+      p.campaign ||= v.campaign;
+      if (v.ip && !p.ips.includes(v.ip)) p.ips.push(v.ip);
+      p.sessions.push(v);
+    }
+    return [...byVisitor.values()].sort((a, b) => Date.parse(b.lastAt) - Date.parse(a.lastAt));
+  }
+
+  /**
+   * Every visit, oldest first: the same browser's page views and clicks less than 30 minutes apart are one
+   * visit. Each has the time, IP, device, where they came from (the first outside page that sent them, with
+   * the Naver blog id and post), the campaign link, the pages in order, how long they read and how far
+   * they scrolled, and whether it is the owner's own visit.
+   */
+  allSessions() {
     const rows = this.db.prepare(`
-      SELECT visitor, page, referrer_url, utm_source, utm_campaign, utm_content, ip, device, created_at,
+      SELECT visitor, page, referrer_url, utm_source, utm_campaign, utm_content, ip, device, seconds, depth, seen, created_at,
         CASE WHEN ${MINE} THEN 1 ELSE 0 END AS mine
       FROM site_visits ORDER BY created_at ASC, id ASC
     `).all();
@@ -224,9 +311,18 @@ export class VisitService {
     for (const r of rows) {
       const at = Date.parse(r.created_at);
       let visit = open.get(r.visitor);
+      if (r.page === LEAVE) {
+        // A long read can end more than 30 minutes after the page opened; it still belongs to that visit.
+        if (!visit) continue;
+        visit.seconds += Number(r.seconds || 0);
+        visit.depth = Math.max(visit.depth, Number(r.depth || 0));
+        for (const part of String(r.seen || '').split(',')) if (part && !visit.seen.includes(part)) visit.seen.push(part);
+        visit.lastAt = Math.max(visit.lastAt, at);
+        continue;
+      }
       if (!visit || at - visit.lastAt > SESSION_GAP_MS) {
         visit = { visitor: r.visitor, mine: false, startedAt: r.created_at, lastAt: at, ip: r.ip || '', device: r.device || '',
-          from: null, campaign: null, pages: [], download: false, buy: false };
+          from: null, campaign: null, pages: [], download: false, buy: false, video: false, seconds: 0, depth: 0, seen: [] };
         open.set(r.visitor, visit);
         done.push(visit);
       }
@@ -238,14 +334,9 @@ export class VisitService {
       if (!visit.campaign && r.utm_source) visit.campaign = [r.utm_source, r.utm_campaign, r.utm_content].filter(Boolean).join(' · ');
       if (r.page === 'download') visit.download = true;
       else if (r.page === 'buy') visit.buy = true;
+      else if (r.page === 'video') visit.video = true;
       else if (visit.pages[visit.pages.length - 1] !== r.page) visit.pages.push(r.page);
     }
-    const list = done.filter((v) => includeMine || !v.mine).reverse().slice(0, Math.max(1, Math.min(500, Number(limit) || 100)));
-    return {
-      ok: true,
-      sessions: list.map(({ lastAt, ...v }) => ({ ...v, endedAt: new Date(lastAt).toISOString() })),
-      total: done.length,
-      mine: done.filter((v) => v.mine).length
-    };
+    return done.map(({ lastAt, ...v }) => ({ ...v, endedAt: new Date(lastAt).toISOString() }));
   }
 }

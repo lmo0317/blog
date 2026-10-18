@@ -10,183 +10,254 @@
 <style>
   :root {
     --green: #03c75a; --green-hover: #00a94f; --green-soft: #ecfdf5; --green-border: #a7f3d0;
-    --indigo: #4f46e5; --indigo-soft: #e0e7ff;
+    --indigo: #4f46e5; --indigo-soft: #e0e7ff; --indigo-border: #c7d2fe;
     --ok: #15803d; --ok-bg: #f0fdf4; --ok-border: #bbf7d0; --ok-badge: #dcfce7;
     --danger: #dc2626; --danger-bg: #fef2f2; --danger-border: #fecaca; --danger-badge: #fee2e2;
     --warn: #d97706; --warn-bg: #fffbeb; --warn-border: #fde68a; --warn-badge: #fef3c7;
-    --info: #2563eb; --info-bg: #eff6ff; --info-badge: #dbeafe;
+    --info: #2563eb; --info-bg: #eff6ff; --info-border: #bfdbfe; --info-badge: #dbeafe;
     --surface: #f8fafc; --card: #ffffff; --border: #e2e8f0; --border-strong: #cbd5e1;
     --title: #0f172a; --body: #334155; --muted: #64748b; --hint: #94a3b8;
     --shadow: 0 1px 3px 0 rgba(0,0,0,.05), 0 1px 2px -1px rgba(0,0,0,.05);
+    --side: 228px;
   }
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
   body { margin: 0; background: var(--surface); color: var(--body); font-family: Pretendard, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif; font-size: 14px; }
-  button, input { font: inherit; }
-  input[type="checkbox"] { width: 16px !important; height: 16px !important; margin: 0 !important; accent-color: var(--green); flex-shrink: 0; cursor: pointer; }
+  button, input, select, textarea { font: inherit; }
+  input[type="checkbox"] { width: 16px !important; height: 16px !important; margin: 0 !important; padding: 0 !important; accent-color: var(--green); flex-shrink: 0; cursor: pointer; }
+  a { color: inherit; }
   .hidden { display: none !important; }
 
   /* Login gate */
   .gate { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
   .gate-card { width: min(400px, 100%); background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px 28px; box-shadow: 0 20px 25px -5px rgba(0,0,0,.08), 0 8px 10px -6px rgba(0,0,0,.06); }
-  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; min-width: 0; }
   .brand-mark { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; background: url(data:image/png;base64,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) center / cover no-repeat; }
-  .brand h1 { font-size: 18px; margin: 0; color: var(--title); font-weight: 800; }
+  .brand h1 { font-size: 18px; margin: 0; color: var(--title); font-weight: 800; white-space: nowrap; }
   .gate-card p { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
   .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-  .field label { font-size: 12.5px; font-weight: 700; color: var(--title); }
+  .field label, .field > span { font-size: 12.5px; font-weight: 700; color: var(--title); }
   .input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: #fff; color: var(--title); outline: none; transition: border-color .15s, box-shadow .15s; }
-  .input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(3,199,90,.15); }
+  .input:focus, .textarea:focus, .select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(3,199,90,.15); }
+  .textarea { width: 100%; min-height: 96px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: #fff; color: var(--title); line-height: 1.6; resize: vertical; outline: none; }
+  .select { height: 36px; padding: 0 30px 0 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; appearance: none; color: var(--body); font-weight: 700; font-size: 13px; cursor: pointer; outline: none; }
   .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--body); margin-bottom: 18px; cursor: pointer; user-select: none; }
-  .error-text { color: var(--danger); font-size: 12.5px; margin: -6px 0 12px; min-height: 0; }
+  .error-text { color: var(--danger); font-size: 12.5px; margin: -6px 0 12px; }
 
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--body); font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s, transform .15s, box-shadow .15s; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--body); font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; text-decoration: none; transition: background .15s, border-color .15s, transform .15s, box-shadow .15s; }
   .btn:hover { background: #f1f5f9; border-color: var(--border-strong); }
   .btn:disabled { opacity: .55; cursor: not-allowed; }
   .btn-primary { height: 44px; width: 100%; border: 0; color: #fff; background: linear-gradient(135deg, var(--green) 0%, var(--green-hover) 100%); font-size: 14.5px; font-weight: 800; }
   .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--green-hover) 0%, #008f42 100%); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(3,199,90,.25); }
-  .btn-sm { height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; }
-  .btn-danger { color: var(--danger); border-color: var(--danger-border); background: #fff; }
+  .btn-green { color: #fff; border: 0; background: linear-gradient(135deg, var(--green) 0%, var(--green-hover) 100%); }
+  .btn-green:hover:not(:disabled) { background: linear-gradient(135deg, var(--green-hover) 0%, #008f42 100%); box-shadow: 0 4px 14px rgba(3,199,90,.25); }
+  .btn-sm { height: 32px; padding: 0 11px; font-size: 12.5px; border-radius: 9px; }
+  .btn-xs { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 8px; }
+  .btn-danger { color: var(--danger); border-color: var(--danger-border); }
   .btn-danger:hover { background: var(--danger-bg); border-color: #fca5a5; }
   .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn-ghost:hover { background: #f1f5f9; border-color: transparent; }
 
-  /* App */
-  .topbar { position: sticky; top: 0; z-index: 5; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-  .topbar-inner { max-width: 1280px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 48px; }
-  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
-  .stat { padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--card); box-shadow: var(--shadow); }
-  .stat span { display: block; font-size: 12px; font-weight: 700; color: var(--muted); }
-  .stat strong { display: block; margin-top: 4px; font-size: 24px; font-weight: 800; color: var(--title); font-variant-numeric: tabular-nums; }
-  .stat.ok { background: var(--ok-bg); border-color: var(--ok-border); } .stat.ok strong { color: var(--ok); }
-  .stat.info { background: var(--info-bg); border-color: #bfdbfe; } .stat.info strong { color: var(--info); }
-  .stat.warn { background: var(--warn-bg); border-color: var(--warn-border); } .stat.warn strong { color: var(--warn); }
+  /* Shell: sidebar on desktop, top bar on tablets, bottom tabs on phones */
+  .side { position: fixed; top: 0; left: 0; bottom: 0; width: var(--side); z-index: 8; display: flex; flex-direction: column; gap: 22px; padding: 20px 14px 16px; background: #fff; border-right: 1px solid var(--border); }
+  .side .brand { padding: 0 6px; margin: 0; }
+  .side .brand h1 { font-size: 15.5px; }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
+  .nav a { position: relative; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border-radius: 11px; color: var(--body); font-weight: 700; text-decoration: none; transition: background .15s, color .15s; }
+  .nav a:hover { background: #f1f5f9; }
+  .nav a.active { background: var(--green-soft); color: var(--ok); }
+  .nav .ico { width: 22px; text-align: center; font-size: 17px; flex-shrink: 0; }
+  .nav .lbl { flex: 1; white-space: nowrap; }
+  .nav-count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 9999px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; font-style: normal; }
+  .nav-count.soft { background: var(--info-badge); color: var(--info); }
+  .nav-count:empty { display: none; }
+  .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding: 0 6px; }
+  .sync { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--hint); font-weight: 600; }
+  .sync i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(3,199,90,.18); }
+  .main { margin-left: var(--side); min-width: 0; }
+  .main-inner { max-width: 1200px; margin: 0 auto; padding: 26px 28px 64px; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .page-head h2 { margin: 0; font-size: 22px; font-weight: 800; color: var(--title); letter-spacing: -.01em; }
+  .page-head p { margin: 5px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .page-head .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-  .grid { display: grid; grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); gap: 18px; align-items: start; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); min-width: 0; }
-  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #f1f5f9; }
-  .card-head h2 { margin: 0; font-size: 15px; font-weight: 800; color: var(--title); }
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); min-width: 0; margin-bottom: 16px; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid #f1f5f9; }
+  .card-head h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--title); display: flex; align-items: center; gap: 8px; }
+  .card-head .meta { font-size: 12px; color: var(--hint); font-weight: 600; }
   .card-body { padding: 16px 18px 18px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.55; }
+  .note { font-size: 12.5px; color: var(--info); line-height: 1.6; padding: 10px 12px; border-radius: 10px; background: var(--info-bg); border: 1px solid var(--info-border); }
+  .note.warn { color: #92400e; background: var(--warn-bg); border-color: var(--warn-border); }
+  .note.good { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-border); }
+  .empty { padding: 36px 16px; text-align: center; color: var(--muted); line-height: 1.55; }
+  .empty strong { display: block; color: var(--title); margin-bottom: 4px; }
+  .muted { color: var(--muted); }
 
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { height: 34px; padding: 0 14px; border-radius: 9999px; border: 1px solid var(--border); background: #fff; color: var(--body); font-weight: 700; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; border-radius: 9999px; border: 1px solid var(--border); background: #fff; color: var(--body); font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; transition: all .15s; }
   .chip:hover { border-color: var(--border-strong); }
   .chip.active { background: var(--green-soft); border-color: var(--green-border); color: var(--ok); }
-  .stepper { align-self: flex-start; display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; height: 38px; }
-  .stepper button { width: 38px; height: 100%; border: 0; background: #f8fafc; cursor: pointer; font-size: 16px; color: var(--body); }
-  .stepper button:hover { background: #f1f5f9; }
-  .stepper input { width: 52px; height: 100%; border: 0; text-align: center; font-weight: 800; color: var(--title); outline: none; }
-
-  .issued { margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--ok-bg); border: 1px solid var(--ok-border); }
-  .issued-title { font-size: 13px; font-weight: 800; color: var(--ok); margin-bottom: 10px; }
-  .code-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--ok-border); margin-bottom: 6px; }
-  .code { font-family: 'JetBrains Mono', Consolas, monospace; font-weight: 700; color: var(--title); font-size: 13.5px; letter-spacing: .02em; overflow-wrap: anywhere; }
-  .issued .btn-primary { margin-top: 6px; height: 40px; font-size: 13.5px; }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
-
-  .tabs { display: inline-flex; gap: 4px; padding: 4px; background: #f1f5f9; border: 1px solid var(--border); border-radius: 12px; }
-  .tab { height: 32px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; }
-  .tab.active { background: #fff; color: var(--title); box-shadow: var(--shadow); }
+  .chip em { font-style: normal; font-size: 11.5px; color: var(--hint); font-weight: 700; }
+  .chip.active em { color: var(--ok); }
+  .chip-sm { height: 28px; padding: 0 10px; font-size: 12px; }
   .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-  .seg { display: inline-flex; gap: 6px; }
-  .search { width: min(260px, 100%); height: 36px; }
+  .toolbar .right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .search { width: 240px; max-width: 100%; height: 36px; }
+  .tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #f1f5f9; border: 1px solid var(--border); border-radius: 12px; }
+  .tab { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 13px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .tab.active { background: #fff; color: var(--title); box-shadow: var(--shadow); }
+  .tab em { font-style: normal; font-size: 11px; font-weight: 800; color: var(--hint); }
 
-  .list { display: flex; flex-direction: column; gap: 8px; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; transition: border-color .15s; }
-  .row:hover { border-color: var(--border-strong); }
-  .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--title); font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
-  .row-meta { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
-  .row-actions { display: flex; gap: 6px; flex-shrink: 0; }
   .badge { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 9999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
   .badge.ok { background: var(--ok-badge); color: var(--ok); }
   .badge.info { background: var(--info-badge); color: var(--info); }
   .badge.warn { background: var(--warn-badge); color: #92400e; }
   .badge.danger { background: var(--danger-badge); color: #b91c1c; }
+  .badge.indigo { background: var(--indigo-soft); color: var(--indigo); }
   .badge.gray { background: #f1f5f9; color: var(--muted); }
-  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
-  .empty strong { display: block; color: var(--title); margin-bottom: 4px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; }
 
-  .tab-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9999px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; }
-  .q { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
-  .q.pending { border-color: var(--warn-border); background: #fffdf5; }
-  .q-body { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--body); line-height: 1.6; padding: 10px 12px; background: var(--surface); border-radius: 10px; }
-  .q textarea { width: 100%; min-height: 84px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 10px; font: inherit; line-height: 1.55; resize: vertical; outline: none; }
-  .q textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(3,199,90,.15); }
-  .q-actions { display: flex; justify-content: flex-end; gap: 6px; }
-  .q-actions .btn-save { color: #fff; border: 0; background: linear-gradient(135deg, var(--green) 0%, var(--green-hover) 100%); }
-  .q-actions .btn-save:hover { background: linear-gradient(135deg, var(--green-hover) 0%, #008f42 100%); }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; transition: border-color .15s, background .15s; }
+  .row:hover { border-color: var(--border-strong); }
+  .row.click { cursor: pointer; }
+  .row.click:hover { border-color: var(--green-border); background: #fcfffd; }
+  .row.mine { background: var(--surface); }
+  .row.focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(3,199,90,.15); }
+  .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--title); font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+  .row-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .row-meta a { color: var(--info); font-weight: 700; text-decoration: none; }
+  .row-meta a:hover { text-decoration: underline; }
+  .row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; text-align: right; }
+  .row-side small { font-size: 11.5px; color: var(--hint); font-weight: 600; white-space: nowrap; }
+  .row-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .mini { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; color: var(--body); font-weight: 600; white-space: nowrap; }
+  .mini b { color: var(--title); font-variant-numeric: tabular-nums; }
+  .mini.hot { background: var(--warn-bg); border-color: var(--warn-border); color: #92400e; }
+  .minis { display: flex; flex-wrap: wrap; gap: 6px; }
+  .code { font-family: 'JetBrains Mono', Consolas, monospace; font-weight: 700; color: var(--title); font-size: 13.5px; letter-spacing: .02em; overflow-wrap: anywhere; }
+  .ip { font-family: 'JetBrains Mono', Consolas, monospace; }
 
-  /* Promo site visitors */
-  .visits { margin-bottom: 18px; }
-  .visits .card-head { flex-wrap: wrap; }
-  .visits .card-head .meta { font-size: 12px; color: var(--hint); font-weight: 600; }
-  .vhead-side { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  /* Home */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi { display: block; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1px solid var(--border); box-shadow: var(--shadow); text-decoration: none; color: inherit; transition: border-color .15s, transform .15s; min-width: 0; }
+  .kpi:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+  .kpi span { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+  .kpi strong { display: block; margin-top: 4px; font-size: 24px; font-weight: 800; color: var(--title); font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .kpi small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--hint); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi.live { background: var(--ok-bg); border-color: var(--ok-border); }
+  .kpi.live strong { color: var(--ok); }
+  .kpi.live span::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(3,199,90,.5); } 70% { box-shadow: 0 0 0 7px rgba(3,199,90,0); } 100% { box-shadow: 0 0 0 0 rgba(3,199,90,0); } }
+  .fresh { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .fresh .mini { background: #fff; }
+  .fresh .mini.on { background: var(--green-soft); border-color: var(--green-border); color: var(--ok); }
+  .fresh .mini.on.bad { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
+  .home-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .scroll { max-height: 470px; overflow-y: auto; }
+  .todo { display: flex; flex-direction: column; gap: 8px; }
+  .todo-item { position: relative; display: flex; align-items: center; gap: 10px; padding: 11px 12px 11px 16px; border: 1px solid var(--border); border-radius: 12px; background: #fff; cursor: pointer; transition: border-color .15s, background .15s; }
+  .todo-item:hover { border-color: var(--border-strong); background: #fcfdff; }
+  .todo-item::before { content: ''; position: absolute; left: 6px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--hint); }
+  .todo-item.danger::before { background: var(--danger); }
+  .todo-item.warn::before { background: var(--warn); }
+  .todo-item.info::before { background: var(--info); }
+  .todo-ico { width: 26px; flex-shrink: 0; text-align: center; font-size: 18px; }
+  .todo-text { flex: 1; min-width: 0; }
+  .todo-text b { display: block; color: var(--title); font-size: 13.5px; }
+  .todo-text small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+  .todo-done { flex-shrink: 0; }
+  .all-done { display: flex; align-items: center; gap: 12px; padding: 18px; border-radius: 12px; background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); font-weight: 700; }
+  .all-done span { font-size: 26px; }
+  .feed-item { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 9px 8px; border-radius: 10px; cursor: pointer; }
+  .feed-item:hover { background: var(--surface); }
+  .feed-item + .feed-item { border-top: 1px solid #f1f5f9; }
+  .feed-item .fi { text-align: center; font-size: 15px; }
+  .feed-item .ft { min-width: 0; color: var(--body); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  .feed-item time { font-size: 11.5px; color: var(--hint); font-weight: 600; white-space: nowrap; padding-top: 2px; }
+  .feed-item.new .ft::after { content: 'NEW'; display: inline-block; margin-left: 6px; padding: 0 6px; height: 16px; line-height: 16px; border-radius: 9999px; background: var(--green); color: #fff; font-size: 10px; font-weight: 800; vertical-align: 1px; }
+  .feed-day { padding: 10px 8px 4px; font-size: 11.5px; font-weight: 800; color: var(--hint); }
+
+  .funnel { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .fstep { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; text-decoration: none; color: inherit; min-width: 0; transition: border-color .15s; }
+  .fstep:hover { border-color: var(--green-border); }
+  .fstep > span { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+  .fstep strong { font-size: 24px; font-weight: 800; color: var(--title); font-variant-numeric: tabular-nums; }
+  .fbar { height: 6px; border-radius: 9999px; background: #e2e8f0; overflow: hidden; margin-top: 2px; }
+  .fbar i { display: block; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, var(--green), #34d399); }
+  .frate { font-size: 12px; font-weight: 700; color: var(--ok); white-space: nowrap; }
+  .frate.low { color: var(--danger); }
+  .frate.none { color: var(--hint); }
+  .funnel-note { margin-top: 12px; }
+
+  .spark-row { display: grid; grid-template-columns: 132px minmax(0, 1fr) 76px; gap: 14px; align-items: center; padding: 10px 0; }
+  .spark-row + .spark-row { border-top: 1px solid #f1f5f9; }
+  .spark-label { font-size: 13px; font-weight: 700; color: var(--title); white-space: nowrap; }
+  .spark-label small { display: block; font-size: 11.5px; color: var(--hint); font-weight: 600; }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 44px; }
+  .spark i { flex: 1; min-width: 0; min-height: 2px; border-radius: 3px 3px 1px 1px; background: var(--c, #a7f3d0); opacity: .55; }
+  .spark i.zero { background: #eef2f7; opacity: 1; }
+  .spark i.today { opacity: 1; }
+  .spark-total { text-align: right; font-size: 18px; font-weight: 800; color: var(--title); font-variant-numeric: tabular-nums; }
+  .spark-total small { display: block; font-size: 11px; color: var(--hint); font-weight: 600; }
+  .spark-axis { display: grid; grid-template-columns: 132px minmax(0, 1fr) 76px; gap: 14px; font-size: 10.5px; color: var(--hint); font-weight: 600; }
+  .spark-axis div { display: flex; justify-content: space-between; }
+  .vtable { display: flex; flex-direction: column; gap: 6px; }
+  .vitem { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; background: var(--surface); font-size: 13px; min-width: 0; }
+  .vitem > span { min-width: 0; color: var(--body); font-weight: 600; overflow-wrap: anywhere; }
+  .vitem > b { flex-shrink: 0; color: var(--title); font-variant-numeric: tabular-nums; text-align: right; }
+  .vitem small { color: var(--hint); font-weight: 600; margin-left: 4px; }
+  .vitem.err { background: var(--danger-bg); }
+  .vitem.good { background: var(--ok-bg); }
+  .vempty { font-size: 12.5px; color: var(--hint); padding: 8px 2px; }
+  .vlabel { font-size: 12.5px; font-weight: 800; color: var(--title); margin: 0 0 8px; }
+  .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+
+  /* Visitor stats */
   .vstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-  .vstat { padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
-  .vstat span { display: block; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .vstat { padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); min-width: 0; }
+  .vstat span { display: block; font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
   .vstat strong { display: block; margin-top: 2px; font-size: 22px; font-weight: 800; color: var(--title); font-variant-numeric: tabular-nums; }
   .vstat small { display: block; font-size: 11.5px; color: var(--hint); font-weight: 600; }
   .vstat.hot { background: var(--green-soft); border-color: var(--green-border); }
   .vstat.hot strong { color: var(--ok); }
-  .vrow { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; margin-top: 16px; }
-  .vlabel { font-size: 12.5px; font-weight: 800; color: var(--title); margin-bottom: 8px; }
+  .vrow { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; margin-top: 16px; }
   .vchart { display: flex; align-items: flex-end; gap: 4px; height: 150px; padding: 0 2px; border-bottom: 1px solid var(--border); }
   .vbar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; }
   .vbar b { font-size: 10.5px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .vbar i { display: block; width: 100%; max-width: 26px; min-height: 2px; border-radius: 6px 6px 2px 2px; background: #a7f3d0; transition: height .3s ease; }
+  .vbar i { display: block; width: 100%; max-width: 26px; min-height: 2px; border-radius: 6px 6px 2px 2px; background: #a7f3d0; }
   .vbar.today i { background: var(--green); }
-  .vbar.today b { color: var(--ok); }
   .vdays { display: flex; gap: 4px; padding: 4px 2px 0; }
   .vdays span { flex: 1; min-width: 0; text-align: center; font-size: 10.5px; color: var(--hint); font-variant-numeric: tabular-nums; }
-  .vlist { display: flex; flex-direction: column; gap: 6px; }
-  .vitem { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface); font-size: 13px; }
-  .vitem span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--body); font-weight: 600; }
-  .vitem b { flex-shrink: 0; color: var(--title); font-variant-numeric: tabular-nums; }
-  .vitem small { color: var(--hint); font-weight: 600; margin-left: 4px; }
-  .vempty { font-size: 12.5px; color: var(--hint); padding: 8px 2px; }
-  .vlog .row { align-items: flex-start; }
-  .vlog .row.mine { background: var(--surface); }
-  .vlog .row-title { font-size: 13.5px; }
-  .vlog .when { font-variant-numeric: tabular-nums; }
-  .vlog .path { color: var(--body); font-weight: 600; }
-  .vlog .from { color: var(--info); font-weight: 700; text-decoration: none; }
-  .vlog .from:hover { text-decoration: underline; }
-  .vlog .row-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-  .vlog .ip { font-family: 'JetBrains Mono', Consolas, monospace; }
-  .check-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--body); cursor: pointer; white-space: nowrap; }
+  .stage { white-space: nowrap; }
+  .seen-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; background: #f1f5f9; color: var(--muted); font-size: 11px; font-weight: 700; }
+  .seen-chip.key { background: var(--warn-badge); color: #92400e; }
+  .sessions { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: var(--surface); }
+  .session { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--muted); }
+  .session b { color: var(--body); }
 
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 11px 16px; border-radius: 12px; background: #0f172a; color: #fff; font-weight: 600; font-size: 13px; box-shadow: 0 10px 25px rgba(0,0,0,.2); transition: all .2s; pointer-events: none; z-index: 20; max-width: calc(100% - 32px); }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .toast.error { background: var(--danger); }
-
-  /* Customers */
-  .cust { margin-bottom: 18px; }
-  .cust-row { cursor: pointer; align-items: flex-start; }
-  .cust-row:hover { border-color: var(--green-border); background: #fcfffd; }
-  .cust-row.mine { background: #f8fafc; }
-  .cust-lines { display: flex; flex-direction: column; gap: 3px; }
-  .cust-lines .row-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-  .cust-today { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
-  .mini { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; color: var(--body); font-weight: 600; white-space: nowrap; }
-  .mini b { color: var(--title); font-variant-numeric: tabular-nums; }
-  .cust-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; text-align: right; }
-  .cust-side small { font-size: 11.5px; color: var(--hint); font-weight: 600; white-space: nowrap; }
-
-  /* Customer detail drawer */
-  .drawer-back { position: fixed; inset: 0; z-index: 20; background: rgba(15,23,42,.35); opacity: 0; pointer-events: none; transition: opacity .2s; }
-  .drawer-back.open { opacity: 1; pointer-events: auto; }
-  .drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 21; width: min(760px, 100%); background: var(--surface); box-shadow: -20px 0 25px -5px rgba(0,0,0,.1); transform: translateX(100%); transition: transform .25s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; }
-  .drawer.open { transform: translateX(0); }
-  .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; background: #fff; border-bottom: 1px solid var(--border); }
-  .drawer-head h3 { margin: 0 0 6px; font-size: 16px; font-weight: 800; color: var(--title); overflow-wrap: anywhere; }
-  .drawer-head .badges { display: flex; flex-wrap: wrap; gap: 6px; }
-  .drawer-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; background: #fff; border-bottom: 1px solid var(--border); }
-  .drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px 32px; display: flex; flex-direction: column; gap: 14px; }
-  .dsec { background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
-  .dsec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; flex-wrap: wrap; }
+  /* Customer detail */
+  .back { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; color: var(--muted); text-decoration: none; margin-bottom: 12px; }
+  .back:hover { color: var(--title); }
+  .dhead { padding: 18px 20px; }
+  .dhead-main { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+  .avatar { width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0; display: grid; place-items: center; background: linear-gradient(135deg, var(--green-soft), var(--indigo-soft)); color: var(--ok); font-size: 20px; font-weight: 800; text-transform: uppercase; }
+  .dhead h2 { margin: 0 0 6px; font-size: 20px; font-weight: 800; color: var(--title); overflow-wrap: anywhere; }
+  .dmeta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  .dmeta a { color: var(--info); font-weight: 700; text-decoration: none; }
+  .dactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9; }
+  .dtabs { margin-top: 14px; }
+  .dsec { background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); min-width: 0; }
+  .dsec + .dsec, .dgrid + .dsec, .dsec + .dgrid, .dgrid + .dgrid { margin-top: 14px; }
+  .dsec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
   .dsec-head h4 { margin: 0; font-size: 14px; font-weight: 800; color: var(--title); }
   .dsec-head small { color: var(--hint); font-size: 12px; font-weight: 600; }
   .dsec-body { padding: 12px 16px 14px; }
+  .dgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .dgrid .dsec + .dsec { margin-top: 0; }
   .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
   .kv div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .kv span { font-size: 11.5px; font-weight: 700; color: var(--muted); }
@@ -194,7 +265,7 @@
   .kv b.bad { color: var(--danger); } .kv b.good { color: var(--ok); } .kv b.warn { color: var(--warn); }
   .dstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
   .dstats .vstat strong { font-size: 20px; }
-  .auto-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .auto-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .auto-item { padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); min-width: 0; }
   .auto-item .t { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-weight: 700; color: var(--title); font-size: 13px; }
   .auto-item .m { margin-top: 4px; font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
@@ -207,12 +278,8 @@
   .ddays span { text-align: center; font-size: 10.5px; color: var(--hint); font-weight: 600; white-space: nowrap; }
   .legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); font-weight: 600; }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
-  .rank { display: flex; flex-direction: column; gap: 6px; }
-  .rank .vitem span { white-space: normal; }
-  .rank .vitem.err { background: var(--danger-bg); }
-  .tl-filter { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tl-filter .chip { height: 28px; padding: 0 10px; font-size: 12px; }
-  .timeline { max-height: 460px; overflow-y: auto; border-radius: 12px; background: #0f172a; padding: 6px 0; font-size: 12.5px; }
+  .tl-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .timeline { max-height: 620px; overflow-y: auto; border-radius: 12px; background: #0f172a; padding: 6px 0; font-size: 12.5px; }
   .tl { display: grid; grid-template-columns: 64px 20px minmax(0, 1fr); gap: 8px; padding: 4px 12px; color: #e2e8f0; line-height: 1.5; }
   .tl:hover { background: #1e293b; }
   .tl time { color: #64748b; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11.5px; white-space: nowrap; padding-top: 1px; }
@@ -223,24 +290,122 @@
   .tl-more { display: flex; justify-content: center; padding: 8px; }
   .tl-more .btn { background: #1e293b; color: #e2e8f0; border-color: #334155; }
   .tl-empty { padding: 24px 12px; text-align: center; color: #94a3b8; }
-  .note { font-size: 12.5px; color: var(--info); line-height: 1.55; padding: 10px 12px; border-radius: 10px; background: var(--info-bg); border: 1px solid #bfdbfe; }
-  .note.warn { color: #92400e; background: var(--warn-bg); border-color: var(--warn-border); }
+  .care-item { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; padding: 11px 4px; align-items: start; }
+  .care-item + .care-item { border-top: 1px solid #f1f5f9; }
+  .care-ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--surface); font-size: 15px; }
+  .care-text { min-width: 0; }
+  .care-text b { font-size: 12.5px; color: var(--title); }
+  .care-text p { margin: 3px 0 0; font-size: 13px; color: var(--body); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .care-text small { font-size: 11.5px; color: var(--hint); font-weight: 600; }
+  .composer { display: flex; flex-direction: column; gap: 10px; }
+  .composer-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+  /* Q&A */
+  .q { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
+  .q.pending { border-color: var(--warn-border); background: #fffdf5; }
+  .q-body { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--body); line-height: 1.6; padding: 10px 12px; background: var(--surface); border-radius: 10px; }
+  .q-actions { display: flex; justify-content: flex-end; gap: 6px; }
+  .who { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 8px; background: var(--indigo-soft); color: var(--indigo); font-size: 12px; font-weight: 700; text-decoration: none; }
+  .who:hover { background: var(--indigo-border); }
+  .who.none { background: #f1f5f9; color: var(--muted); }
+
+  /* Vouchers */
+  .grid-issue { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .stepper { align-self: flex-start; display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; height: 38px; }
+  .stepper button { width: 38px; height: 100%; border: 0; background: #f8fafc; cursor: pointer; font-size: 16px; color: var(--body); }
+  .stepper button:hover { background: #f1f5f9; }
+  .stepper input { width: 52px; height: 100%; border: 0; text-align: center; font-weight: 800; color: var(--title); outline: none; }
+  .issued { margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--ok-bg); border: 1px solid var(--ok-border); }
+  .issued-title { font-size: 13px; font-weight: 800; color: var(--ok); margin-bottom: 10px; }
+  .code-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--ok-border); margin-bottom: 6px; }
+  .issued .btn-primary { margin-top: 6px; height: 40px; font-size: 13.5px; }
+
+  /* Modal */
+  .modal-back { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(15,23,42,.42); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .modal-back.open { opacity: 1; pointer-events: auto; }
+  .modal { width: min(660px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: #fff; border-radius: 20px; box-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1); transform: translateY(10px); transition: transform .2s; }
+  .modal-back.open .modal { transform: none; }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; }
+  .modal-head h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--title); }
+  .modal-head p { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .modal-body { padding: 4px 20px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .modal-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid #f1f5f9; }
+  .modal .textarea { min-height: 240px; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 11px 16px; border-radius: 12px; background: #0f172a; color: #fff; font-weight: 600; font-size: 13px; box-shadow: 0 10px 25px rgba(0,0,0,.2); transition: all .2s; pointer-events: none; z-index: 40; max-width: calc(100% - 32px); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--danger); }
+
+  @media (max-width: 1100px) {
+    .funnel { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+    .fstep { padding: 12px 10px; }
+    .fstep strong { font-size: 20px; }
+  }
   @media (max-width: 1024px) {
-    .grid { grid-template-columns: 1fr; }
-    .vrow { grid-template-columns: minmax(0, 1fr); }
+    .side { position: sticky; top: 0; bottom: auto; width: auto; flex-direction: row; align-items: center; gap: 12px; padding: 10px 16px; border-right: 0; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.95); backdrop-filter: blur(8px); }
+    .side .brand h1 { display: none; }
+    .nav { flex-direction: row; gap: 2px; flex: 1; min-width: 0; }
+    .nav a { height: 38px; padding: 0 10px; gap: 6px; }
+    .nav .lbl { flex: none; }
+    .side-foot { margin: 0; flex-direction: row; align-items: center; padding: 0; }
+    .sync { display: none; }
+    .main { margin-left: 0; }
+    .main-inner { padding: 20px 20px 56px; }
+    .home-grid, .two, .vrow, .dgrid, .grid-issue { grid-template-columns: minmax(0, 1fr); }
+    .funnel { grid-template-columns: minmax(0, 1fr); }
+    .fstep { display: grid; grid-template-columns: 110px 60px minmax(0, 1fr) 100px; align-items: center; gap: 12px; padding: 12px 14px; }
+    .fstep .fbar { margin: 0; }
+    .fstep .frate { text-align: right; }
   }
   @media (max-width: 720px) {
-    .topbar-inner, .main { padding-left: 16px; padding-right: 16px; }
-    .cust-side { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
-    .kv, .auto-grid { grid-template-columns: minmax(0, 1fr); }
-    .dstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .drawer-head, .drawer-actions, .drawer-body { padding-left: 16px; padding-right: 16px; }
-    .stats, .vstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* backdrop-filter would make the fixed bottom tabs stick to this bar instead of the screen */
+    .side { padding: 10px 16px; backdrop-filter: none; background: #fff; }
+    .side .brand h1 { display: block; font-size: 15px; }
+    .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; justify-content: space-around; gap: 0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.97); border-top: 1px solid var(--border); box-shadow: 0 -4px 12px rgba(15,23,42,.05); }
+    .nav a { flex: 1; flex-direction: column; justify-content: center; gap: 2px; height: 52px; padding: 0 2px; font-size: 11px; border-radius: 10px; }
+    .nav .ico { font-size: 19px; }
+    .nav .lbl { flex: none; }
+    .nav-count { position: absolute; top: 3px; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 4px; font-size: 10px; }
+    .side-foot { margin-left: auto; }
+    .main-inner { padding: 16px 16px 100px; }
+    .page-head h2 { font-size: 19px; }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .kpi { padding: 12px 13px; }
+    .kpi strong { font-size: 22px; }
+    .card-head, .card-body { padding-left: 14px; padding-right: 14px; }
+    .fstep { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'label num' 'bar bar' 'rate rate'; gap: 6px 10px; }
+    .fstep > span { grid-area: label; }
+    .fstep strong { grid-area: num; font-size: 18px; }
+    .fstep .fbar { grid-area: bar; }
+    .fstep .frate { grid-area: rate; text-align: left; white-space: normal; }
+    .spark-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'label total' 'spark spark'; gap: 6px 10px; }
+    .spark-label { grid-area: label; }
+    .spark-total { grid-area: total; font-size: 16px; }
+    .spark { grid-area: spark; height: 36px; }
+    .spark-axis { grid-template-columns: minmax(0, 1fr); }
+    .spark-axis > span { display: none; }
+    .vstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .vdays span:nth-child(odd) { visibility: hidden; }
     .row { flex-direction: column; align-items: stretch; }
-    .row-actions { justify-content: flex-end; }
+    .row-side { flex-direction: row; align-items: center; justify-content: space-between; text-align: left; flex-wrap: wrap; }
+    .row-actions { justify-content: flex-start; }
     .search { width: 100%; }
+    .toolbar .right { width: 100%; }
+    .toolbar .right .select { flex: 1; }
+    .kv, .dstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dhead { padding: 16px; }
+    .avatar { width: 40px; height: 40px; font-size: 17px; }
+    .dhead h2 { font-size: 17px; }
+    .dsec-head, .dsec-body { padding-left: 12px; padding-right: 12px; }
+    .tl { grid-template-columns: 58px 18px minmax(0, 1fr); padding: 4px 8px; gap: 6px; }
+    .toast { bottom: 84px; }
+    .modal-back { padding: 8px; align-items: end; }
+    .modal { max-height: calc(100vh - 16px); border-radius: 18px; }
+  }
+  @media (max-width: 420px) {
+    .kv { grid-template-columns: minmax(0, 1fr); }
+    .feed-item { grid-template-columns: 22px minmax(0, 1fr); }
+    .feed-item time { grid-column: 2; padding-top: 0; }
   }
 </style>
 </head>
@@ -249,7 +414,7 @@
   <section class="gate" id="gate">
     <form class="gate-card" id="gateForm" autocomplete="off">
       <div class="brand"><div class="brand-mark" aria-hidden="true"></div><h1>이웃메이트 판매자 관리</h1></div>
-      <p>이용권 발급과 고객 관리를 하는 곳입니다. 관리자 키를 입력하세요.</p>
+      <p>고객·방문자·문의·이용권을 한곳에서 관리합니다. 관리자 키를 입력하세요.</p>
       <div class="field">
         <label for="adminKey">관리자 키</label>
         <input class="input" id="adminKey" type="password" placeholder="관리자 키" autocomplete="current-password">
@@ -262,184 +427,261 @@
 
   <!-- App -->
   <div class="hidden" id="app">
-    <header class="topbar">
-      <div class="topbar-inner">
-        <div class="brand" style="margin:0"><div class="brand-mark" aria-hidden="true"></div><h1>이웃메이트 판매자 관리</h1></div>
-        <button class="btn btn-ghost" type="button" id="logoutBtn">나가기</button>
+    <aside class="side">
+      <div class="brand"><div class="brand-mark" aria-hidden="true"></div><h1>이웃메이트 관리</h1></div>
+      <nav class="nav" aria-label="메뉴">
+        <a href="#home" data-view="home"><span class="ico">🏠</span><span class="lbl">홈</span><em class="nav-count" id="navHome"></em></a>
+        <a href="#customers" data-view="customers"><span class="ico">👥</span><span class="lbl">고객</span><em class="nav-count" id="navCustomers"></em></a>
+        <a href="#visitors" data-view="visitors"><span class="ico">👀</span><span class="lbl">방문자</span><em class="nav-count soft" id="navVisitors"></em></a>
+        <a href="#qna" data-view="qna"><span class="ico">💬</span><span class="lbl">문의</span><em class="nav-count" id="navQna"></em></a>
+        <a href="#vouchers" data-view="vouchers"><span class="ico">🎟️</span><span class="lbl">이용권</span></a>
+      </nav>
+      <div class="side-foot">
+        <div class="sync"><i></i><span id="syncText">1분마다 자동 갱신</span></div>
+        <button class="btn btn-sm btn-ghost" type="button" id="logoutBtn">나가기</button>
       </div>
-    </header>
+    </aside>
 
-    <main class="main">
-      <div class="stats">
-        <div class="stat"><span>👥 전체 고객</span><strong id="statUsers">-</strong></div>
-        <div class="stat ok"><span>💳 유료 이용 중</span><strong id="statPaid">-</strong></div>
-        <div class="stat info"><span>🎁 무료체험 중</span><strong id="statTrial">-</strong></div>
-        <div class="stat warn"><span>🎟️ 안 쓴 이용권</span><strong id="statUnused">-</strong></div>
-      </div>
-
-      <section class="card cust">
-        <div class="card-head">
-          <h2>👥 고객 현황</h2>
-          <div class="vhead-side">
-            <span class="meta" id="custMeta"></span>
-            <button class="btn btn-sm" type="button" id="custRefresh">새로고침</button>
+    <main class="main"><div class="main-inner">
+      <!-- Home -->
+      <section class="view" id="view-home">
+        <div class="page-head">
+          <div>
+            <h2 id="homeTitle">오늘의 현황</h2>
+            <div class="fresh" id="homeFresh"></div>
           </div>
+          <div class="tools"><button class="btn btn-sm" type="button" data-refresh>🔄 새로고침</button></div>
         </div>
-        <div class="card-body">
-          <div class="toolbar">
-            <div class="seg chips" id="custFilter">
-              <button type="button" class="chip active" data-filter="all">전체</button>
-              <button type="button" class="chip" data-filter="attention">⚠️ 챙길 고객</button>
-              <button type="button" class="chip" data-filter="trial">🎁 체험 중</button>
-              <button type="button" class="chip" data-filter="paid">💳 유료</button>
-              <button type="button" class="chip" data-filter="mine">🙋 내 계정</button>
-            </div>
-            <input class="input search" id="userSearch" placeholder="이메일·블로그 아이디로 찾기">
-          </div>
-          <div class="list" id="userList"></div>
-          <div class="hint">고객 PC의 이웃메이트(1.0.22부터)가 몇 분마다 사용 기록을 보냅니다. 줄을 누르면 프로그램 환경, 오늘 사용량, 최근 활동 기록이 열립니다.</div>
+        <div class="kpis" id="kpis"></div>
+        <div class="home-grid">
+          <section class="card">
+            <div class="card-head"><h3>✅ 지금 챙길 일 <span class="badge danger" id="todoCount"></span></h3><button class="btn btn-xs btn-ghost hidden" type="button" id="todoHidden"></button></div>
+            <div class="card-body scroll"><div class="todo" id="todoList"></div></div>
+          </section>
+          <section class="card">
+            <div class="card-head"><h3>📰 최근 소식</h3><span class="meta">가입·결제·질문·설치·오류</span></div>
+            <div class="card-body scroll" style="padding-top:6px"><div id="newsList"></div></div>
+          </section>
         </div>
-      </section>
-      <section class="card visits">
-        <div class="card-head">
-          <h2>📈 홈페이지 방문자</h2>
-          <div class="vhead-side">
-            <span class="meta" id="visitSince"></span>
-            <a class="btn btn-sm" href="/neighbormate-app/" target="_blank" rel="noopener">홈페이지 열기 ↗</a>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="vstats">
-            <div class="vstat hot"><span>👀 오늘 방문자</span><strong id="vToday">-</strong><small id="vTodayViews"></small></div>
-            <div class="vstat"><span>📅 어제</span><strong id="vYesterday">-</strong><small id="vYesterdayViews"></small></div>
-            <div class="vstat"><span>🗓️ 최근 7일</span><strong id="vWeek">-</strong><small id="vWeekViews"></small></div>
-            <div class="vstat"><span>👥 누적 방문자</span><strong id="vTotal">-</strong><small id="vTotalViews"></small></div>
-          </div>
-          <div class="vrow">
-            <div>
-              <div class="vlabel">최근 14일 방문자</div>
-              <div class="vchart" id="vChart"></div>
-              <div class="vdays" id="vDays"></div>
-            </div>
-            <div>
-              <div class="vlabel">방문 → 설치·구매 (누적 · 최근 7일 · 오늘)</div>
-              <div class="vlist" id="vActions"></div>
-              <div class="vlabel" style="margin-top:14px">페이지별</div>
-              <div class="vlist" id="vPages"></div>
-              <div class="vlabel" style="margin-top:14px">어디서 왔나</div>
-              <div class="vlist" id="vRefs"></div>
-              <div class="vlabel" style="margin-top:14px">캠페인 링크 (utm)</div>
-              <div class="vlist" id="vCampaigns"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="card visits vlog">
-        <div class="card-head">
-          <h2>🧾 방문 기록</h2>
-          <div class="vhead-side">
-            <span class="meta" id="vLogMeta"></span>
-            <label class="check-inline"><input type="checkbox" id="vLogMine"> 내 방문도 보기</label>
-            <button class="btn btn-sm" type="button" id="vLogRefresh">새로고침</button>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="list" id="vLog"></div>
-          <div class="hint">같은 브라우저가 30분 안에 본 페이지는 한 줄로 묶었습니다. 이 관리자 페이지를 연 브라우저와 집 와이파이(192.168.x)는 자동으로 <b>나</b>로 표시되고 위 숫자에서 빠집니다.</div>
-        </div>
-      </section>
-
-      <div class="grid">
-        <section class="card">
-          <div class="card-head"><h2>🎟️ 이용권 발급</h2></div>
-          <div class="card-body">
-            <div class="field">
-              <label>이용 기간</label>
-              <div class="chips" id="daysChips">
-                <button type="button" class="chip active" data-days="30">30일</button>
-                <button type="button" class="chip" data-days="90">90일</button>
-                <button type="button" class="chip" data-days="180">180일</button>
-                <button type="button" class="chip" data-days="365">1년</button>
-              </div>
-            </div>
-            <div class="field">
-              <label for="countInput">개수</label>
-              <div class="stepper">
-                <button type="button" id="countMinus" aria-label="하나 줄이기">−</button>
-                <input id="countInput" inputmode="numeric" value="1" aria-label="발급 개수">
-                <button type="button" id="countPlus" aria-label="하나 늘리기">+</button>
-              </div>
-            </div>
-            <div class="field">
-              <label for="memoInput">메모 <span style="color:var(--hint);font-weight:500">(선택)</span></label>
-              <input class="input" id="memoInput" placeholder="예: 크몽 주문번호, 구매자 닉네임">
-            </div>
-            <button class="btn btn-primary" type="button" id="issueBtn">🎟️ 이용권 발급</button>
-
-            <div class="issued hidden" id="issuedBox">
-              <div class="issued-title" id="issuedTitle"></div>
-              <div id="issuedCodes"></div>
-              <button class="btn btn-primary" type="button" id="copyGuideBtn">📋 구매자에게 보낼 안내문 복사</button>
-              <div class="hint">안내문에는 이용권 키와 등록 방법이 들어 있습니다. 크몽 메시지에 그대로 붙여 넣으면 됩니다.</div>
-            </div>
-          </div>
-        </section>
-
         <section class="card">
           <div class="card-head">
-            <div class="tabs" role="tablist">
-              <button type="button" class="tab active" data-tab="vouchers" role="tab">이용권</button>
-              <button type="button" class="tab" data-tab="qna" role="tab">질문<span class="tab-count hidden" id="qnaCount"></span></button>
+            <h3>🔻 손님 흐름</h3>
+            <div class="chips" id="funnelPeriod">
+              <button type="button" class="chip chip-sm active" data-period="week">최근 7일</button>
+              <button type="button" class="chip chip-sm" data-period="month">30일</button>
+              <button type="button" class="chip chip-sm" data-period="all">전체</button>
             </div>
-            <button class="btn btn-sm" type="button" id="refreshBtn">새로고침</button>
           </div>
           <div class="card-body">
-            <div id="vouchersPanel">
-              <div class="toolbar">
-                <div class="seg chips" id="voucherFilter">
-                  <button type="button" class="chip active" data-status="unused">안 쓴 이용권</button>
-                  <button type="button" class="chip" data-status="used">사용됨</button>
-                  <button type="button" class="chip" data-status="all">전체</button>
-                </div>
+            <div class="funnel" id="funnel"></div>
+            <div class="note funnel-note" id="funnelNote"></div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h3>📈 최근 30일 흐름</h3><span class="meta">막대에 마우스를 올리면 날짜별 숫자</span></div>
+          <div class="card-body" id="trend"></div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h3>📦 고객 프로그램 버전</h3><span class="meta" id="latestMeta"></span></div>
+          <div class="card-body"><div class="vtable" id="versions"></div></div>
+        </section>
+      </section>
+
+      <!-- Customers -->
+      <section class="view hidden" id="view-customers">
+        <div class="page-head">
+          <div><h2>👥 고객</h2><p id="custMeta">불러오는 중…</p></div>
+          <div class="tools"><button class="btn btn-sm" type="button" data-refresh>🔄 새로고침</button></div>
+        </div>
+        <section class="card">
+          <div class="card-body">
+            <div class="toolbar">
+              <div class="chips" id="custFilter"></div>
+              <div class="right">
+                <select class="select" id="custSort" aria-label="정렬">
+                  <option value="recent">최근 활동순</option>
+                  <option value="signup">가입 최신순</option>
+                  <option value="expiry">만료 임박순</option>
+                  <option value="usage">많이 쓰는 순</option>
+                </select>
+                <input class="input search" id="userSearch" placeholder="이메일·블로그 아이디로 찾기">
               </div>
-              <div class="list" id="voucherList"></div>
             </div>
-            <div class="hidden" id="qnaPanel">
+            <div class="list" id="userList"></div>
+            <div class="hint">고객 PC의 이웃메이트(1.0.22부터)가 2분마다 사용 기록을 보냅니다. 줄을 누르면 그 고객의 모든 정보가 열립니다.</div>
+          </div>
+        </section>
+      </section>
+
+      <!-- One customer -->
+      <section class="view hidden" id="view-customer">
+        <a class="back" href="#customers">← 고객 목록</a>
+        <div id="customerPage"><div class="card"><div class="empty"><strong>불러오는 중…</strong></div></div></div>
+      </section>
+
+      <!-- Visitors -->
+      <section class="view hidden" id="view-visitors">
+        <div class="page-head">
+          <div><h2>👀 홈페이지 방문자</h2><p id="visitSince">홈페이지에 온 사람이 어디서 왔고, 무엇을 얼마나 봤고, 어디서 멈췄는지 봅니다.</p></div>
+          <div class="tools">
+            <a class="btn btn-sm" href="/neighbormate-app/" target="_blank" rel="noopener">홈페이지 열기 ↗</a>
+            <button class="btn btn-sm" type="button" data-refresh>🔄 새로고침</button>
+          </div>
+        </div>
+        <section class="card">
+          <div class="card-head">
+            <h3>🧑‍🤝‍🧑 방문자 한 사람씩</h3>
+            <div class="tabs" id="visitMode">
+              <button type="button" class="tab active" data-mode="people">사람별</button>
+              <button type="button" class="tab" data-mode="log">시간순 기록</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="peoplePanel">
+              <div class="toolbar"><div class="chips" id="peopleFilter"></div></div>
+              <div class="list" id="peopleList"></div>
+              <div class="hint">같은 브라우저는 한 사람으로 묶었습니다. 가입한 고객과는 같은 IP로 연결했으니 공용 와이파이에서는 틀릴 수 있습니다. 읽은 시간·스크롤·본 곳은 10월 18일 이후 방문부터 나옵니다.</div>
+            </div>
+            <div class="hidden" id="logPanel">
               <div class="toolbar">
-                <div class="seg chips" id="qnaFilter">
-                  <button type="button" class="chip active" data-status="unanswered">답변 대기</button>
-                  <button type="button" class="chip" data-status="all">전체</button>
-                </div>
-                <a class="btn btn-sm" href="/neighbormate-app/qna.html" target="_blank" rel="noopener">게시판 열기 ↗</a>
+                <span class="muted" id="vLogMeta" style="font-size:12.5px"></span>
+                <label class="check-row" style="margin:0"><input type="checkbox" id="vLogMine"> 내 방문도 보기</label>
               </div>
-              <div class="list" id="qnaList"></div>
+              <div class="list" id="vLog"></div>
+              <div class="hint">같은 브라우저가 30분 안에 본 페이지는 한 줄로 묶었습니다. 이 관리자 페이지를 연 브라우저와 집 와이파이(192.168.x)는 자동으로 <b>나</b>로 표시되고 숫자에서 빠집니다.</div>
             </div>
           </div>
         </section>
-      </div>
-    </main>
+        <section class="card">
+          <div class="card-head"><h3>📊 방문 통계</h3><span class="meta" id="visitMeta"></span></div>
+          <div class="card-body">
+            <div class="vstats" id="vstats"></div>
+            <div class="vrow">
+              <div>
+                <div class="vlabel">최근 14일 방문자</div>
+                <div class="vchart" id="vChart"></div>
+                <div class="vdays" id="vDays"></div>
+                <div class="vlabel" style="margin-top:18px">어디서 왔나</div>
+                <div class="vtable" id="vRefs"></div>
+              </div>
+              <div>
+                <div class="vlabel">방문 → 행동 (누적 · 7일 · 오늘)</div>
+                <div class="vtable" id="vActions"></div>
+                <div class="vlabel" style="margin-top:14px">페이지별</div>
+                <div class="vtable" id="vPages"></div>
+                <div class="vlabel" style="margin-top:14px">캠페인 링크 (utm)</div>
+                <div class="vtable" id="vCampaigns"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- Q&A -->
+      <section class="view hidden" id="view-qna">
+        <div class="page-head">
+          <div><h2>💬 문의</h2><p>홈페이지 질문 게시판의 질문입니다. 같은 IP로 가입한 고객이 있으면 함께 보여 줍니다.</p></div>
+          <div class="tools">
+            <a class="btn btn-sm" href="/neighbormate-app/qna.html" target="_blank" rel="noopener">게시판 열기 ↗</a>
+            <button class="btn btn-sm" type="button" data-refresh>🔄 새로고침</button>
+          </div>
+        </div>
+        <section class="card">
+          <div class="card-body">
+            <div class="toolbar">
+              <div class="chips" id="qnaFilter">
+                <button type="button" class="chip active" data-status="unanswered">답변 대기</button>
+                <button type="button" class="chip" data-status="all">전체</button>
+              </div>
+            </div>
+            <div class="list" id="qnaList"></div>
+            <div class="hint">블로그 댓글·메일로 온 문의는 고객 화면의 [응대·메모]에 적어 두면 한곳에 모입니다.</div>
+          </div>
+        </section>
+      </section>
+
+      <!-- Vouchers -->
+      <section class="view hidden" id="view-vouchers">
+        <div class="page-head">
+          <div><h2>🎟️ 이용권</h2><p>크몽·카톡으로 판 이용권 키를 발급하고, 누가 썼는지 봅니다.</p></div>
+        </div>
+        <div class="grid-issue">
+          <section class="card">
+            <div class="card-head"><h3>이용권 발급</h3></div>
+            <div class="card-body">
+              <div class="field">
+                <span>이용 기간</span>
+                <div class="chips" id="daysChips">
+                  <button type="button" class="chip active" data-days="30">30일</button>
+                  <button type="button" class="chip" data-days="90">90일</button>
+                  <button type="button" class="chip" data-days="180">180일</button>
+                  <button type="button" class="chip" data-days="365">1년</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="countInput">개수</label>
+                <div class="stepper">
+                  <button type="button" id="countMinus" aria-label="하나 줄이기">−</button>
+                  <input id="countInput" inputmode="numeric" value="1" aria-label="발급 개수">
+                  <button type="button" id="countPlus" aria-label="하나 늘리기">+</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="memoInput">메모 <span style="color:var(--hint);font-weight:500">(선택)</span></label>
+                <input class="input" id="memoInput" placeholder="예: 크몽 주문번호, 구매자 닉네임">
+              </div>
+              <button class="btn btn-primary" type="button" id="issueBtn">🎟️ 이용권 발급</button>
+              <div class="issued hidden" id="issuedBox">
+                <div class="issued-title" id="issuedTitle"></div>
+                <div id="issuedCodes"></div>
+                <button class="btn btn-primary" type="button" id="copyGuideBtn">📋 구매자에게 보낼 안내문 복사</button>
+                <div class="hint">안내문에는 이용권 키와 등록 방법이 들어 있습니다. 크몽·카톡 메시지에 그대로 붙여 넣으면 됩니다.</div>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-head">
+              <div class="chips" id="voucherFilter">
+                <button type="button" class="chip chip-sm active" data-status="unused">안 쓴 이용권</button>
+                <button type="button" class="chip chip-sm" data-status="used">사용됨</button>
+                <button type="button" class="chip chip-sm" data-status="all">전체</button>
+              </div>
+            </div>
+            <div class="card-body"><div class="list" id="voucherList"></div></div>
+          </section>
+        </div>
+      </section>
+    </div></main>
   </div>
 
-  <div class="drawer-back" id="drawerBack"></div>
-  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle" aria-hidden="true">
-    <div class="drawer-head">
-      <div style="min-width:0">
-        <h3 id="dTitle">고객</h3>
-        <div class="badges" id="dBadges"></div>
+  <!-- Mail helper -->
+  <div class="modal-back" id="mailModal" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mailTitle">
+      <div class="modal-head">
+        <div><h3 id="mailTitle">✉️ 고객에게 메일 쓰기</h3><p id="mailTo"></p></div>
+        <button class="btn btn-sm btn-ghost" type="button" data-close-modal aria-label="닫기">✕</button>
       </div>
-      <button class="btn btn-sm" type="button" id="drawerClose" aria-label="닫기">✕ 닫기</button>
+      <div class="modal-body">
+        <div class="chips" id="mailTemplates"></div>
+        <div class="field" style="margin:0"><label for="mailSubject">제목</label><input class="input" id="mailSubject"></div>
+        <div class="field" style="margin:0"><label for="mailBody">본문</label><textarea class="textarea" id="mailBody"></textarea></div>
+        <div class="hint" style="margin:0">복사한 뒤 네이버 메일에 붙여 넣어 보내세요. 보낸 다음 [보냈다고 기록]을 누르면 이 고객의 응대 기록에 남습니다.</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-sm" type="button" id="mailCopyTo">📋 받는 사람 복사</button>
+        <button class="btn btn-sm" type="button" id="mailCopy">📋 제목·본문 복사</button>
+        <a class="btn btn-sm" href="https://mail.naver.com/v2/new" target="_blank" rel="noopener">✉️ 네이버 메일 열기 ↗</a>
+        <button class="btn btn-sm btn-green" type="button" id="mailLog">✅ 보냈다고 기록</button>
+      </div>
     </div>
-    <div class="drawer-actions" id="dActions"></div>
-    <div class="drawer-body" id="dBody"></div>
-  </aside>
+  </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (() => {
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => [...document.querySelectorAll(s)];
+  const $ = (s, root = document) => root.querySelector(s);
+  const $$ = (s, root = document) => [...root.querySelectorAll(s)];
   const KEY_NAME = 'nm-admin-key';
   const storage = {
     get() { try { return sessionStorage.getItem(KEY_NAME) || localStorage.getItem(KEY_NAME) || ''; } catch { return ''; } },
@@ -448,14 +690,34 @@
     },
     clear() { try { sessionStorage.removeItem(KEY_NAME); localStorage.removeItem(KEY_NAME); } catch {} }
   };
+  const local = {
+    get(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch { return fallback; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
+  };
   let adminKey = storage.get();
-  let voucherStatus = 'unused';
-  let lastIssued = [];
 
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (iso) => iso ? new Date(iso).toLocaleString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
   const fmtDay = (iso) => iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' }) : '-';
+  const fmtShort = (iso) => iso ? new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
   const daysLabel = (d) => d % 365 === 0 ? `${d / 365}년` : `${d}일`;
+  const n = (v) => Number(v || 0).toLocaleString();
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  const ago = (iso) => {
+    if (!iso) return '-';
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (min < 1) return '방금';
+    if (min < 60) return `${min}분 전`;
+    if (min < 60 * 24) return `${Math.floor(min / 60)}시간 전`;
+    return `${Math.floor(min / 1440)}일 전`;
+  };
+  const dur = (s) => {
+    const sec = Math.round(Number(s) || 0);
+    if (sec < 60) return `${sec}초`;
+    const m = Math.floor(sec / 60);
+    return m < 60 ? `${m}분${sec % 60 ? ` ${sec % 60}초` : ''}` : `${Math.floor(m / 60)}시간 ${m % 60}분`;
+  };
+  const verNum = (v) => String(v || '0').split('.').map((x) => Number(x) || 0).reduce((a, x) => a * 1000 + x, 0);
 
   let toastTimer = null;
   function toast(message, error = false) {
@@ -463,7 +725,7 @@
     el.textContent = message;
     el.className = `toast show${error ? ' error' : ''}`;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.className = 'toast'; }, 2600);
+    toastTimer = setTimeout(() => { el.className = 'toast'; }, 2800);
   }
 
   async function api(path, { method = 'GET', body } = {}) {
@@ -483,7 +745,18 @@
     }
   }
 
+  // Two-step buttons: the first click asks, the second within 3 seconds does it.
+  function confirmFirst(btn, label) {
+    if (btn.dataset.confirm === '1') return true;
+    btn.dataset.confirm = '1';
+    const original = btn.innerHTML;
+    btn.textContent = label;
+    setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ''; btn.innerHTML = original; } }, 3000);
+    return false;
+  }
+
   function showGate(message = '') {
+    stopAuto();
     $('#app').classList.add('hidden');
     $('#gate').classList.remove('hidden');
     $('#gateError').textContent = message;
@@ -491,267 +764,8 @@
     $('#adminKey').focus();
   }
 
-  async function enter() {
-    await loadSummary();
-    $('#gate').classList.add('hidden');
-    $('#app').classList.remove('hidden');
-    loadVouchers();
-    loadUsers();
-    markMe().finally(() => {
-      loadVisits().catch((err) => toast(`방문자 통계를 불러오지 못했습니다: ${err.message}`, true));
-      loadVisitLog().catch((err) => toast(`방문 기록을 불러오지 못했습니다: ${err.message}`, true));
-    });
-  }
-
-  $('#gateForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const key = $('#adminKey').value.trim();
-    if (!key) return showGate('관리자 키를 입력해주세요.');
-    adminKey = key;
-    const btn = $('#gateBtn');
-    btn.disabled = true; btn.textContent = '확인 중…';
-    try {
-      await enter();
-      storage.set(key, $('#rememberKey').checked);
-      $('#adminKey').value = '';
-    } catch (err) {
-      adminKey = '';
-      showGate(err.message);
-    } finally {
-      btn.disabled = false; btn.textContent = '들어가기';
-    }
-  });
-  $('#logoutBtn').addEventListener('click', () => { storage.clear(); adminKey = ''; showGate(); });
-
-  async function loadSummary() {
-    const { summary } = await api('api/admin/summary');
-    $('#statUsers').textContent = summary.users.toLocaleString();
-    $('#statPaid').textContent = summary.paidActive.toLocaleString();
-    $('#statTrial').textContent = summary.trialActive.toLocaleString();
-    $('#statUnused').textContent = summary.unusedVouchers.toLocaleString();
-    const pending = summary.unansweredQuestions || 0;
-    $('#qnaCount').textContent = pending > 99 ? '99+' : String(pending);
-    $('#qnaCount').classList.toggle('hidden', !pending);
-  }
-
-
-  // ---- Promo site visitors ----
-  const PAGE_NAMES = { home: '🏠 홈', about: '📖 기능 소개', qna: '💬 질문 게시판' };
-  const n = (v) => Number(v || 0).toLocaleString();
-  async function loadVisits() {
-    const { visits } = await api('api/admin/visits');
-    $('#vToday').textContent = `${n(visits.today.visitors)}명`;
-    $('#vTodayViews').textContent = `페이지 ${n(visits.today.views)}회`;
-    $('#vYesterday').textContent = `${n(visits.yesterday.visitors)}명`;
-    $('#vYesterdayViews').textContent = `페이지 ${n(visits.yesterday.views)}회`;
-    $('#vWeek').textContent = `${n(visits.week.visitors)}명`;
-    $('#vWeekViews').textContent = `페이지 ${n(visits.week.views)}회`;
-    $('#vTotal').textContent = `${n(visits.total.visitors)}명`;
-    $('#vTotalViews').textContent = `페이지 ${n(visits.total.views)}회`;
-    $('#visitSince').textContent = visits.since
-      ? `${visits.since.replace(/-/g, '.')}부터 집계${visits.mine ? ` · 내 방문 ${n(visits.mine)}회 제외` : ''}`
-      : '아직 방문 기록이 없습니다';
-
-    const max = Math.max(1, ...visits.days.map((d) => d.visitors));
-    const last = visits.days.length - 1;
-    $('#vChart').innerHTML = visits.days.map((d, i) => `<div class="vbar${i === last ? ' today' : ''}" title="${esc(d.day)} · 방문자 ${n(d.visitors)}명 · 페이지 ${n(d.views)}회"><b>${d.visitors || ''}</b><i style="height:${Math.round((d.visitors / max) * 100)}%"></i></div>`).join('');
-    $('#vDays').innerHTML = visits.days.map((d, i) => `<span>${i === last ? '오늘' : `${Number(d.day.slice(5, 7))}/${Number(d.day.slice(8))}`}</span>`).join('');
-
-    $('#vPages').innerHTML = visits.pages.length
-      ? visits.pages.map((p) => `<div class="vitem"><span>${esc(PAGE_NAMES[p.page] || p.page)}</span><b>${n(p.visitors)}명<small>${n(p.views)}회</small></b></div>`).join('')
-      : '<div class="vempty">아직 기록이 없습니다.</div>';
-    const actions = visits.actions || {};
-    const rate = (count) => (visits.total.visitors ? ` · 방문의 ${Math.round((count / visits.total.visitors) * 100)}%` : '');
-    $('#vActions').innerHTML = [['download', '⬇️ 설치 파일 받기'], ['buy', '💬 구매 문의 누름']].map(([key, label]) => {
-      const a = actions[key] || { total: 0, week: 0, today: 0 };
-      return `<div class="vitem"><span>${label}<small>${rate(a.total)}</small></span><b>${n(a.total)}명<small>${n(a.week)} · ${n(a.today)}</small></b></div>`;
-    }).join('');
-    $('#vCampaigns').innerHTML = (visits.campaigns || []).length
-      ? visits.campaigns.map((c) => `<div class="vitem"><span>${esc(c.source)}${c.campaign ? ` · ${esc(c.campaign)}` : ''}</span><b>${n(c.visitors)}명<small>설치 ${n(c.downloads)} · 구매 ${n(c.buys)}</small></b></div>`).join('')
-      : '<div class="vempty">아직 utm 링크로 들어온 방문이 없습니다. 홍보 글·영상에 ?utm_source= 링크를 쓰면 여기 나옵니다.</div>';
-    $('#vRefs').innerHTML = visits.referrers.length
-      ? visits.referrers.map((r) => `<div class="vitem"><span>${esc(r.host)}</span><b>${n(r.visitors)}명</b></div>`).join('')
-      : '<div class="vempty">아직 다른 사이트에서 들어온 방문이 없습니다. (주소를 직접 입력한 방문은 빠집니다)</div>';
-  }
-
-  // ---- Visit log ----
-  // The promo site and this page share an origin, so the visitor id the site gave this browser is here
-  // too; marking it as "나" keeps the owner's own clicks out of the numbers.
-  async function markMe() {
-    let id = '';
-    try {
-      id = localStorage.getItem('nm-visitor') || '';
-      if (!id && window.crypto?.randomUUID) { id = crypto.randomUUID(); localStorage.setItem('nm-visitor', id); }
-    } catch {}
-    if (id) await api('api/admin/visits/owner', { method: 'POST', body: { visitor: id } }).catch(() => {});
-  }
-
-  const SHORT_PAGES = { home: '홈', about: '기능 소개', qna: '질문 게시판' };
-  async function loadVisitLog() {
-    const mine = $('#vLogMine').checked;
-    const data = await api(`api/admin/visits/list?limit=200&mine=${mine ? 1 : 0}`);
-    $('#vLogMeta').textContent = `방문 ${n(data.total - data.mine)}회${data.mine ? ` · 내 방문 ${n(data.mine)}회` : ''}`;
-    $('#vLog').innerHTML = data.sessions.length ? data.sessions.map((v) => {
-      const from = v.from
-        ? `<a class="from" href="${esc(v.from.link)}" target="_blank" rel="noopener noreferrer" title="${esc(v.from.url)}">🔗 ${esc(v.from.label)}</a>`
-        : '<span>🔗 직접 접속 (주소 입력·즐겨찾기·앱)</span>';
-      return `<div class="row${v.mine ? ' mine' : ''}">
-        <div class="row-main">
-          <div class="row-title">
-            <span class="when">${esc(fmt(v.startedAt))}</span>
-            ${v.mine ? '<span class="badge gray">나</span>' : ''}
-            <span class="path">${v.pages.map((p) => esc(SHORT_PAGES[p] || p)).join(' → ') || '-'}</span>
-            ${v.download ? '<span class="badge ok">⬇️ 설치 파일</span>' : ''}
-            ${v.buy ? '<span class="badge warn">💬 구매 문의</span>' : ''}
-          </div>
-          <div class="row-meta">
-            ${from}
-            ${v.campaign ? `<span>🏷️ ${esc(v.campaign)}</span>` : ''}
-            <span class="ip">IP ${esc(v.ip || '기록 없음')}</span>
-            ${v.device ? `<span>${esc(v.device)}</span>` : ''}
-          </div>
-        </div>
-        <div class="row-actions">
-          <button class="btn btn-sm${v.mine ? ' btn-ghost' : ''}" type="button" data-owner="${esc(v.visitor)}" data-mine="${v.mine ? '0' : '1'}">${v.mine ? '내 방문 아님' : '나로 표시'}</button>
-        </div>
-      </div>`;
-    }).join('') : `<div class="empty"><strong>${mine ? '아직 방문 기록이 없습니다' : '아직 다른 사람의 방문이 없습니다'}</strong>홍보 글·영상에 홈페이지 링크를 걸면 여기 한 줄씩 쌓입니다.</div>`;
-  }
-  $('#vLogMine').addEventListener('change', () => loadVisitLog().catch((err) => toast(err.message, true)));
-  $('#vLogRefresh').addEventListener('click', () => {
-    loadVisits().catch(() => {});
-    loadVisitLog().then(() => toast('🔄 방문 기록을 새로 불러왔습니다.')).catch((err) => toast(err.message, true));
-  });
-  $('#vLog').addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-owner]'); if (!btn) return;
-    btn.disabled = true;
-    try {
-      await api('api/admin/visits/owner', { method: 'POST', body: { visitor: btn.dataset.owner, mine: btn.dataset.mine === '1' } });
-      toast(btn.dataset.mine === '1' ? '🙋 내 방문으로 표시했습니다. 숫자에서 빠집니다.' : '방문자 숫자에 다시 넣었습니다.');
-      await Promise.all([loadVisits(), loadVisitLog()]);
-    } catch (err) { toast(err.message, true); btn.disabled = false; }
-  });
-
-  // ---- Issue ----
-  let days = 30;
-  $('#daysChips').addEventListener('click', (e) => {
-    const chip = e.target.closest('.chip'); if (!chip) return;
-    days = Number(chip.dataset.days);
-    $$('#daysChips .chip').forEach((c) => c.classList.toggle('active', c === chip));
-  });
-  const clampCount = (n) => Math.max(1, Math.min(50, Math.trunc(Number(n)) || 1));
-  $('#countMinus').addEventListener('click', () => { $('#countInput').value = clampCount(Number($('#countInput').value) - 1); });
-  $('#countPlus').addEventListener('click', () => { $('#countInput').value = clampCount(Number($('#countInput').value) + 1); });
-  $('#countInput').addEventListener('change', () => { $('#countInput').value = clampCount($('#countInput').value); });
-
-  $('#issueBtn').addEventListener('click', async () => {
-    const btn = $('#issueBtn');
-    btn.disabled = true; btn.textContent = '발급 중…';
-    try {
-      const count = clampCount($('#countInput').value);
-      const { vouchers } = await api('api/admin/vouchers', { method: 'POST', body: { days, count, memo: $('#memoInput').value } });
-      lastIssued = vouchers;
-      $('#issuedTitle').textContent = `✅ ${daysLabel(days)} 이용권 ${vouchers.length}개를 발급했습니다`;
-      $('#issuedCodes').innerHTML = vouchers.map((v) => `<div class="code-row"><span class="code">${esc(v.code)}</span><button class="btn btn-sm" type="button" data-copy="${esc(v.code)}">복사</button></div>`).join('');
-      $('#issuedBox').classList.remove('hidden');
-      $('#memoInput').value = '';
-      toast('🎟️ 이용권을 발급했습니다.');
-      loadSummary().catch(() => {});
-      if (voucherStatus !== 'used') loadVouchers();
-    } catch (err) { toast(err.message, true); }
-    finally { btn.disabled = false; btn.textContent = '🎟️ 이용권 발급'; }
-  });
-
-  function guideText(vouchers) {
-    const keys = vouchers.map((v) => v.code).join('\n');
-    const period = daysLabel(vouchers[0].days);
-    return [
-      '구매해 주셔서 감사합니다! 이웃메이트 이용권을 보내드립니다.',
-      '',
-      `■ 이용권 키 (${period})`,
-      keys,
-      '',
-      '■ 등록 방법',
-      '1. 이웃메이트 앱을 실행합니다.',
-      '2. 위쪽의 [이용권 등록 필요] 배지를 눌러 이용권 관리 창을 엽니다.',
-      '3. 처음이시면 [신규 계정 생성]에서 이메일·비밀번호와 함께 위 이용권 키를 넣어주세요.',
-      '   이미 가입하셨다면 [로그인 / 키 등록]에서 로그인한 뒤 [이용권 키 등록]에 키를 넣으면 기간이 더해집니다.',
-      '',
-      '※ 이용권은 한 계정에 한 번만 등록할 수 있고, 계정은 PC 1대에서 사용할 수 있습니다.',
-      '궁금한 점은 크몽 메시지로 편하게 물어봐 주세요.'
-    ].join('\n');
-  }
-  $('#copyGuideBtn').addEventListener('click', () => { if (lastIssued.length) copy(guideText(lastIssued), '안내문을 복사했습니다.'); });
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-copy]');
-    if (btn) copy(btn.dataset.copy, '이용권 키를 복사했습니다.');
-  });
-
-  // ---- Lists ----
-  let currentTab = 'vouchers';
-  const loaders = { vouchers: () => loadVouchers(), qna: () => loadQna() };
-  $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
-    currentTab = tab.dataset.tab;
-    $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-    $('#vouchersPanel').classList.toggle('hidden', currentTab !== 'vouchers');
-    $('#qnaPanel').classList.toggle('hidden', currentTab !== 'qna');
-    loaders[currentTab]();
-  }));
-  $('#refreshBtn').addEventListener('click', () => {
-    loadSummary().catch((err) => toast(err.message, true));
-    loadVisits().catch(() => {});
-    loadUsers();
-    loaders[currentTab]();
-  });
-  $('#voucherFilter').addEventListener('click', (e) => {
-    const chip = e.target.closest('.chip'); if (!chip) return;
-    voucherStatus = chip.dataset.status;
-    $$('#voucherFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
-    loadVouchers();
-  });
-
-  async function loadVouchers() {
-    const list = $('#voucherList');
-    try {
-      const { vouchers } = await api(`api/admin/vouchers?status=${voucherStatus}`);
-      if (!vouchers.length) {
-        list.innerHTML = `<div class="empty"><strong>${voucherStatus === 'used' ? '아직 사용된 이용권이 없습니다' : '이용권이 없습니다'}</strong>왼쪽에서 이용권을 발급하면 여기에 나옵니다.</div>`;
-        return;
-      }
-      list.innerHTML = vouchers.map((v) => {
-        const used = Boolean(v.redeemed_at);
-        return `<div class="row">
-          <div class="row-main">
-            <div class="row-title"><span class="code">${esc(v.code)}</span><span class="badge info">${esc(daysLabel(v.days))}</span>${used ? '<span class="badge ok">사용됨</span>' : '<span class="badge warn">안 씀</span>'}</div>
-            <div class="row-meta">발급 ${esc(fmt(v.created_at))}${v.order_id ? ` · ${esc(v.order_id)}` : ''}${used ? ` · ${esc(v.redeemed_email || '')} 님이 ${esc(fmt(v.redeemed_at))}에 등록` : ''}</div>
-          </div>
-          <div class="row-actions">
-            <button class="btn btn-sm" type="button" data-copy="${esc(v.code)}">복사</button>
-            ${used ? '' : `<button class="btn btn-sm btn-danger" type="button" data-delete="${v.id}" data-code="${esc(v.code)}">삭제</button>`}
-          </div>
-        </div>`;
-      }).join('');
-    } catch (err) {
-      list.innerHTML = `<div class="empty"><strong>이용권 목록을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
-    }
-  }
-
-  $('#voucherList').addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-delete]'); if (!btn) return;
-    if (btn.dataset.confirm !== '1') {
-      btn.dataset.confirm = '1'; btn.textContent = '정말 삭제';
-      setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ''; btn.textContent = '삭제'; } }, 3000);
-      return;
-    }
-    try {
-      await api(`api/admin/vouchers/${btn.dataset.delete}/delete`, { method: 'POST' });
-      toast('이용권을 삭제했습니다.');
-      loadVouchers(); loadSummary().catch(() => {});
-    } catch (err) { toast(err.message, true); }
-  });
-
-  // ---- Customers ----
-  // Names for what the customer's program did, by the API path its screen called.
+  // ---- Names ----
+  // What the customer's program did, by the API path its screen called.
   const ACTION_NAMES = {
     '/api/autopilot/start': '🚗 자율 주행 켜기', '/api/autopilot/stop': '자율 주행 끄기', '/api/autopilot/settings': '자율 주행 설정 바꿈',
     '/api/engagement/start': '💬 소통 시작', '/api/engagement/pause': '소통 일시정지', '/api/engagement/resume': '소통 다시 시작', '/api/engagement/stop': '소통 중지',
@@ -782,18 +796,17 @@
   const STAT_NAMES = { processed: '처리', liked: '공감', likes: '공감', commented: '댓글', comments: '댓글', replied: '대댓글', skipped: '건너뜀', failed: '실패', errors: '오류', requested: '이웃 신청', neighborRequested: '이웃 신청', accepted: '수락', rejected: '거절', canceled: '취소', removed: '정리', visited: '방문', total: '전체', cycle: '회차' };
   const RUNTIME_NAMES = { running: '실행 중', starting: '켜는 중', stopped: '꺼짐', error: '오류' };
   const CHANNEL_NAMES = { trial: '가입 시 지급', admin: '관리자', kmong: '크몽', toss: '토스 결제', direct: '직접', manual: '수동' };
+  const PAGE_NAMES = { home: '홈', about: '기능 소개', qna: '질문 게시판' };
+  const SEEN_NAMES = { pricing: '💳 가격', download: '⬇️ 설치 안내', faq: '❓ FAQ', video: '🎬 영상', 'punch-hero': '첫 화면', hero: '첫 화면', chores: '하는 일', numbers: '숫자', why: '왜 필요한지', 'report-home': '활동 보고서', report: '활동 보고서', final: '마지막 안내', autopilot: '자율 주행', comments: '댓글', engagement: '소통', replies: '대댓글', neighbors: '이웃', keyword: '키워드', safety: '안전', ai: 'AI' };
+  const KEY_SECTIONS = new Set(['pricing', 'download', 'video']);
+  const NOTE_KINDS = { note: ['📝', '메모'], mail: ['✉️', '메일 보냄'], reply: ['💬', '답글 달았음'], call: ['📞', '연락함'], credit: ['🎁', '서비스 지급'] };
+  const STAGES = { customer: ['✅ 가입함', 'ok'], buy: ['💬 구매 버튼 누름', 'warn'], download: ['⬇️ 받고 가입 안 함', 'info'], hot: ['🔥 관심 큼', 'danger'], look: ['👀 구경만', 'gray'] };
   const actionName = (p) => ACTION_NAMES[p] || (/^\/api\/ai-engine\/[^/]+\/login$/.test(p) ? 'AI 구독 로그인' : p);
 
-  const ago = (iso) => {
-    if (!iso) return '-';
-    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-    if (min < 1) return '방금';
-    if (min < 60) return `${min}분 전`;
-    if (min < 60 * 24) return `${Math.floor(min / 60)}시간 전`;
-    return `${Math.floor(min / 1440)}일 전`;
-  };
-  const verNum = (v) => String(v || '0').split('.').map((x) => Number(x) || 0).reduce((a, x) => a * 1000 + x, 0);
+  // ---- State ----
+  const state = { view: 'home', home: null, users: [], period: 'week', custFilter: 'all', peopleFilter: 'interest', peopleShown: 30, visitMode: 'people', focusVisitor: null, expanded: new Set() };
   let latestVersion = '';
+  let since = null;
   async function loadLatestVersion() {
     try {
       const text = await (await fetch('/updates/neighbormate/latest.yml', { cache: 'no-store' })).text();
@@ -801,25 +814,319 @@
     } catch { latestVersion = ''; }
   }
 
+  // ---- Enter / leave ----
+  async function enter() {
+    await loadLatestVersion();
+    since = local.get('nm-admin-last', null);
+    await loadHome();
+    local.set('nm-admin-last', new Date().toISOString());
+    $('#gate').classList.add('hidden');
+    $('#app').classList.remove('hidden');
+    markMe();
+    route();
+    startAuto();
+    loadUsers({ quiet: true }).catch(() => {});
+  }
+
+  $('#gateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const key = $('#adminKey').value.trim();
+    if (!key) return showGate('관리자 키를 입력해주세요.');
+    adminKey = key;
+    const btn = $('#gateBtn');
+    btn.disabled = true; btn.textContent = '확인 중…';
+    try {
+      await enter();
+      storage.set(key, $('#rememberKey').checked);
+      $('#adminKey').value = '';
+    } catch (err) {
+      adminKey = '';
+      showGate(err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = '들어가기';
+    }
+  });
+  $('#logoutBtn').addEventListener('click', () => { storage.clear(); adminKey = ''; showGate(); });
+
+  // The promo site and this page share an origin, so the visitor id the site gave this browser is here
+  // too; marking it as "나" keeps the owner's own clicks out of the numbers.
+  async function markMe() {
+    let id = '';
+    try {
+      id = localStorage.getItem('nm-visitor') || '';
+      if (!id && window.crypto?.randomUUID) { id = crypto.randomUUID(); localStorage.setItem('nm-visitor', id); }
+    } catch {}
+    if (id) await api('api/admin/visits/owner', { method: 'POST', body: { visitor: id } }).catch(() => {});
+  }
+
+  // ---- Auto refresh ----
+  let autoTimer = null;
+  function stopAuto() { clearInterval(autoTimer); autoTimer = null; }
+  function startAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible' || $('#app').classList.contains('hidden')) return;
+      refreshView({ quiet: true });
+    }, 60000);
+  }
+  function synced() {
+    $('#syncText').textContent = `${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 갱신 · 1분마다 자동`;
+  }
+  async function refreshView({ quiet = false } = {}) {
+    const jobs = [loadHome()];
+    if (state.view === 'customers') jobs.push(loadUsers({ quiet }));
+    else loadUsers({ quiet: true }).catch(() => {});
+    if (state.view === 'visitors') jobs.push(loadVisitors());
+    if (state.view === 'qna') jobs.push(loadQna());
+    if (state.view === 'vouchers') jobs.push(loadVouchers());
+    if (state.view === 'customer' && !quiet) jobs.push(reloadCustomer());
+    try { await Promise.all(jobs); if (!quiet) toast('🔄 새로 불러왔습니다.'); }
+    catch (err) { if (!quiet) toast(err.message, true); }
+  }
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-refresh]')) refreshView(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autoTimer) refreshView({ quiet: true }); });
+
+  // ---- Routing: #home, #customers[/filter], #customer/<id>[/tab], #visitors[/filter], #qna, #vouchers ----
+  const VIEWS = new Set(['home', 'customers', 'customer', 'visitors', 'qna', 'vouchers']);
+  function route() {
+    const [rawView = 'home', a = '', b = ''] = decodeURIComponent(location.hash.replace(/^#/, '')).split('/');
+    const view = VIEWS.has(rawView) ? rawView : 'home';
+    const changed = view !== state.view;
+    state.view = view;
+    $$('.view').forEach((v) => v.classList.toggle('hidden', v.id !== `view-${view}`));
+    $$('.nav a').forEach((link) => link.classList.toggle('active', link.dataset.view === (view === 'customer' ? 'customers' : view)));
+    if (changed) window.scrollTo(0, 0);
+    if (view === 'home') renderHome();
+    if (view === 'customers') { if (a) setCustFilter(a); renderUsers(); loadUsers({ quiet: true }).catch(() => {}); }
+    if (view === 'customer') showCustomer(Number(a), b || 'overview');
+    if (view === 'visitors') { if (a) state.peopleFilter = a; loadVisitors().catch((err) => toast(err.message, true)); }
+    if (view === 'qna') loadQna();
+    if (view === 'vouchers') loadVouchers();
+  }
+  window.addEventListener('hashchange', route);
+  function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
+  function openTarget(t) {
+    if (!t) return;
+    if (t.view === 'customer') go(`#customer/${t.id}`);
+    else if (t.view === 'visitors') { state.focusVisitor = t.visitor || null; state.visitMode = 'people'; go(`#visitors/${t.visitor ? 'all' : (t.filter || 'all')}`); }
+    else go(`#${t.view}`);
+  }
+
+  // ---- Home ----
+  async function loadHome() {
+    const data = await api(`api/admin/home?latest=${encodeURIComponent(latestVersion)}${since ? `&since=${encodeURIComponent(since)}` : ''}`);
+    state.home = data;
+    updateNav();
+    synced();
+    if (state.view === 'home') renderHome();
+    return data;
+  }
+
+  const dismissed = () => local.get('nm-admin-dismissed', {});
+  function visibleTodo() {
+    const hide = dismissed();
+    return (state.home?.todo || []).filter((t) => !hide[t.key]);
+  }
+
+  function updateNav() {
+    const h = state.home;
+    if (!h) return;
+    const todo = visibleTodo();
+    const custIds = new Set(todo.filter((t) => t.target?.view === 'customer').map((t) => t.target.id));
+    $('#navHome').textContent = todo.length ? String(Math.min(99, todo.length)) : '';
+    $('#navCustomers').textContent = custIds.size ? String(custIds.size) : '';
+    $('#navQna').textContent = h.kpi.unansweredQuestions ? String(h.kpi.unansweredQuestions) : '';
+    $('#navVisitors').textContent = h.kpi.visitorsToday ? String(h.kpi.visitorsToday) : '';
+    document.title = `${todo.length ? `(${todo.length}) ` : ''}이웃메이트 판매자 관리`;
+  }
+
+  function renderHome() {
+    const h = state.home;
+    if (!h) return;
+    const k = h.kpi;
+    const hour = new Date().getHours();
+    $('#homeTitle').textContent = `${hour < 12 ? '좋은 아침입니다' : hour < 18 ? '좋은 오후입니다' : '오늘도 수고하셨습니다'} 👋`;
+    const f = h.fresh;
+    $('#homeFresh').innerHTML = f
+      ? `<span class="mini">마지막으로 본 ${esc(ago(f.since))} 이후</span>${[
+        ['🆕 가입', f.signups], ['💬 질문', f.questions], ['👀 방문자', f.visitors], ['⬇️ 설치 파일', f.downloads], ['🚨 오류', f.errors, true]
+      ].map(([label, value, bad]) => `<span class="mini${value ? ` on${bad ? ' bad' : ''}` : ''}">${label} <b>${n(value)}</b></span>`).join('')}`
+      : '<p>처음 오셨네요. 다음부터는 마지막으로 본 뒤 새로 생긴 일을 여기 보여 드립니다.</p>';
+
+    $('#kpis').innerHTML = [
+      { cls: 'live', href: '#customers/live', label: '지금 켜둔 고객', value: k.activeNow, sub: `고객 ${n(k.customers)}명 중` },
+      { href: '#customers', label: '☀️ 오늘 쓴 고객', value: k.usedToday, sub: '공감·댓글 등 실제로 돌린 사람' },
+      { href: '#customers/trial', label: '🎁 체험 중', value: k.trialActive, sub: '유료로 바꿀 후보' },
+      { href: '#customers/paid', label: '💳 유료', value: k.paidActive, sub: '이용권이 남은 고객' },
+      { href: '#visitors', label: '👀 오늘 방문자', value: k.visitorsToday, sub: `이번 주 ${n(k.week.visitors)}명` },
+      { href: '#visitors/download', label: '⬇️ 오늘 설치 파일', value: k.downloadsToday, sub: `이번 주 ${n(k.week.downloads)}명` },
+      { href: '#customers', label: '🆕 오늘 가입', value: k.signupsToday, sub: `이번 주 ${n(k.week.signups)}명` }
+    ].map((c) => `<a class="kpi${c.cls ? ` ${c.cls}` : ''}" href="${c.href}"><span>${c.label}</span><strong>${n(c.value)}</strong><small>${esc(c.sub)}</small></a>`).join('');
+
+    // To-do
+    const todo = visibleTodo();
+    const hiddenCount = (h.todo || []).length - todo.length;
+    $('#todoCount').textContent = todo.length ? `${todo.length}` : '';
+    $('#todoCount').classList.toggle('hidden', !todo.length);
+    $('#todoHidden').classList.toggle('hidden', !hiddenCount);
+    $('#todoHidden').textContent = `확인한 ${hiddenCount}개 다시 보기`;
+    $('#todoList').innerHTML = todo.length ? todo.map((t, i) => `<div class="todo-item ${esc(t.level)}" data-todo="${i}" tabindex="0" role="button">
+        <span class="todo-ico">${esc(t.icon)}</span>
+        <div class="todo-text"><b>${esc(t.title)}</b><small>${esc(t.detail)}${t.at ? ` · ${esc(ago(t.at))}` : ''}</small></div>
+        <button class="btn btn-xs todo-done" type="button" data-dismiss="${esc(t.key)}" title="처리했으면 숨깁니다">✓ 확인</button>
+      </div>`).join('')
+      : '<div class="all-done"><span>🎉</span><div>지금 챙길 일이 없습니다.<br><small style="font-weight:600;color:var(--muted)">새 질문·오류·이탈 신호가 생기면 여기 바로 뜹니다.</small></div></div>';
+
+    // News
+    let lastDay = '';
+    $('#newsList').innerHTML = h.news.length ? h.news.map((item, i) => {
+      const day = new Date(item.at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+      const head = day !== lastDay ? `<div class="feed-day">${esc(day)}</div>` : '';
+      lastDay = day;
+      const isNew = f && item.at > f.since;
+      return `${head}<div class="feed-item${isNew ? ' new' : ''}" data-news="${i}" role="button" tabindex="0"><span class="fi">${esc(item.icon)}</span><span class="ft">${esc(item.text)}</span><time>${esc(new Date(item.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))}</time></div>`;
+    }).join('') : '<div class="empty"><strong>아직 소식이 없습니다</strong>가입·질문·설치 파일 다운로드가 생기면 여기 쌓입니다.</div>';
+
+    renderFunnel();
+    renderTrend();
+
+    $('#latestMeta').textContent = latestVersion ? `최신 ${latestVersion}` : '';
+    $('#versions').innerHTML = h.versions.length ? h.versions.map((v) => {
+      const isLatest = latestVersion && v.version === latestVersion;
+      return `<div class="vitem${v.usersWithErrors ? ' err' : isLatest ? ' good' : ''}"><span>📦 ${esc(v.version)} ${isLatest ? '<span class="badge ok">최신</span>' : (latestVersion && verNum(v.version) < verNum(latestVersion) ? '<span class="badge warn">구버전</span>' : '')}</span><b>${n(v.users)}명<small>최근 하루 켠 사람 ${n(v.recent)} · 오류 난 사람 ${n(v.usersWithErrors)}</small></b></div>`;
+    }).join('') : '<div class="vempty">아직 사용 기록을 보낸 고객이 없습니다. 고객이 1.0.22 이상으로 업데이트하면 버전별 현황이 나옵니다.</div>';
+  }
+
+  function renderFunnel() {
+    const fu = state.home?.funnel?.[state.period];
+    if (!fu) return;
+    const steps = [
+      { key: 'visitors', label: '👀 새 방문자', href: '#visitors/all' },
+      { key: 'downloads', label: '⬇️ 설치 파일 받음', href: '#visitors/download' },
+      { key: 'signups', label: '🆕 가입', href: '#customers' },
+      { key: 'activated', label: '⚙️ 실제로 사용', href: '#customers' },
+      { key: 'paid', label: '💳 유료 결제', href: '#customers/paid' }
+    ];
+    const top = Math.max(1, ...steps.map((s) => fu[s.key]));
+    let worst = null;
+    $('#funnel').innerHTML = steps.map((s, i) => {
+      const value = fu[s.key];
+      let rate = '<span class="frate none">시작</span>';
+      if (i > 0) {
+        const prev = fu[steps[i - 1].key];
+        if (!prev) rate = '<span class="frate none">이전 단계 없음</span>';
+        else {
+          const r = pct(value, prev);
+          const lost = Math.max(0, prev - value);
+          // Steps with only a person or two say nothing yet.
+          if (prev >= 3 && (!worst || r < worst.rate)) worst = { rate: r, lost, from: steps[i - 1].label, to: s.label };
+          rate = `<span class="frate${r < 30 ? ' low' : ''}">${r}% 이어짐${lost ? ` · ${n(lost)}명 멈춤` : ''}</span>`;
+        }
+      }
+      return `<a class="fstep" href="${s.href}"><span>${s.label}</span><strong>${n(value)}</strong><div class="fbar"><i style="width:${Math.max(value ? 3 : 0, Math.round((value / top) * 100))}%"></i></div>${rate}</a>`;
+    }).join('');
+    const tips = {
+      '⬇️ 설치 파일 받음': '홈페이지를 보고 그냥 나가는 사람이 많습니다. 사람별 목록에서 어디까지 읽고 나갔는지(가격을 봤는지, 영상을 봤는지) 확인해 보세요.',
+      '🆕 가입': '설치 파일을 받고도 가입하지 않았습니다. 설치 중 경고창이나 첫 화면에서 막혔을 수 있습니다.',
+      '⚙️ 실제로 사용': '가입하고 실제로 돌려 보지 않았습니다. 네이버 연결이나 AI 모델 받기에서 막혔을 수 있으니 안내 메일을 보내 보세요.',
+      '💳 유료 결제': '써 보고 결제까지 가지 않았습니다. 체험이 끝날 때 유료 안내 메일을 보내 보세요.'
+    };
+    $('#funnelNote').innerHTML = worst && worst.lost
+      ? `가장 많이 멈추는 곳은 <b>${esc(worst.from)} → ${esc(worst.to)}</b> (${worst.rate}%만 이어짐)입니다. ${esc(tips[worst.to] || '')}`
+      : '아직 비교할 만큼 사람이 모이지 않았습니다. 홍보 글에 홈페이지 링크를 걸면 여기서 어디서 멈추는지 보입니다.';
+  }
+  $('#funnelPeriod').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-period]'); if (!chip) return;
+    state.period = chip.dataset.period;
+    $$('#funnelPeriod .chip').forEach((c) => c.classList.toggle('active', c === chip));
+    renderFunnel();
+  });
+
+  function renderTrend() {
+    const days = state.home?.daily || [];
+    if (!days.length) return;
+    const rows = [
+      ['visitors', '👀 방문자', '#34d399', '명'],
+      ['downloads', '⬇️ 설치 파일', '#818cf8', '명'],
+      ['signups', '🆕 가입', '#60a5fa', '명'],
+      ['active', '⚙️ 사용한 고객', '#03c75a', '명/일'],
+      ['errors', '🚨 오류', '#f87171', '건']
+    ];
+    const label = (d) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
+    $('#trend').innerHTML = rows.map(([key, name, color, unit]) => {
+      const values = days.map((d) => d[key] || 0);
+      const max = Math.max(1, ...values);
+      const total = key === 'active' ? Math.max(...values) : values.reduce((a, x) => a + x, 0);
+      return `<div class="spark-row">
+        <div class="spark-label">${name}<small>${key === 'active' ? '하루 최대' : '30일 합계'}</small></div>
+        <div class="spark" style="--c:${color}">${days.map((d, i) => `<i class="${values[i] ? '' : 'zero'}${i === days.length - 1 ? ' today' : ''}" style="height:${values[i] ? Math.max(8, Math.round((values[i] / max) * 100)) : 6}%" title="${esc(label(d.day))} · ${name.slice(2).trim()} ${n(values[i])}${unit.replace('/일', '')}"></i>`).join('')}</div>
+        <div class="spark-total">${n(total)}<small>${key === 'active' ? '명' : unit}</small></div>
+      </div>`;
+    }).join('') + `<div class="spark-axis"><span></span><div><span>${esc(label(days[0].day))}</span><span>${esc(label(days[15].day))}</span><span>오늘</span></div><span></span></div>`;
+  }
+
+  $('#todoList').addEventListener('click', (e) => {
+    const dismiss = e.target.closest('[data-dismiss]');
+    if (dismiss) {
+      const hide = dismissed();
+      hide[dismiss.dataset.dismiss] = new Date().toISOString();
+      // Keep the list short: forget what was hidden more than 30 days ago.
+      for (const [key, at] of Object.entries(hide)) if (Date.now() - Date.parse(at) > 30 * 86400000) delete hide[key];
+      local.set('nm-admin-dismissed', hide);
+      renderHome(); updateNav();
+      toast('✓ 확인했습니다. 상황이 바뀌면 다시 뜹니다.');
+      return;
+    }
+    const item = e.target.closest('[data-todo]');
+    if (item) openTarget(visibleTodo()[Number(item.dataset.todo)]?.target);
+  });
+  $('#todoHidden').addEventListener('click', () => { local.set('nm-admin-dismissed', {}); renderHome(); updateNav(); });
+  $('#newsList').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-news]');
+    if (item) openTarget(state.home.news[Number(item.dataset.news)]?.target);
+  });
+  for (const id of ['#todoList', '#newsList']) {
+    $(id).addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button]')) { e.preventDefault(); e.target.click(); } });
+  }
+
+  // ---- Customers ----
+  const sumToday = (t) => !t ? 0 : [t.engagement?.total, t.feed?.likes, t.feed?.comments, t.neighborRequests?.today, t.replies?.today].reduce((a, x) => a + (Number(x) || 0), 0);
+  const isLive = (u) => u.client?.lastReportAt && Date.now() - new Date(u.client.lastReportAt).getTime() < 30 * 60000;
+
   // One look at a customer: is the program set up, running and working for them right now?
   function health(u) {
     const c = u.client;
-    if (!c || !c.lastReportAt) return { key: 'none', badge: '<span class="badge gray">⚪ 사용 기록 없음</span>', attention: Boolean(u.planType && u.daysLeft > 0) };
+    const licensed = u.planType && u.daysLeft > 0;
+    if (!c || !c.lastReportAt) return { badge: '<span class="badge gray">⚪ 사용 기록 없음</span>', attention: Boolean(licensed) };
     const offMin = (Date.now() - new Date(c.lastReportAt).getTime()) / 60000;
     const errors = c.errors24h || 0;
     const busy = (c.actions24h || 0) > 0 || sumToday(c.today) > 0;
     const old = latestVersion && c.appVersion && verNum(c.appVersion) < verNum(latestVersion);
+    const idleDays = c.lastUsedAt ? (Date.now() - new Date(c.lastUsedAt).getTime()) / 86400000 : null;
+    const dropped = (c.activeDaysPrev7 || 0) >= 3 && (c.activeDays7 || 0) <= 1;
     const parts = [];
     if (offMin > 30) parts.push(`<span class="badge gray">💤 꺼짐 · ${esc(ago(c.lastReportAt))}</span>`);
     else if (busy) parts.push('<span class="badge ok">🟢 사용 중</span>');
     else parts.push('<span class="badge warn">🟡 켜두기만</span>');
     if (errors) parts.push(`<span class="badge danger">🔴 오류 ${errors}건</span>`);
-    if (c.naverConnected === false && offMin <= 30) parts.push('<span class="badge warn">네이버 미연결</span>');
+    if (c.naverConnected === false && offMin <= 60 * 24) parts.push('<span class="badge warn">네이버 미연결</span>');
+    if (c.modelMissing && offMin <= 60 * 24) parts.push('<span class="badge warn">AI 모델 없음</span>');
     if (old) parts.push(`<span class="badge warn">구버전 ${esc(c.appVersion)}</span>`);
-    const expiring = u.planType && u.daysLeft > 0 && u.daysLeft <= 1;
-    return { key: 'reported', badge: parts.join(''), attention: Boolean(errors || old || expiring || (c.naverConnected === false) || (!busy && offMin <= 30) || (offMin > 60 * 24 && u.daysLeft > 0)) };
+    if (licensed && idleDays != null && idleDays > 3) parts.push(`<span class="badge warn">📉 ${Math.floor(idleDays)}일째 안 씀</span>`);
+    else if (licensed && dropped) parts.push('<span class="badge warn">📉 사용 줄어듦</span>');
+    const expiring = licensed && u.daysLeft <= 1;
+    return {
+      badge: parts.join(''),
+      attention: Boolean(errors || old || expiring || c.modelMissing || (c.naverConnected === false && offMin <= 60 * 24) || (!busy && offMin <= 30) || (licensed && idleDays != null && idleDays > 3) || (licensed && dropped) || (offMin > 60 * 24 && licensed))
+    };
   }
-  const sumToday = (t) => !t ? 0 : [t.engagement?.total, t.feed?.likes, t.feed?.comments, t.neighborRequests?.today, t.replies?.today].reduce((a, x) => a + (Number(x) || 0), 0);
+
+  function planBadge(u) {
+    if (!u.planType) return '<span class="badge gray">이용권 없음</span>';
+    if (u.daysLeft <= 0) return '<span class="badge danger">만료</span>';
+    if (u.planType === 'free_trial') return `<span class="badge info">🎁 체험 · ${u.daysLeft}일 남음</span>`;
+    return `<span class="badge ok">💳 유료 · ${u.daysLeft}일 남음</span>`;
+  }
 
   function todayChips(t) {
     if (!t) return '';
@@ -829,73 +1136,73 @@
       ['🤝 이웃 신청', (t.neighborRequests?.today || 0) + (t.engagement?.neighbors || 0)],
       ['↩️ 대댓글', t.replies?.today || 0]
     ];
-    return `<div class="cust-today">${items.map(([label, value]) => `<span class="mini">${label} <b>${n(value)}</b></span>`).join('')}</div>`;
+    return `<div class="minis">${items.map(([label, value]) => `<span class="mini">${label} <b>${n(value)}</b></span>`).join('')}</div>`;
   }
 
-  let custFilter = 'all';
-  let users = [];
-  $('#custFilter').addEventListener('click', (e) => {
-    const chip = e.target.closest('.chip'); if (!chip) return;
-    custFilter = chip.dataset.filter;
-    $$('#custFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
-    renderUsers();
-  });
-  let searchTimer = null;
-  $('#userSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderUsers, 150); });
-  $('#custRefresh').addEventListener('click', () => loadUsers().then(() => toast('🔄 고객 현황을 새로 불러왔습니다.')));
+  const CUST_FILTERS = [
+    ['all', '전체'], ['attention', '⚠️ 챙길 고객'], ['live', '🟢 지금 켜짐'], ['trial', '🎁 체험 중'], ['paid', '💳 유료'], ['expired', '⏳ 만료'], ['mine', '🙋 내 계정']
+  ];
+  const custMatch = {
+    all: () => true,
+    attention: (u) => !u.owner && health(u).attention,
+    live: (u) => !u.owner && isLive(u),
+    trial: (u) => !u.owner && u.planType === 'free_trial' && u.daysLeft > 0,
+    paid: (u) => !u.owner && u.planType && u.planType !== 'free_trial' && u.daysLeft > 0,
+    expired: (u) => !u.owner && (!u.planType || u.daysLeft <= 0),
+    mine: (u) => u.owner
+  };
+  function setCustFilter(key) { if (custMatch[key]) state.custFilter = key; }
 
-  function planBadge(u) {
-    if (!u.planType) return '<span class="badge gray">이용권 없음</span>';
-    if (u.daysLeft <= 0) return '<span class="badge danger">만료</span>';
-    if (u.planType === 'free_trial') return `<span class="badge info">🎁 체험 · ${u.daysLeft}일 남음</span>`;
-    return `<span class="badge ok">💳 유료 · ${u.daysLeft}일 남음</span>`;
-  }
-
-  async function loadUsers() {
-    const list = $('#userList');
+  async function loadUsers({ quiet = false } = {}) {
     try {
       if (!latestVersion) await loadLatestVersion();
-      ({ users } = await api('api/admin/users'));
-      renderUsers();
+      ({ users: state.users } = await api('api/admin/users'));
+      if (state.view === 'customers') renderUsers();
     } catch (err) {
-      list.innerHTML = `<div class="empty"><strong>고객 목록을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
+      if (!quiet) $('#userList').innerHTML = `<div class="empty"><strong>고객 목록을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
+      throw err;
     }
   }
 
   function renderUsers() {
-    const list = $('#userList');
-    const q = $('#userSearch').value.trim().toLowerCase();
-    const last = (u) => new Date(u.client?.lastReportAt || u.lastSeenAt || u.createdAt || 0).getTime();
-    const rows = [...users].sort((x, y) => (x.owner - y.owner) || (last(y) - last(x))).map((u) => ({ u, h: health(u) })).filter(({ u, h }) => {
-      if (q && !`${u.email} ${u.client?.blogId || ''} ${u.name || ''}`.toLowerCase().includes(q)) return false;
-      if (custFilter === 'mine') return u.owner;
-      if (u.owner && custFilter !== 'all') return false;
-      if (custFilter === 'trial') return u.planType === 'free_trial' && u.daysLeft > 0;
-      if (custFilter === 'paid') return u.planType && u.planType !== 'free_trial' && u.daysLeft > 0;
-      if (custFilter === 'attention') return h.attention;
-      return true;
-    });
+    const users = state.users;
     const customers = users.filter((u) => !u.owner);
-    const active = customers.filter((u) => u.client?.lastReportAt && Date.now() - new Date(u.client.lastReportAt).getTime() < 30 * 60000).length;
-    const attention = customers.filter((u) => health(u).attention).length;
-    $('#custMeta').textContent = `고객 ${n(customers.length)}명 · 지금 켜둔 사람 ${n(active)}명 · 챙길 고객 ${n(attention)}명${latestVersion ? ` · 최신 ${latestVersion}` : ''}`;
+    $('#custFilter').innerHTML = CUST_FILTERS.map(([key, label]) => {
+      const count = users.filter(custMatch[key]).length;
+      return `<button type="button" class="chip${key === state.custFilter ? ' active' : ''}" data-filter="${key}">${label}<em>${n(key === 'all' ? customers.length : count)}</em></button>`;
+    }).join('');
+    $('#custMeta').textContent = `고객 ${n(customers.length)}명 · 지금 켜둔 사람 ${n(customers.filter(isLive).length)}명 · 챙길 고객 ${n(customers.filter(custMatch.attention).length)}명${latestVersion ? ` · 최신 버전 ${latestVersion}` : ''}`;
+    const q = $('#userSearch').value.trim().toLowerCase();
+    const lastAt = (u) => new Date(u.client?.lastReportAt || u.lastSeenAt || u.createdAt || 0).getTime();
+    const sorters = {
+      recent: (x, y) => lastAt(y) - lastAt(x),
+      signup: (x, y) => new Date(y.createdAt) - new Date(x.createdAt),
+      expiry: (x, y) => ((x.daysLeft > 0 ? x.daysLeft : 9999) - (y.daysLeft > 0 ? y.daysLeft : 9999)),
+      usage: (x, y) => ((y.client?.activeDays7 || 0) - (x.client?.activeDays7 || 0)) || ((y.client?.actions24h || 0) - (x.client?.actions24h || 0))
+    };
+    const rows = users.filter((u) => state.custFilter === 'all' ? true : custMatch[state.custFilter](u))
+      .filter((u) => !q || `${u.email} ${u.client?.blogId || ''} ${u.name || ''}`.toLowerCase().includes(q))
+      .sort((x, y) => (x.owner - y.owner) || sorters[$('#custSort').value](x, y));
+    const list = $('#userList');
     if (!rows.length) {
-      const empty = { attention: '지금 챙길 고객이 없습니다', mine: '내 계정으로 표시한 계정이 없습니다', trial: '체험 중인 고객이 없습니다', paid: '유료 고객이 아직 없습니다' }[custFilter] || '고객이 없습니다';
-      list.innerHTML = `<div class="empty"><strong>${empty}</strong>${custFilter === 'mine' ? '고객 상세에서 [내 계정으로 표시]를 누르면 숫자에서 빠지고 여기로 옵니다.' : '앱에서 회원가입한 고객이 여기에 나옵니다.'}</div>`;
+      const empty = { attention: '지금 챙길 고객이 없습니다 🎉', mine: '내 계정으로 표시한 계정이 없습니다', trial: '체험 중인 고객이 없습니다', paid: '유료 고객이 아직 없습니다', live: '지금 프로그램을 켜둔 고객이 없습니다', expired: '만료된 고객이 없습니다' }[state.custFilter] || '고객이 없습니다';
+      list.innerHTML = `<div class="empty"><strong>${empty}</strong>${state.custFilter === 'mine' ? '고객 화면에서 [내 계정으로 표시]를 누르면 숫자에서 빠지고 여기로 옵니다.' : q ? '검색어를 바꿔 보세요.' : '앱에서 회원가입한 고객이 여기에 나옵니다.'}</div>`;
       return;
     }
-    list.innerHTML = rows.map(({ u, h }) => {
+    list.innerHTML = rows.map((u) => {
       const c = u.client || {};
+      const h = health(u);
       const blog = c.blogId ? `<a href="https://blog.naver.com/${esc(c.blogId)}" target="_blank" rel="noopener" data-stop>🌐 ${esc(c.blogId)}</a>` : '<span>🌐 블로그 모름</span>';
       const ai = c.aiEngine ? `<span>🤖 ${esc(ENGINE_NAMES[c.aiEngine] || c.aiEngine)}${c.aiEngine === 'local' && c.acceleration ? ` · ${esc(c.acceleration)}` : ''}</span>` : '';
       const last = c.lastAction ? `<span>🖱️ 마지막 행동: ${esc(actionName(c.lastAction))} · ${esc(ago(c.lastActionAt))}</span>` : '';
-      return `<div class="row cust-row${u.owner ? ' mine' : ''}" data-user="${u.id}" tabindex="0" role="button" aria-label="${esc(u.email)} 자세히 보기">
-        <div class="row-main cust-lines">
+      const week = c.lastReportAt ? `<span>📅 이번 주 ${n(c.activeDays7)}일 사용</span>` : '';
+      return `<div class="row click${u.owner ? ' mine' : ''}" data-user="${u.id}" tabindex="0" role="button" aria-label="${esc(u.email)} 자세히 보기">
+        <div class="row-main">
           <div class="row-title">${esc(u.email)} ${planBadge(u)} ${u.owner ? '<span class="badge gray">🙋 나</span>' : ''} ${h.badge}</div>
-          <div class="row-meta">${blog}${c.appVersion ? `<span>📦 ${esc(c.appVersion)}</span>` : ''}${ai}${last}</div>
+          <div class="row-meta">${blog}${c.appVersion ? `<span>📦 ${esc(c.appVersion)}</span>` : ''}${ai}${week}${last}</div>
           ${todayChips(c.today)}
         </div>
-        <div class="cust-side">
+        <div class="row-side">
           <small>가입 ${esc(fmtDay(u.createdAt))}</small>
           <small>최근 접속 ${esc(ago(c.lastReportAt || u.lastSeenAt))}</small>
           <span class="btn btn-sm">자세히 →</span>
@@ -903,72 +1210,101 @@
       </div>`;
     }).join('');
   }
+  $('#custFilter').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-filter]'); if (!chip) return;
+    state.custFilter = chip.dataset.filter;
+    history.replaceState(null, '', `#customers${state.custFilter === 'all' ? '' : `/${state.custFilter}`}`);
+    renderUsers();
+  });
+  $('#custSort').addEventListener('change', renderUsers);
+  let searchTimer = null;
+  $('#userSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderUsers, 150); });
   $('#userList').addEventListener('click', (e) => {
     if (e.target.closest('[data-stop]')) return;
-    const row = e.target.closest('[data-user]'); if (row) openCustomer(Number(row.dataset.user));
+    const row = e.target.closest('[data-user]'); if (row) go(`#customer/${row.dataset.user}`);
   });
   $('#userList').addEventListener('keydown', (e) => {
     const row = e.target.closest('[data-user]');
-    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openCustomer(Number(row.dataset.user)); }
+    if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); go(`#customer/${row.dataset.user}`); }
   });
 
-  // ---- Customer detail drawer ----
-  let openId = null;
+  // ---- One customer ----
   let detail = null;
+  let detailId = null;
   let tlFilter = '';
   let tlEvents = [];
-  function closeDrawer() {
-    $('#drawer').classList.remove('open'); $('#drawerBack').classList.remove('open');
-    $('#drawer').setAttribute('aria-hidden', 'true');
-    openId = null;
-  }
-  $('#drawerClose').addEventListener('click', closeDrawer);
-  $('#drawerBack').addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && openId) closeDrawer(); });
-
-  async function openCustomer(id) {
-    openId = id; tlFilter = '';
-    const u = users.find((x) => x.id === id);
-    $('#dTitle').textContent = u?.email || '고객';
-    $('#dBadges').innerHTML = u ? planBadge(u) + health(u).badge : '';
-    $('#dActions').innerHTML = '';
-    $('#dBody').innerHTML = '<div class="empty"><strong>불러오는 중…</strong></div>';
-    $('#drawer').classList.add('open'); $('#drawerBack').classList.add('open');
-    $('#drawer').setAttribute('aria-hidden', 'false');
-    $('#drawerClose').focus();
-    try {
-      detail = await api(`api/admin/users/${id}?limit=300`);
-      if (openId !== id) return;
-      tlEvents = detail.events;
-      renderDetail(u);
-    } catch (err) {
-      $('#dBody').innerHTML = `<div class="empty"><strong>불러오지 못했습니다</strong>${esc(err.message)}</div>`;
-    }
-  }
-
+  let currentTab = 'overview';
   const kv = (pairs) => `<div class="kv">${pairs.filter(Boolean).map(([k, v, cls = '']) => `<div><span>${esc(k)}</span><b class="${cls}">${v}</b></div>`).join('')}</div>`;
   const sec = (title, body, side = '') => `<section class="dsec"><div class="dsec-head"><h4>${title}</h4>${side}</div><div class="dsec-body">${body}</div></section>`;
+  const listRow = (id) => state.users.find((x) => x.id === id) || null;
 
-  function renderDetail(listRow) {
+  async function showCustomer(id, tab) {
+    currentTab = tab;
+    if (detail && detailId === id) return renderCustomer();
+    detailId = id; detail = null; tlFilter = '';
+    $('#customerPage').innerHTML = '<div class="card"><div class="empty"><strong>불러오는 중…</strong></div></div>';
+    try {
+      if (!state.users.length) await loadUsers({ quiet: true }).catch(() => {});
+      const data = await api(`api/admin/users/${id}?limit=300`);
+      if (detailId !== id) return;
+      detail = data; tlEvents = data.events;
+      renderCustomer();
+    } catch (err) {
+      $('#customerPage').innerHTML = `<div class="card"><div class="empty"><strong>불러오지 못했습니다</strong>${esc(err.message)}</div></div>`;
+    }
+  }
+  async function reloadCustomer() {
+    if (!detailId) return;
+    await loadUsers({ quiet: true }).catch(() => {});
+    const data = await api(`api/admin/users/${detailId}?limit=300${tlFilter ? `&type=${tlFilter}` : ''}`);
+    detail = data; tlEvents = data.events;
+    if (state.view === 'customer') renderCustomer();
+  }
+
+  function renderCustomer() {
     const d = detail;
     const st = d.status;
-    const lic = d.licenses[0];
-    const u = listRow || {};
-    $('#dTitle').textContent = d.user.email;
-    $('#dBadges').innerHTML = (listRow ? planBadge(listRow) + health(listRow).badge : '') + (d.owner ? '<span class="badge gray">🙋 내 계정</span>' : '');
-    $('#dActions').innerHTML = `
-      <button class="btn btn-sm" type="button" data-dext="3">+3일 (서비스)</button>
-      <button class="btn btn-sm" type="button" data-dext="30">+30일</button>
-      ${d.user.hasDevice ? '<button class="btn btn-sm" type="button" data-dreset title="고객이 PC를 바꿨을 때">🖥️ PC 초기화</button>' : ''}
-      <button class="btn btn-sm" type="button" data-dcopy="${esc(d.user.email)}">📋 이메일 복사</button>
-      ${st?.naver?.blogId ? `<a class="btn btn-sm" href="https://blog.naver.com/${esc(st.naver.blogId)}" target="_blank" rel="noopener">🌐 블로그 열기 ↗</a>` : ''}
-      <button class="btn btn-sm btn-ghost" type="button" data-downer="${d.owner ? '0' : '1'}">${d.owner ? '고객으로 되돌리기' : '🙋 내 계정으로 표시'}</button>`;
+    const u = listRow(d.user.id) || {};
+    const blogId = st?.naver?.blogId || u.client?.blogId || '';
+    const firstFrom = d.origin?.find((p) => p.from)?.from;
+    const careCount = d.notes.length + d.questions.length + d.audit.filter((a) => /^ADMIN_/.test(a.action)).length;
+    const tabs = [['overview', '개요'], ['activity', '활동 기록'], ['care', '응대·메모', careCount], ['origin', '유입 경로', d.origin.length], ['account', '계정·이용권']];
+    $('#customerPage').innerHTML = `<section class="card dhead">
+        <div class="dhead-main">
+          <div class="avatar">${esc((d.user.email || '?')[0])}</div>
+          <div style="min-width:0;flex:1">
+            <h2>${esc(d.user.email)}</h2>
+            <div class="badges">${u.id ? planBadge(u) + health(u).badge : ''}${d.owner ? '<span class="badge gray">🙋 내 계정</span>' : ''}</div>
+            <div class="dmeta">
+              <span>🆕 가입 ${esc(fmt(d.user.createdAt))}</span>
+              ${blogId ? `<a href="https://blog.naver.com/${esc(blogId)}" target="_blank" rel="noopener">🌐 ${esc(blogId)} ↗</a>` : '<span>🌐 블로그 모름</span>'}
+              ${st?.appVersion ? `<span>📦 ${esc(st.appVersion)}</span>` : ''}
+              ${firstFrom ? `<span>🧭 처음 온 곳: ${esc(firstFrom.label)}</span>` : ''}
+              ${d.notes[0] ? `<span>📝 최근 메모: ${esc(d.notes[0].body.split('\n')[0].slice(0, 40))}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="dactions">
+          <button class="btn btn-sm btn-green" type="button" data-mail>✉️ 메일 쓰기</button>
+          <a class="btn btn-sm" href="#customer/${d.user.id}/care" data-memo>📝 메모 남기기</a>
+          <button class="btn btn-sm" type="button" data-dext="3">🎁 +3일 (서비스)</button>
+          <button class="btn btn-sm" type="button" data-dext="30">+30일</button>
+          ${d.user.hasDevice ? '<button class="btn btn-sm" type="button" data-dreset title="고객이 PC를 바꿨을 때">🖥️ PC 초기화</button>' : ''}
+          <button class="btn btn-sm" type="button" data-dcopy="${esc(d.user.email)}">📋 이메일 복사</button>
+          <button class="btn btn-sm btn-ghost" type="button" data-downer="${d.owner ? '0' : '1'}">${d.owner ? '고객으로 되돌리기' : '🙋 내 계정으로 표시'}</button>
+        </div>
+        <div class="tabs dtabs" role="tablist">${tabs.map(([key, label, count]) => `<a class="tab${key === currentTab ? ' active' : ''}" href="#customer/${d.user.id}/${key}" role="tab">${label}${count ? `<em>${n(count)}</em>` : ''}</a>`).join('')}</div>
+      </section>
+      <div id="dBody">${({ overview: overviewTab, activity: activityTab, care: careTab, origin: originTab, account: accountTab }[currentTab] || overviewTab)()}</div>`;
+  }
 
+  function overviewTab() {
+    const d = detail;
+    const st = d.status;
     const parts = [];
     if (!st) {
-      parts.push('<div class="note warn">이 고객의 프로그램에서 아직 사용 기록이 오지 않았습니다. 1.0.22 이전 버전이거나, 가입 후 프로그램을 켜지 않았거나, 로그인하지 않은 상태입니다. 아래는 서버에 남은 계정 정보입니다.</div>');
+      parts.push('<div class="note warn">이 고객의 프로그램에서 아직 사용 기록이 오지 않았습니다. 1.0.22 이전 버전이거나, 가입 후 프로그램을 켜지 않았거나, 로그인하지 않은 상태입니다. [✉️ 메일 쓰기]의 “사용 시작 도움” 안내를 보내 보세요.</div>');
     } else {
-      const offMin = (Date.now() - new Date(st.lastReportAt).getTime()) / 60000;
       const t = st.today || {};
       parts.push(sec('📊 오늘 사용량', `<div class="dstats">
         <div class="vstat hot"><span>❤️ 공감</span><strong>${n((t.engagement?.likes || 0) + (t.feed?.likes || 0))}</strong><small>소통 ${n(t.engagement?.likes)} · 이웃 새글 ${n(t.feed?.likes)}</small></div>
@@ -976,35 +1312,7 @@
         <div class="vstat"><span>🤝 이웃 신청</span><strong>${n((t.neighborRequests?.today || 0) + (t.engagement?.neighbors || 0))}</strong><small>누적 ${n(t.neighborRequests?.allTime)}</small></div>
         <div class="vstat"><span>↩️ 대댓글</span><strong>${n(t.replies?.today)}</strong><small>누적 ${n(t.replies?.allTime)}</small></div>
       </div>`, `<small>${esc(t.date || '')} 기준 · ${esc(ago(st.lastReportAt))} 보고</small>`));
-
-      const gpus = (st.hardware?.gpus || []).map((g) => `${g.name}${g.vramMb ? ` (${Math.round(g.vramMb / 1024)}GB)` : ''}`).join(', ');
-      const aiOk = st.ai?.engine !== 'local' || st.ai?.runtime === 'running';
-      parts.push(sec('🖥️ 프로그램 환경', kv([
-        ['프로그램 버전', `${esc(st.appVersion || '-')}${latestVersion && verNum(st.appVersion) < verNum(latestVersion) ? ` <span class="badge warn">최신 ${esc(latestVersion)}</span>` : ''}`],
-        ['상태', offMin > 30 ? `💤 꺼짐 (${esc(ago(st.lastReportAt))})` : `🟢 켜져 있음 · ${n(st.uptimeMin)}분째`, offMin > 30 ? '' : 'good'],
-        ['네이버', st.naver?.connected ? `연결됨${st.naver.blogId ? ` · ${esc(st.naver.blogId)}` : ''}` : '연결 안 됨', st.naver?.connected ? 'good' : 'bad'],
-        ['AI 엔진', `${esc(ENGINE_NAMES[st.ai?.engine] || st.ai?.engine || '-')}${st.ai?.engine === 'local' ? ` · ${esc(RUNTIME_NAMES[st.ai?.runtime] || st.ai?.runtime || '-')} · ${esc(st.ai?.acceleration || '')}` : ''}`, aiOk ? '' : 'bad'],
-        ['AI 모델', st.ai?.engine && st.ai.engine !== 'local' ? '구독 AI 사용 (내 PC 모델 안 씀)' : esc(st.ai?.model || (st.ai?.modelDownloaded ? '받음' : '없음 · 다운로드 필요')), st.ai?.engine === 'local' && !st.ai?.modelDownloaded ? 'bad' : ''],
-        ['운영체제', esc(st.platform?.os || '-')],
-        ['CPU / RAM', `${esc(st.hardware?.cpu || '-')} · ${n(st.hardware?.cores)}코어 · ${n(st.hardware?.ramGb)}GB`],
-        ['그래픽카드', esc(gpus || '없음 (내장 그래픽)')],
-        ['처음 보고', esc(fmt(st.firstReportAt))],
-        ['접속 IP', esc(st.ip || '-')],
-        st.telemetry?.lastError ? ['전송 오류', esc(st.telemetry.lastError), 'bad'] : null
-      ])));
-
-      const auto = st.automation || {};
-      const autoNames = { autopilot: '🚗 자율 주행', engagement: '💬 소통', feed: '📰 이웃 새글', neighbors: '🤝 서로이웃 신청', cleaner: '🧹 이웃 관리', health: '📈 이웃 활동도' };
-      parts.push(sec('⚙️ 자동 작업 상태', `<div class="auto-grid">${Object.entries(autoNames).map(([key, label]) => {
-        const a = auto[key] || {};
-        const state = key === 'autopilot' ? (a.enabled ? (a.running ? 'running' : 'idle') : 'off') : (a.state || a.status || 'idle');
-        const badge = state === 'running' ? '<span class="badge ok">실행 중</span>' : state === 'off' ? '<span class="badge gray">꺼짐</span>' : state === 'paused' ? '<span class="badge warn">일시정지</span>' : `<span class="badge gray">${esc(STATE_NAMES[state] || state)}</span>`;
-        const stats = a.stats && typeof a.stats === 'object' ? Object.entries(a.stats).filter(([k, v]) => typeof v === 'number' && v && STAT_NAMES[k]).slice(0, 5).map(([k, v]) => `${STAT_NAMES[k]} ${n(v)}`).join(' · ') : '';
-        const extra = key === 'autopilot' && a.nextRunAt ? `다음 실행 ${fmt(a.nextRunAt)}` : '';
-        return `<div class="auto-item"><div class="t">${label}${badge}</div><div class="m">${esc([stats, extra].filter(Boolean).join(' · ') || '기록 없음')}</div></div>`;
-      }).join('')}</div>`));
     }
-
     // 14-day activity
     const days = [];
     for (let i = 13; i >= 0; i--) {
@@ -1018,33 +1326,111 @@
     }).join('')}</div><div class="ddays">${days.map((x, i) => `<span>${i === 13 ? '오늘' : (x.day.slice(8) === '01' ? `${Number(x.day.slice(5, 7))}/${Number(x.day.slice(8))}` : Number(x.day.slice(8)))}</span>`).join('')}</div>`,
       '<div class="legend"><span><i style="background:var(--green)"></i>행동·성공</span><span><i style="background:#f87171"></i>오류</span></div>'));
 
-    parts.push(sec('🖱️ 많이 쓴 기능 (최근 7일)', d.topActions.length
-      ? `<div class="rank">${d.topActions.map((a) => `<div class="vitem${a.errors ? ' err' : ''}"><span>${esc(actionName(a.name))}${a.errors ? ` · 실패 ${n(a.errors)}` : ''}</span><b>${n(a.n)}회<small>${esc(ago(a.lastAt))}</small></b></div>`).join('')}</div>`
-      : '<div class="vempty">아직 누른 기능이 없습니다.</div>'));
+    if (st) {
+      const offMin = (Date.now() - new Date(st.lastReportAt).getTime()) / 60000;
+      const gpus = (st.hardware?.gpus || []).map((g) => `${g.name}${g.vramMb ? ` (${Math.round(g.vramMb / 1024)}GB)` : ''}`).join(', ');
+      const aiOk = st.ai?.engine !== 'local' || st.ai?.runtime === 'running';
+      const env = sec('🖥️ 프로그램 환경', kv([
+        ['프로그램 버전', `${esc(st.appVersion || '-')}${latestVersion && verNum(st.appVersion) < verNum(latestVersion) ? ` <span class="badge warn">최신 ${esc(latestVersion)}</span>` : ''}`],
+        ['상태', offMin > 30 ? `💤 꺼짐 (${esc(ago(st.lastReportAt))})` : `🟢 켜져 있음 · ${n(st.uptimeMin)}분째`, offMin > 30 ? '' : 'good'],
+        ['네이버', st.naver?.connected ? `연결됨${st.naver.blogId ? ` · ${esc(st.naver.blogId)}` : ''}` : '연결 안 됨', st.naver?.connected ? 'good' : 'bad'],
+        ['AI 엔진', `${esc(ENGINE_NAMES[st.ai?.engine] || st.ai?.engine || '-')}${st.ai?.engine === 'local' ? ` · ${esc(RUNTIME_NAMES[st.ai?.runtime] || st.ai?.runtime || '-')} · ${esc(st.ai?.acceleration || '')}` : ''}`, aiOk ? '' : 'bad'],
+        ['AI 모델', st.ai?.engine && st.ai.engine !== 'local' ? '구독 AI 사용' : esc(st.ai?.model || (st.ai?.modelDownloaded ? '받음' : '없음 · 다운로드 필요')), st.ai?.engine === 'local' && !st.ai?.modelDownloaded ? 'bad' : ''],
+        ['운영체제', esc(st.platform?.os || '-')],
+        ['CPU / RAM', `${esc(st.hardware?.cpu || '-')} · ${n(st.hardware?.cores)}코어 · ${n(st.hardware?.ramGb)}GB`],
+        ['그래픽카드', esc(gpus || '없음 (내장 그래픽)')],
+        ['처음 보고', esc(fmt(st.firstReportAt))],
+        ['접속 IP', `<span class="ip">${esc(st.ip || '-')}</span>`],
+        st.telemetry?.lastError ? ['전송 오류', esc(st.telemetry.lastError), 'bad'] : null
+      ]));
+      const auto = st.automation || {};
+      const autoNames = { autopilot: '🚗 자율 주행', engagement: '💬 소통', feed: '📰 이웃 새글', neighbors: '🤝 서로이웃 신청', cleaner: '🧹 이웃 관리', health: '📈 이웃 활동도' };
+      const autos = sec('⚙️ 자동 작업 상태', `<div class="auto-grid">${Object.entries(autoNames).map(([key, label]) => {
+        const a = auto[key] || {};
+        const s = key === 'autopilot' ? (a.enabled ? (a.running ? 'running' : 'idle') : 'off') : (a.state || a.status || 'idle');
+        const badge = s === 'running' ? '<span class="badge ok">실행 중</span>' : s === 'off' ? '<span class="badge gray">꺼짐</span>' : s === 'paused' ? '<span class="badge warn">일시정지</span>' : `<span class="badge gray">${esc(STATE_NAMES[s] || s)}</span>`;
+        const stats = a.stats && typeof a.stats === 'object' ? Object.entries(a.stats).filter(([k, v]) => typeof v === 'number' && v && STAT_NAMES[k]).slice(0, 5).map(([k, v]) => `${STAT_NAMES[k]} ${n(v)}`).join(' · ') : '';
+        const extra = key === 'autopilot' && a.nextRunAt ? `다음 실행 ${fmt(a.nextRunAt)}` : '';
+        return `<div class="auto-item"><div class="t">${label}${badge}</div><div class="m">${esc([stats, extra].filter(Boolean).join(' · ') || '기록 없음')}</div></div>`;
+      }).join('')}</div>`);
+      parts.push(`<div class="dgrid">${env}${autos}</div>`);
+    }
 
-    parts.push(sec('🚨 자주 난 오류·경고 (최근 7일)', d.topErrors.length
-      ? `<div class="rank">${d.topErrors.map((e) => `<div class="vitem err"><span>${esc(actionName(String(e.message || '')))}</span><b>${n(e.n)}회<small>${esc(ago(e.lastAt))}</small></b></div>`).join('')}</div>`
-      : '<div class="vempty">오류가 없습니다. 👍</div>'));
+    const top = sec('🖱️ 많이 쓴 기능 (최근 7일)', d.topActions.length
+      ? `<div class="vtable">${d.topActions.map((a) => `<div class="vitem${a.errors ? ' err' : ''}"><span>${esc(actionName(a.name))}${a.errors ? ` · 실패 ${n(a.errors)}` : ''}</span><b>${n(a.n)}회<small>${esc(ago(a.lastAt))}</small></b></div>`).join('')}</div>`
+      : '<div class="vempty">아직 누른 기능이 없습니다.</div>');
+    const errs = sec('🚨 자주 난 오류·경고 (최근 7일)', d.topErrors.length
+      ? `<div class="vtable">${d.topErrors.map((e) => `<div class="vitem err"><span>${esc(actionName(String(e.message || '')))}</span><b>${n(e.n)}회<small>${esc(ago(e.lastAt))}</small></b></div>`).join('')}</div>`
+      : '<div class="vempty">오류가 없습니다. 👍</div>');
+    parts.push(`<div class="dgrid">${top}${errs}</div>`);
+    return parts.join('');
+  }
 
-    parts.push(sec('🧾 활동 기록', `<div class="tl-filter" id="tlFilter">
-        ${[['', '전체'], ['action', '🖱️ 행동'], ['error', '🚨 오류'], ['log', '⚙️ 자동 작업'], ['ui', '👀 화면']].map(([k, label]) => `<button type="button" class="chip${k === tlFilter ? ' active' : ''}" data-tl="${k}">${label}</button>`).join('')}
-      </div><div class="timeline" id="timeline" style="margin-top:10px">${timelineHtml(tlEvents)}</div>`, '<small>최근 것부터 · 60일 보관</small>'));
+  function activityTab() {
+    return sec('🧾 활동 기록', `<div class="tl-filter" id="tlFilter">
+        ${[['', '전체'], ['action', '🖱️ 행동'], ['error', '🚨 오류'], ['log', '⚙️ 자동 작업'], ['ui', '👀 화면']].map(([k, label]) => `<button type="button" class="chip chip-sm${k === tlFilter ? ' active' : ''}" data-tl="${k}">${label}</button>`).join('')}
+      </div><div class="timeline" id="timeline">${timelineHtml(tlEvents)}</div>`, '<small>최근 것부터 · 60일 보관</small>');
+  }
 
+  function careTab() {
+    const d = detail;
+    const items = [
+      ...d.notes.map((x) => ({ at: x.at, icon: NOTE_KINDS[x.kind]?.[0] || '📝', title: NOTE_KINDS[x.kind]?.[1] || '메모', body: x.body, noteId: x.id })),
+      ...d.questions.map((q) => ({ at: q.createdAt, icon: '💬', title: `게시판 질문${q.answer == null ? ' · 답변 대기' : ' · 답변함'} (${q.nickname}, 같은 IP)`, body: `${q.title}\n${q.body}${q.answer ? `\n\n↳ 답변: ${q.answer}` : ''}`, qna: true })),
+      ...d.audit.filter((a) => /^ADMIN_/.test(a.action)).map((a) => ({ at: a.at, icon: a.action === 'ADMIN_EXTEND' ? '🎁' : '🖥️', title: a.action === 'ADMIN_EXTEND' ? `기간 연장 ${String(a.details || '').replace('d', '일')}` : (AUDIT_NAMES[a.action] || a.action), body: '' }))
+    ].sort((x, y) => new Date(y.at) - new Date(x.at));
+    const kinds = Object.entries(NOTE_KINDS).filter(([k]) => k !== 'credit');
+    return sec('📝 응대 기록 남기기', `<div class="composer">
+        <div class="chips" id="noteKinds">${kinds.map(([k, [icon, label]], i) => `<button type="button" class="chip chip-sm${i === 0 ? ' active' : ''}" data-kind="${k}">${icon} ${label}</button>`).join('')}</div>
+        <textarea class="textarea" id="noteBody" placeholder="예: 블로그 댓글로 '댓글 조회가 안 된다' 문의 → 1.0.21에서 고침, 3일 서비스 넣고 메일 보냄"></textarea>
+        <div class="composer-foot"><span class="muted" style="font-size:12px">블로그 댓글·카톡·메일로 주고받은 내용을 적어 두면 다음 문의 때 바로 이어서 볼 수 있습니다.</span><button class="btn btn-sm btn-green" type="button" id="noteSave">저장</button></div>
+      </div>`) + sec(`🗂️ 이 고객과 있었던 일 (${n(items.length)})`, items.length ? items.map((x) => `<div class="care-item">
+        <div class="care-ico">${esc(x.icon)}</div>
+        <div class="care-text"><b>${esc(x.title)}</b> <small>${esc(fmt(x.at))}</small>${x.body ? `<p>${esc(x.body)}</p>` : ''}</div>
+        <div>${x.noteId ? `<button class="btn btn-xs btn-ghost" type="button" data-note-delete="${x.noteId}">삭제</button>` : x.qna ? '<a class="btn btn-xs" href="#qna">문의로 →</a>' : ''}</div>
+      </div>`).join('') : '<div class="vempty">아직 기록이 없습니다. 메일·답글·서비스 지급 같은 응대를 적어 두세요.</div>');
+  }
+
+  // The video has its own badge, so it is left out of the sections seen.
+  const seenChips = (seen) => (seen || []).filter((x) => x !== 'video').map((s) => `<span class="seen-chip${KEY_SECTIONS.has(s) ? ' key' : ''}">${esc(SEEN_NAMES[s] || s)}</span>`).join('');
+  function sessionLines(sessions) {
+    return `<div class="sessions">${sessions.map((s) => `<div class="session"><b>${esc(fmt(s.startedAt))}</b><span>${s.pages.map((p) => esc(PAGE_NAMES[p] || p)).join(' → ') || '-'}</span>${s.seconds ? `<span>⏱️ ${esc(dur(s.seconds))}</span>` : ''}${s.depth ? `<span>↕️ ${s.depth}%</span>` : ''}${s.download ? '<span>⬇️ 설치 파일</span>' : ''}${s.buy ? '<span>💬 구매 버튼</span>' : ''}${s.video ? '<span>🎬 영상</span>' : ''}<span>${s.from ? `🔗 ${esc(s.from.label)}` : '🔗 직접 접속'}</span></div>`).join('')}</div>`;
+  }
+
+  function originTab() {
+    const d = detail;
+    if (!d.origin.length) {
+      return sec('🧭 유입 경로', `<div class="note">가입하기 전 홈페이지 방문 기록을 찾지 못했습니다. 다른 IP(휴대폰으로 보고 PC로 설치 등)였거나, 설치 파일 링크를 직접 받았거나, 방문 기록을 남기기 전에 가입한 고객입니다.</div>`);
+    }
+    return d.origin.map((p) => sec(`🧭 ${p.from ? esc(p.from.label) : '직접 접속'}`, `${kv([
+        ['처음 온 날', esc(fmt(p.firstAt))],
+        ['방문 횟수', `${n(p.visits)}번`],
+        ['읽은 시간', p.seconds ? esc(dur(p.seconds)) : '기록 없음'],
+        ['스크롤', p.depth ? `${p.depth}%까지` : '기록 없음'],
+        ['캠페인', esc(p.campaign || '-')],
+        ['기기', esc(p.device || '-')]
+      ])}
+      ${p.from ? `<div class="hint"><a href="${esc(p.from.link)}" target="_blank" rel="noopener noreferrer" style="color:var(--info);font-weight:700">🔗 이 사람을 보낸 페이지 열기 ↗</a></div>` : ''}
+      ${p.seen.length ? `<div class="minis" style="margin-top:10px">${seenChips(p.seen)}</div>` : ''}
+      <div class="minis" style="margin-top:8px">${p.download ? '<span class="badge ok">⬇️ 설치 파일 받음</span>' : ''}${p.buy ? '<span class="badge warn">💬 구매 버튼 누름</span>' : ''}${p.video ? '<span class="badge indigo">🎬 영상 봄</span>' : ''}</div>
+      ${sessionLines(p.sessions)}`, '<small>같은 IP 기준</small>')).join('');
+  }
+
+  function accountTab() {
+    const d = detail;
+    const lic = d.licenses[0];
     const licRows = d.licenses.map((l) => `<div class="vitem"><span>${l.planType === 'free_trial' ? '🎁 체험' : '💳 유료'} · ${esc(l.planType !== 'free_trial' && l.channel === 'trial' ? '체험에서 전환' : (CHANNEL_NAMES[l.channel] || l.channel || '-'))}${l.orderId ? ` · ${esc(l.orderId)}` : ''}</span><b>${esc(fmtDay(l.expiresAt))}까지<small>${l.daysLeft}일 남음</small></b></div>`).join('');
-    parts.push(sec('🎟️ 계정·이용권', kv([
+    return sec('🎟️ 계정·이용권', kv([
       ['가입', esc(fmt(d.user.createdAt))],
       ['만료', lic ? `${esc(fmt(lic.expiresAt))} (${lic.daysLeft}일 남음)` : '이용권 없음', lic && lic.daysLeft <= 1 ? 'warn' : ''],
       ['PC 등록', d.user.hasDevice ? '등록됨' : '미등록'],
       ['PC 바꾼 날', esc(fmt(d.user.deviceChangedAt))],
       ['마지막 확인', esc(fmt(lic?.lastSeenAt))],
-      ['마지막 IP', esc(lic?.lastIp || '-')]
-    ]) + (licRows ? `<div class="rank" style="margin-top:12px">${licRows}</div>` : '') + (d.vouchers.length ? `<div class="rank" style="margin-top:8px">${d.vouchers.map((v) => `<div class="vitem"><span>🎟️ ${esc(v.code)} · ${esc(CHANNEL_NAMES[v.channel] || v.channel || '')}${v.order_id ? ` · ${esc(v.order_id)}` : ''}</span><b>${esc(daysLabel(v.days))}<small>${esc(fmtDay(v.redeemed_at))}</small></b></div>`).join('')}</div>` : '')));
-
-    parts.push(sec('📜 계정 이력', d.audit.length
-      ? `<div class="rank">${d.audit.map((a) => `<div class="vitem"><span>${esc(AUDIT_NAMES[a.action] || a.action)}${a.details && !/hwid=/.test(a.details) ? ` · ${esc(a.details)}` : ''}</span><b>${esc(fmt(a.at))}<small>${esc(a.ip || '')}</small></b></div>`).join('')}</div>`
-      : '<div class="vempty">기록이 없습니다.</div>'));
-
-    $('#dBody').innerHTML = parts.join('');
+      ['마지막 IP', `<span class="ip">${esc(lic?.lastIp || '-')}</span>`]
+    ]) + (licRows ? `<div class="vtable" style="margin-top:12px">${licRows}</div>` : '') + (d.vouchers.length ? `<div class="vtable" style="margin-top:8px">${d.vouchers.map((v) => `<div class="vitem"><span>🎟️ <span class="code">${esc(v.code)}</span> · ${esc(CHANNEL_NAMES[v.channel] || v.channel || '')}${v.order_id ? ` · ${esc(v.order_id)}` : ''}</span><b>${esc(daysLabel(v.days))}<small>${esc(fmtDay(v.redeemed_at))}</small></b></div>`).join('')}</div>` : ''))
+      + sec('📜 계정 이력', d.audit.length
+        ? `<div class="vtable">${d.audit.map((a) => `<div class="vitem"><span>${esc(AUDIT_NAMES[a.action] || a.action)}${a.details && !/hwid=/.test(a.details) ? ` · ${esc(a.details)}` : ''}</span><b>${esc(fmt(a.at))}<small class="ip">${esc(a.ip || '')}</small></b></div>`).join('')}</div>`
+        : '<div class="vempty">기록이 없습니다.</div>');
   }
 
   function eventLine(e) {
@@ -1055,16 +1441,15 @@
     if (e.type === 'app_stop') return { cls: '', icon: '⏹️', text: `프로그램 종료 · ${n(d.uptimeMin)}분 사용` };
     if (e.type === 'crash') return { cls: 'error', icon: '💥', text: `프로그램 오류 ${String(d.error || '').split('\n')[0]}` };
     if (e.type === 'api' || e.type === 'api_error') {
-      const detailBits = [];
-      const r = d.result || {};
-      for (const [k, v] of Object.entries(r)) {
+      const bits = [];
+      for (const [k, v] of Object.entries(d.result || {})) {
         if (k === 'ok') continue;
-        if (typeof v === 'number') detailBits.push(`${k} ${v}`);
-        else if (v && typeof v === 'object' && typeof v.count === 'number') detailBits.push(`${k} ${v.count}개`);
-        if (detailBits.length >= 4) break;
+        if (typeof v === 'number') bits.push(`${k} ${v}`);
+        else if (v && typeof v === 'object' && typeof v.count === 'number') bits.push(`${k} ${v.count}개`);
+        if (bits.length >= 4) break;
       }
       const req = d.request ? Object.entries(d.request).filter(([, v]) => typeof v !== 'object').slice(0, 3).map(([k, v]) => `${k}=${v}`).join(' ') : '';
-      const extra = [req, detailBits.join(' · '), d.repeat ? `${d.repeat}번` : '', d.ms > 3000 ? `${(d.ms / 1000).toFixed(1)}초` : ''].filter(Boolean).join(' · ');
+      const extra = [req, bits.join(' · '), d.repeat ? `${d.repeat}번` : '', d.ms > 3000 ? `${(d.ms / 1000).toFixed(1)}초` : ''].filter(Boolean).join(' · ');
       return e.type === 'api_error'
         ? { cls: 'error', icon: '🚨', text: `${actionName(d.path)} 실패: ${d.error || d.status}`, extra }
         : { cls: d.method === 'GET' ? '' : 'success', icon: d.method === 'GET' ? '·' : '🖱️', text: actionName(d.path), extra };
@@ -1088,14 +1473,14 @@
     return out.join('');
   }
 
-  $('#drawer').addEventListener('click', async (e) => {
+  $('#customerPage').addEventListener('click', async (e) => {
     const chip = e.target.closest('[data-tl]');
     if (chip) {
       tlFilter = chip.dataset.tl;
       $$('#tlFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
       $('#timeline').innerHTML = '<div class="tl-empty">불러오는 중…</div>';
       try {
-        const r = await api(`api/admin/users/${openId}?limit=300${tlFilter ? `&type=${tlFilter}` : ''}`);
+        const r = await api(`api/admin/users/${detailId}?limit=300${tlFilter ? `&type=${tlFilter}` : ''}`);
         tlEvents = r.events;
         $('#timeline').innerHTML = timelineHtml(tlEvents);
       } catch (err) { $('#timeline').innerHTML = `<div class="tl-empty">${esc(err.message)}</div>`; }
@@ -1104,37 +1489,278 @@
     if (e.target.closest('[data-tlmore]')) {
       const before = tlEvents.at(-1)?.at;
       try {
-        const r = await api(`api/admin/users/${openId}?limit=300${tlFilter ? `&type=${tlFilter}` : ''}&before=${encodeURIComponent(before)}`);
+        const r = await api(`api/admin/users/${detailId}?limit=300${tlFilter ? `&type=${tlFilter}` : ''}&before=${encodeURIComponent(before)}`);
         tlEvents = tlEvents.concat(r.events);
         $('#timeline').innerHTML = timelineHtml(tlEvents);
       } catch (err) { toast(err.message, true); }
+      return;
+    }
+    if (e.target.closest('[data-memo]')) { setTimeout(() => $('#noteBody')?.focus(), 50); return; }
+    if (e.target.closest('[data-mail]')) return openMail();
+    const kind = e.target.closest('[data-kind]');
+    if (kind) { $$('#noteKinds .chip').forEach((c) => c.classList.toggle('active', c === kind)); return; }
+    if (e.target.closest('#noteSave')) {
+      const body = $('#noteBody').value.trim();
+      if (!body) return toast('메모 내용을 입력해주세요.', true);
+      try {
+        await api(`api/admin/users/${detailId}/notes`, { method: 'POST', body: { kind: $('#noteKinds .chip.active')?.dataset.kind || 'note', body } });
+        toast('📝 저장했습니다.');
+        await reloadCustomer();
+      } catch (err) { toast(err.message, true); }
+      return;
+    }
+    const del = e.target.closest('[data-note-delete]');
+    if (del) {
+      if (!confirmFirst(del, '정말 삭제')) return;
+      try { await api(`api/admin/notes/${del.dataset.noteDelete}/delete`, { method: 'POST' }); toast('메모를 지웠습니다.'); await reloadCustomer(); }
+      catch (err) { toast(err.message, true); }
       return;
     }
     const copyBtn = e.target.closest('[data-dcopy]');
     if (copyBtn) return copy(copyBtn.dataset.dcopy, '이메일을 복사했습니다.');
     const btn = e.target.closest('[data-dext], [data-dreset], [data-downer]');
     if (!btn) return;
-    if (!btn.matches('[data-downer]') && btn.dataset.confirm !== '1') {
-      btn.dataset.confirm = '1';
-      const original = btn.textContent;
-      btn.textContent = btn.matches('[data-dext]') ? `${btn.dataset.dext}일 연장 확인` : '초기화 확인';
-      setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ''; btn.textContent = original; } }, 3000);
-      return;
-    }
+    if (!btn.matches('[data-downer]') && !confirmFirst(btn, btn.matches('[data-dext]') ? `${btn.dataset.dext}일 연장할까요? 한 번 더 누르기` : 'PC 초기화할까요? 한 번 더 누르기')) return;
     btn.disabled = true;
     try {
       if (btn.matches('[data-dext]')) {
-        const r = await api(`api/admin/users/${openId}/extend`, { method: 'POST', body: { days: Number(btn.dataset.dext) } });
-        toast(`${btn.dataset.dext}일 연장했습니다. (남은 기간 ${r.daysLeft}일)`);
+        const r = await api(`api/admin/users/${detailId}/extend`, { method: 'POST', body: { days: Number(btn.dataset.dext) } });
+        toast(`${btn.dataset.dext}일 연장했습니다. (남은 기간 ${r.daysLeft}일) 메일로 알려 주세요.`);
       } else if (btn.matches('[data-dreset]')) {
-        await api(`api/admin/users/${openId}/reset-device`, { method: 'POST' });
+        await api(`api/admin/users/${detailId}/reset-device`, { method: 'POST' });
         toast('PC 등록을 초기화했습니다. 새 PC에서 로그인하면 등록됩니다.');
       } else {
-        await api(`api/admin/users/${openId}/owner`, { method: 'POST', body: { mine: btn.dataset.downer === '1' } });
+        await api(`api/admin/users/${detailId}/owner`, { method: 'POST', body: { mine: btn.dataset.downer === '1' } });
         toast(btn.dataset.downer === '1' ? '🙋 내 계정으로 표시했습니다. 고객 숫자에서 빠집니다.' : '고객 숫자에 다시 넣었습니다.');
       }
-      await loadUsers(); loadSummary().catch(() => {});
-      if (openId) openCustomer(openId);
+      await reloadCustomer();
+      loadHome().catch(() => {});
+    } catch (err) { toast(err.message, true); btn.disabled = false; }
+  });
+
+  // ---- Mail helper ----
+  const BUY_LINK = 'https://open.kakao.com/o/sxZ1kQRi';
+  const SITE = 'https://minohlee.mooo.com/neighbormate-app/';
+  const SIGN = '\n\n감사합니다.\n이웃메이트 드림';
+  const MAIL_TEMPLATES = [
+    ['start', '👋 사용 시작 도움', () => ['[이웃메이트] 시작하시는 데 불편한 점은 없으셨나요?',
+      `안녕하세요, 이웃메이트입니다.\n가입해 주셔서 감사합니다. 혹시 설치나 첫 실행에서 막히신 부분이 있을까 해서 연락드렸어요.\n\n■ 처음 시작하는 방법\n1. 이웃메이트를 실행하고 가입한 이메일로 로그인합니다.\n2. 네이버 연결에서 휴대폰으로 QR을 찍어 로그인합니다.\n3. 자율 주행에서 [시작]을 누르면 공감·댓글·이웃 관리가 알아서 돌아갑니다.\n\n막히는 화면이 있으면 이 메일에 캡처 한 장만 보내 주세요. 바로 도와드리겠습니다.${SIGN}`]],
+    ['naver', '🔗 네이버 연결 안내', () => ['[이웃메이트] 네이버 연결만 하면 바로 시작됩니다',
+      `안녕하세요, 이웃메이트입니다.\n프로그램은 잘 켜져 있는데 아직 네이버 계정이 연결되지 않아 자동 작업이 시작되지 않고 있어요.\n\n■ 연결 방법\n프로그램에서 네이버 연결을 누르고, 휴대폰 네이버 앱으로 화면의 QR을 찍으면 끝입니다. 비밀번호는 저희에게 저장되지 않습니다.\n\n연결이 잘 안 되면 화면을 캡처해서 보내 주세요.${SIGN}`]],
+    ['error', '🚨 오류 확인 안내', () => ['[이웃메이트] 사용 중 생긴 오류를 확인했습니다',
+      `안녕하세요, 이웃메이트입니다.\n사용하시던 중 프로그램에서 오류가 난 것을 확인했습니다. 불편을 드려 죄송합니다.\n\n원인을 찾아 고친 버전을 올려 두었습니다. 프로그램을 껐다 다시 켜면 자동으로 업데이트됩니다.\n그래도 같은 문제가 생기면 이 메일로 알려 주세요. 바로 다시 보겠습니다.${SIGN}`]],
+    ['trial', '⏰ 체험 종료 · 유료 안내', (u) => ['[이웃메이트] 무료 체험이 곧 끝나요',
+      `안녕하세요, 이웃메이트입니다.\n3일 무료 체험이 ${u?.expiresAt ? `${fmtDay(u.expiresAt)}에` : '곧'} 끝납니다. 써 보시니 어떠셨나요?\n\n계속 쓰시려면 원하는 기간을 카카오톡으로 남겨 주세요. 결제 안내 후 바로 이용권 키를 보내 드립니다.\n· 1개월 9,900원\n· 3개월 26,900원 (10% 할인)\n· 12개월 89,000원 (25% 할인)\n\n카카오톡 문의: ${BUY_LINK}\n\n혹시 아쉬웠던 점이 있으면 답장으로 알려 주세요. 다음 업데이트에 꼭 반영하겠습니다.${SIGN}`]],
+    ['credit', '🎁 서비스 기간 지급', () => ['[이웃메이트] 이용 기간을 더 넣어 드렸습니다',
+      `안녕하세요, 이웃메이트입니다.\n문의 주신 문제로 불편을 드려 죄송합니다. 사과의 의미로 이용 기간 3일을 더 넣어 드렸습니다.\n프로그램을 다시 켜면 바로 반영됩니다.\n\n앞으로도 불편한 점이 있으면 언제든 알려 주세요.${SIGN}`]],
+    ['comeback', '🔁 다시 돌아오기', () => ['[이웃메이트] 그동안 업데이트된 기능을 소개합니다',
+      `안녕하세요, 이웃메이트입니다.\n이용 기간이 끝난 뒤로 이웃메이트가 많이 좋아졌어요.\n\n자세한 내용은 홈페이지에서 볼 수 있습니다: ${SITE}\n다시 써 보고 싶으시면 카카오톡으로 편하게 말씀해 주세요: ${BUY_LINK}${SIGN}`]],
+    ['blank', '✍️ 빈 메일', () => ['[이웃메이트] ', `안녕하세요, 이웃메이트입니다.\n\n${SIGN}`]]
+  ];
+  function suggestTemplate(u) {
+    const c = u?.client;
+    if (!c?.lastReportAt) return 'start';
+    if ((c.errors24h || 0) > 0) return 'error';
+    if (c.naverConnected === false) return 'naver';
+    if (u.planType === 'free_trial' && u.daysLeft <= 1) return 'trial';
+    if (!u.planType || u.daysLeft <= 0) return 'comeback';
+    return 'blank';
+  }
+  function fillMail(key) {
+    const u = listRow(detailId);
+    const t = MAIL_TEMPLATES.find((x) => x[0] === key) || MAIL_TEMPLATES[0];
+    const [subject, body] = t[2](u);
+    $('#mailSubject').value = subject;
+    $('#mailBody').value = body;
+    $$('#mailTemplates .chip').forEach((c) => c.classList.toggle('active', c.dataset.tpl === t[0]));
+  }
+  function openMail() {
+    const u = listRow(detailId);
+    $('#mailTo').textContent = `받는 사람: ${detail.user.email}`;
+    $('#mailTemplates').innerHTML = MAIL_TEMPLATES.map(([key, label]) => `<button type="button" class="chip chip-sm" data-tpl="${key}">${label}</button>`).join('');
+    fillMail(suggestTemplate(u));
+    $('#mailModal').classList.add('open');
+    $('#mailModal').setAttribute('aria-hidden', 'false');
+    $('#mailSubject').focus();
+  }
+  function closeMail() { $('#mailModal').classList.remove('open'); $('#mailModal').setAttribute('aria-hidden', 'true'); }
+  $('#mailTemplates').addEventListener('click', (e) => { const chip = e.target.closest('[data-tpl]'); if (chip) fillMail(chip.dataset.tpl); });
+  $('#mailModal').addEventListener('click', (e) => { if (e.target === $('#mailModal') || e.target.closest('[data-close-modal]')) closeMail(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#mailModal').classList.contains('open')) closeMail(); });
+  $('#mailCopyTo').addEventListener('click', () => copy(detail.user.email, '받는 사람을 복사했습니다.'));
+  $('#mailCopy').addEventListener('click', () => copy(`${$('#mailSubject').value}\n\n${$('#mailBody').value}`, '제목과 본문을 복사했습니다.'));
+  $('#mailLog').addEventListener('click', async () => {
+    try {
+      await api(`api/admin/users/${detailId}/notes`, { method: 'POST', body: { kind: 'mail', body: `${$('#mailSubject').value}\n${$('#mailBody').value.split('\n').slice(0, 3).join('\n')}…` } });
+      closeMail();
+      toast('✉️ 메일 보낸 것을 응대 기록에 남겼습니다.');
+      await reloadCustomer();
+    } catch (err) { toast(err.message, true); }
+  });
+
+  // ---- Visitors ----
+  const PEOPLE_FILTERS = [['interest', '⭐ 눈여겨볼 사람'], ['all', '전체'], ['customer', '✅ 가입함'], ['buy', '💬 구매 버튼'], ['download', '⬇️ 받고 가입 안 함'], ['hot', '🔥 관심 큼'], ['look', '👀 구경만']];
+  let peopleData = null;
+  async function loadVisitors() {
+    const [stats, people] = await Promise.all([api('api/admin/visits'), api('api/admin/people')]);
+    peopleData = people;
+    renderVisitStats(stats.visits);
+    renderPeople();
+    if (state.visitMode === 'log') await loadVisitLog();
+    setVisitMode(state.visitMode);
+  }
+  function setVisitMode(mode) {
+    state.visitMode = mode;
+    $$('#visitMode .tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === mode));
+    $('#peoplePanel').classList.toggle('hidden', mode !== 'people');
+    $('#logPanel').classList.toggle('hidden', mode !== 'log');
+  }
+  $('#visitMode').addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-mode]'); if (!tab) return;
+    setVisitMode(tab.dataset.mode);
+    if (tab.dataset.mode === 'log') loadVisitLog().catch((err) => toast(err.message, true));
+  });
+
+  function renderVisitStats(visits) {
+    $('#visitMeta').textContent = visits.since ? `${visits.since.replace(/-/g, '.')}부터 집계${visits.mine ? ` · 내 방문 ${n(visits.mine)}회 제외` : ''}` : '아직 방문 기록이 없습니다';
+    $('#vstats').innerHTML = [
+      ['👀 오늘 방문자', visits.today, true], ['📅 어제', visits.yesterday], ['🗓️ 최근 7일', visits.week], ['👥 누적 방문자', visits.total]
+    ].map(([label, v, hot]) => `<div class="vstat${hot ? ' hot' : ''}"><span>${label}</span><strong>${n(v.visitors)}명</strong><small>페이지 ${n(v.views)}회</small></div>`).join('');
+    const max = Math.max(1, ...visits.days.map((d) => d.visitors));
+    const last = visits.days.length - 1;
+    $('#vChart').innerHTML = visits.days.map((d, i) => `<div class="vbar${i === last ? ' today' : ''}" title="${esc(d.day)} · 방문자 ${n(d.visitors)}명 · 페이지 ${n(d.views)}회"><b>${d.visitors || ''}</b><i style="height:${Math.round((d.visitors / max) * 100)}%"></i></div>`).join('');
+    $('#vDays').innerHTML = visits.days.map((d, i) => `<span>${i === last ? '오늘' : `${Number(d.day.slice(5, 7))}/${Number(d.day.slice(8))}`}</span>`).join('');
+    $('#vPages').innerHTML = visits.pages.length
+      ? visits.pages.map((p) => `<div class="vitem"><span>${esc(PAGE_NAMES[p.page] || p.page)}</span><b>${n(p.visitors)}명<small>${n(p.views)}회</small></b></div>`).join('')
+      : '<div class="vempty">아직 기록이 없습니다.</div>';
+    const actions = visits.actions || {};
+    const rate = (count) => (visits.total.visitors ? ` · 방문의 ${pct(count, visits.total.visitors)}%` : '');
+    $('#vActions').innerHTML = [['download', '⬇️ 설치 파일 받기'], ['buy', '💬 카톡 구매 누름'], ['video', '🎬 소개 영상 재생']].map(([key, label]) => {
+      const a = actions[key] || { total: 0, week: 0, today: 0 };
+      return `<div class="vitem"><span>${label}<small>${rate(a.total)}</small></span><b>${n(a.total)}명<small>${n(a.week)} · ${n(a.today)}</small></b></div>`;
+    }).join('');
+    $('#vCampaigns').innerHTML = (visits.campaigns || []).length
+      ? visits.campaigns.map((c) => `<div class="vitem"><span>${esc(c.source)}${c.campaign ? ` · ${esc(c.campaign)}` : ''}</span><b>${n(c.visitors)}명<small>설치 ${n(c.downloads)} · 구매 ${n(c.buys)}</small></b></div>`).join('')
+      : '<div class="vempty">아직 utm 링크로 들어온 방문이 없습니다. 홍보 글·영상에 ?utm_source= 링크를 쓰면 여기 나옵니다.</div>';
+    $('#vRefs').innerHTML = visits.referrers.length
+      ? visits.referrers.map((r) => `<div class="vitem"><span>${esc(r.host)}</span><b>${n(r.visitors)}명</b></div>`).join('')
+      : '<div class="vempty">아직 다른 사이트에서 들어온 방문이 없습니다. (주소를 직접 입력한 방문은 빠집니다)</div>';
+  }
+
+  function renderPeople() {
+    if (!peopleData) return;
+    const { people, counts } = peopleData;
+    if (state.focusVisitor) state.peopleFilter = 'all';
+    const interest = (p) => p.stage !== 'look';
+    const countOf = (key) => key === 'interest' ? people.filter(interest).length : (counts[key] ?? 0);
+    $('#peopleFilter').innerHTML = PEOPLE_FILTERS.map(([key, label]) => `<button type="button" class="chip${key === state.peopleFilter ? ' active' : ''}" data-pf="${key}">${label}<em>${n(countOf(key))}</em></button>`).join('');
+    const matched = people.filter((p) => state.peopleFilter === 'all' || (state.peopleFilter === 'interest' ? interest(p) : p.stage === state.peopleFilter));
+    const focusAt = state.focusVisitor ? matched.findIndex((p) => p.visitor === state.focusVisitor) : -1;
+    const rows = matched.slice(0, Math.max(state.peopleShown, focusAt + 1));
+    $('#peopleList').innerHTML = rows.length ? rows.map((p) => {
+      const [stageLabel, stageCls] = STAGES[p.stage];
+      const open = state.expanded.has(p.visitor) || state.focusVisitor === p.visitor;
+      const from = p.from ? `<a href="${esc(p.from.link)}" target="_blank" rel="noopener noreferrer" title="${esc(p.from.url)}">🔗 ${esc(p.from.label)}</a>` : '<span>🔗 직접 접속 (주소 입력·즐겨찾기·앱)</span>';
+      return `<div class="row${state.focusVisitor === p.visitor ? ' focus' : ''}" data-person="${esc(p.visitor)}">
+        <div class="row-main">
+          <div class="row-title"><span class="badge ${stageCls} stage">${stageLabel}</span>
+            ${p.customer ? `<a class="who" href="#customer/${p.customer.id}">👤 ${esc(p.customer.email)} →</a>` : ''}
+            <span>${esc(p.pages.map((x) => PAGE_NAMES[x] || x).join(' · ') || '-')}</span>
+          </div>
+          <div class="row-meta">${from}${p.campaign ? `<span>🏷️ ${esc(p.campaign)}</span>` : ''}<span>${esc(p.device || '')}</span><span class="ip">IP ${esc(p.ip || '-')}</span></div>
+          <div class="minis">
+            <span class="mini">🔁 방문 <b>${n(p.visits)}</b>번</span>
+            ${p.seconds ? `<span class="mini${p.seconds >= 90 ? ' hot' : ''}">⏱️ <b>${esc(dur(p.seconds))}</b> 읽음</span>` : ''}
+            ${p.depth ? `<span class="mini${p.depth >= 70 ? ' hot' : ''}">↕️ 스크롤 <b>${p.depth}%</b></span>` : ''}
+            ${p.download ? '<span class="mini">⬇️ 설치 파일</span>' : ''}${p.buy ? '<span class="mini hot">💬 구매 버튼</span>' : ''}${p.video ? '<span class="mini">🎬 영상</span>' : ''}
+            ${seenChips(p.seen)}
+          </div>
+          ${open ? sessionLines(p.sessions) : ''}
+        </div>
+        <div class="row-side">
+          <small>마지막 ${esc(ago(p.lastAt))}</small>
+          <small>처음 ${esc(fmtShort(p.firstAt))}</small>
+          <div class="row-actions">
+            <button class="btn btn-xs" type="button" data-expand="${esc(p.visitor)}">${open ? '접기' : `방문 ${n(p.visits)}번 보기`}</button>
+            <button class="btn btn-xs btn-ghost" type="button" data-owner="${esc(p.visitor)}" data-mine="1">나로 표시</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('') + (matched.length > rows.length ? `<button class="btn btn-sm" type="button" data-more-people style="align-self:center">${n(matched.length - rows.length)}명 더 보기</button>` : '') : `<div class="empty"><strong>${state.peopleFilter === 'all' ? '아직 방문한 사람이 없습니다' : '이 조건의 방문자가 없습니다'}</strong>홍보 글·영상에 홈페이지 링크를 걸면 여기 한 사람씩 쌓입니다.</div>`;
+    if (state.focusVisitor) {
+      const el = $(`[data-person="${CSS.escape(state.focusVisitor)}"]`);
+      if (el) el.scrollIntoView({ block: 'center' });
+      state.expanded.add(state.focusVisitor);
+      state.focusVisitor = null;
+    }
+  }
+  $('#peopleFilter').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-pf]'); if (!chip) return;
+    state.peopleFilter = chip.dataset.pf;
+    state.peopleShown = 30;
+    history.replaceState(null, '', `#visitors/${state.peopleFilter}`);
+    renderPeople();
+  });
+  $('#peopleList').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-more-people]')) { state.peopleShown += 30; renderPeople(); return; }
+    const expand = e.target.closest('[data-expand]');
+    if (expand) {
+      const id = expand.dataset.expand;
+      if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+      renderPeople();
+      return;
+    }
+    const owner = e.target.closest('[data-owner]');
+    if (owner) {
+      if (!confirmFirst(owner, '내 방문이 맞나요? 한 번 더')) return;
+      try {
+        await api('api/admin/visits/owner', { method: 'POST', body: { visitor: owner.dataset.owner, mine: true } });
+        toast('🙋 내 방문으로 표시했습니다. 숫자에서 빠집니다.');
+        await loadVisitors();
+      } catch (err) { toast(err.message, true); }
+    }
+  });
+
+  async function loadVisitLog() {
+    const mine = $('#vLogMine').checked;
+    const data = await api(`api/admin/visits/list?limit=200&mine=${mine ? 1 : 0}`);
+    $('#vLogMeta').textContent = `방문 ${n(data.total - data.mine)}회${data.mine ? ` · 내 방문 ${n(data.mine)}회` : ''}`;
+    $('#vLog').innerHTML = data.sessions.length ? data.sessions.map((v) => {
+      const from = v.from
+        ? `<a href="${esc(v.from.link)}" target="_blank" rel="noopener noreferrer" title="${esc(v.from.url)}">🔗 ${esc(v.from.label)}</a>`
+        : '<span>🔗 직접 접속 (주소 입력·즐겨찾기·앱)</span>';
+      return `<div class="row${v.mine ? ' mine' : ''}">
+        <div class="row-main">
+          <div class="row-title">
+            <span>${esc(fmt(v.startedAt))}</span>
+            ${v.mine ? '<span class="badge gray">나</span>' : ''}
+            <span style="font-weight:600;color:var(--body)">${v.pages.map((p) => esc(PAGE_NAMES[p] || p)).join(' → ') || '-'}</span>
+            ${v.download ? '<span class="badge ok">⬇️ 설치 파일</span>' : ''}
+            ${v.buy ? '<span class="badge warn">💬 구매 문의</span>' : ''}
+            ${v.video ? '<span class="badge indigo">🎬 영상</span>' : ''}
+          </div>
+          <div class="row-meta">
+            ${from}
+            ${v.campaign ? `<span>🏷️ ${esc(v.campaign)}</span>` : ''}
+            ${v.seconds ? `<span>⏱️ ${esc(dur(v.seconds))} · ↕️ ${v.depth}%</span>` : ''}
+            <span class="ip">IP ${esc(v.ip || '기록 없음')}</span>
+            ${v.device ? `<span>${esc(v.device)}</span>` : ''}
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-xs${v.mine ? ' btn-ghost' : ''}" type="button" data-logowner="${esc(v.visitor)}" data-mine="${v.mine ? '0' : '1'}">${v.mine ? '내 방문 아님' : '나로 표시'}</button>
+        </div>
+      </div>`;
+    }).join('') : `<div class="empty"><strong>${mine ? '아직 방문 기록이 없습니다' : '아직 다른 사람의 방문이 없습니다'}</strong>홍보 글·영상에 홈페이지 링크를 걸면 여기 한 줄씩 쌓입니다.</div>`;
+  }
+  $('#vLogMine').addEventListener('change', () => loadVisitLog().catch((err) => toast(err.message, true)));
+  $('#vLog').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-logowner]'); if (!btn) return;
+    btn.disabled = true;
+    try {
+      await api('api/admin/visits/owner', { method: 'POST', body: { visitor: btn.dataset.logowner, mine: btn.dataset.mine === '1' } });
+      toast(btn.dataset.mine === '1' ? '🙋 내 방문으로 표시했습니다. 숫자에서 빠집니다.' : '방문자 숫자에 다시 넣었습니다.');
+      await loadVisitors();
     } catch (err) { toast(err.message, true); btn.disabled = false; }
   });
 
@@ -1146,13 +1772,12 @@
     $$('#qnaFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
     loadQna();
   });
-
   async function loadQna() {
     const list = $('#qnaList');
     try {
       const { questions } = await api(`api/admin/qna?status=${qnaStatus}`);
       if (!questions.length) {
-        list.innerHTML = `<div class="empty"><strong>${qnaStatus === 'unanswered' ? '답변을 기다리는 질문이 없습니다' : '아직 질문이 없습니다'}</strong>홍보 사이트 질문 게시판에 올라온 질문이 여기에 나옵니다.</div>`;
+        list.innerHTML = `<div class="empty"><strong>${qnaStatus === 'unanswered' ? '답변을 기다리는 질문이 없습니다 🎉' : '아직 질문이 없습니다'}</strong>홈페이지 질문 게시판에 올라온 질문이 여기에 나옵니다.</div>`;
         return;
       }
       list.innerHTML = questions.map((q) => {
@@ -1160,13 +1785,14 @@
         return `<div class="q${pending ? ' pending' : ''}" data-q="${q.id}">
           <div class="row-main">
             <div class="row-title">${esc(q.title)}${q.isPrivate ? '<span class="badge gray">🔒 비밀글</span>' : ''}${pending ? '<span class="badge warn">답변 대기</span>' : '<span class="badge ok">답변 완료</span>'}</div>
-            <div class="row-meta">${esc(q.nickname)} · ${esc(fmt(q.createdAt))}${q.answeredAt ? ` · 답변 ${esc(fmt(q.answeredAt))}` : ''}</div>
+            <div class="row-meta"><span>${esc(q.nickname)} · ${esc(fmt(q.createdAt))}${q.answeredAt ? ` · 답변 ${esc(fmt(q.answeredAt))}` : ''}</span>
+              ${q.customer ? `<a class="who" href="#customer/${q.customer.id}">👤 ${esc(q.customer.email)} (같은 IP) →</a>` : '<span class="who none">가입한 고객과 연결 안 됨</span>'}</div>
           </div>
           <div class="q-body">${esc(q.body)}</div>
-          <textarea placeholder="답변을 입력하세요. 저장하면 게시판에 바로 보입니다." aria-label="답변">${esc(q.answer || '')}</textarea>
+          <textarea class="textarea" placeholder="답변을 입력하세요. 저장하면 게시판에 바로 보입니다." aria-label="답변" style="min-height:84px">${esc(q.answer || '')}</textarea>
           <div class="q-actions">
             <button class="btn btn-sm btn-danger" type="button" data-qdelete>삭제</button>
-            <button class="btn btn-sm btn-save" type="button" data-qsave>${pending ? '답변 등록' : '답변 수정'}</button>
+            <button class="btn btn-sm btn-green" type="button" data-qsave>${pending ? '답변 등록' : '답변 수정'}</button>
           </div>
         </div>`;
       }).join('');
@@ -1174,17 +1800,12 @@
       list.innerHTML = `<div class="empty"><strong>질문을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
     }
   }
-
   $('#qnaList').addEventListener('click', async (e) => {
     const card = e.target.closest('[data-q]');
     const save = e.target.closest('[data-qsave]');
     const del = e.target.closest('[data-qdelete]');
     if (!card || (!save && !del)) return;
-    if (del && del.dataset.confirm !== '1') {
-      del.dataset.confirm = '1'; del.textContent = '정말 삭제';
-      setTimeout(() => { if (del.isConnected) { del.dataset.confirm = ''; del.textContent = '삭제'; } }, 3000);
-      return;
-    }
+    if (del && !confirmFirst(del, '정말 삭제')) return;
     const answer = card.querySelector('textarea').value.trim();
     if (save && !answer) return toast('답변을 입력해주세요.', true);
     const btn = save || del;
@@ -1197,8 +1818,101 @@
         await api(`api/admin/qna/${card.dataset.q}/delete`, { method: 'POST' });
         toast('질문을 삭제했습니다.');
       }
-      loadQna(); loadSummary().catch(() => {});
+      loadQna(); loadHome().catch(() => {});
     } catch (err) { toast(err.message, true); btn.disabled = false; }
+  });
+
+  // ---- Vouchers ----
+  let voucherStatus = 'unused';
+  let lastIssued = [];
+  let days = 30;
+  $('#daysChips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    days = Number(chip.dataset.days);
+    $$('#daysChips .chip').forEach((c) => c.classList.toggle('active', c === chip));
+  });
+  const clampCount = (v) => Math.max(1, Math.min(50, Math.trunc(Number(v)) || 1));
+  $('#countMinus').addEventListener('click', () => { $('#countInput').value = clampCount(Number($('#countInput').value) - 1); });
+  $('#countPlus').addEventListener('click', () => { $('#countInput').value = clampCount(Number($('#countInput').value) + 1); });
+  $('#countInput').addEventListener('change', () => { $('#countInput').value = clampCount($('#countInput').value); });
+  $('#issueBtn').addEventListener('click', async () => {
+    const btn = $('#issueBtn');
+    btn.disabled = true; btn.textContent = '발급 중…';
+    try {
+      const count = clampCount($('#countInput').value);
+      const { vouchers } = await api('api/admin/vouchers', { method: 'POST', body: { days, count, memo: $('#memoInput').value } });
+      lastIssued = vouchers;
+      $('#issuedTitle').textContent = `✅ ${daysLabel(days)} 이용권 ${vouchers.length}개를 발급했습니다`;
+      $('#issuedCodes').innerHTML = vouchers.map((v) => `<div class="code-row"><span class="code">${esc(v.code)}</span><button class="btn btn-sm" type="button" data-copy="${esc(v.code)}">복사</button></div>`).join('');
+      $('#issuedBox').classList.remove('hidden');
+      $('#memoInput').value = '';
+      toast('🎟️ 이용권을 발급했습니다.');
+      if (voucherStatus !== 'used') loadVouchers();
+      loadHome().catch(() => {});
+    } catch (err) { toast(err.message, true); }
+    finally { btn.disabled = false; btn.textContent = '🎟️ 이용권 발급'; }
+  });
+  function guideText(vouchers) {
+    return [
+      '구매해 주셔서 감사합니다! 이웃메이트 이용권을 보내드립니다.',
+      '',
+      `■ 이용권 키 (${daysLabel(vouchers[0].days)})`,
+      vouchers.map((v) => v.code).join('\n'),
+      '',
+      '■ 등록 방법',
+      '1. 이웃메이트 앱을 실행합니다.',
+      '2. 위쪽의 [이용권 등록 필요] 배지를 눌러 이용권 관리 창을 엽니다.',
+      '3. 처음이시면 [신규 계정 생성]에서 이메일·비밀번호와 함께 위 이용권 키를 넣어주세요.',
+      '   이미 가입하셨다면 [로그인 / 키 등록]에서 로그인한 뒤 [이용권 키 등록]에 키를 넣으면 기간이 더해집니다.',
+      '',
+      '※ 이용권은 한 계정에 한 번만 등록할 수 있고, 계정은 PC 1대에서 사용할 수 있습니다.',
+      '궁금한 점은 크몽 메시지로 편하게 물어봐 주세요.'
+    ].join('\n');
+  }
+  $('#copyGuideBtn').addEventListener('click', () => { if (lastIssued.length) copy(guideText(lastIssued), '안내문을 복사했습니다.'); });
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-copy]');
+    if (btn) copy(btn.dataset.copy, '이용권 키를 복사했습니다.');
+  });
+  $('#voucherFilter').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    voucherStatus = chip.dataset.status;
+    $$('#voucherFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
+    loadVouchers();
+  });
+  async function loadVouchers() {
+    const list = $('#voucherList');
+    try {
+      const { vouchers } = await api(`api/admin/vouchers?status=${voucherStatus}`);
+      if (!vouchers.length) {
+        list.innerHTML = `<div class="empty"><strong>${voucherStatus === 'used' ? '아직 사용된 이용권이 없습니다' : '이용권이 없습니다'}</strong>왼쪽에서 이용권을 발급하면 여기에 나옵니다.</div>`;
+        return;
+      }
+      list.innerHTML = vouchers.map((v) => {
+        const used = Boolean(v.redeemed_at);
+        return `<div class="row">
+          <div class="row-main">
+            <div class="row-title"><span class="code">${esc(v.code)}</span><span class="badge info">${esc(daysLabel(v.days))}</span>${used ? '<span class="badge ok">사용됨</span>' : '<span class="badge warn">안 씀</span>'}</div>
+            <div class="row-meta">발급 ${esc(fmt(v.created_at))}${v.order_id ? ` · ${esc(v.order_id)}` : ''}${used ? ` · ${esc(v.redeemed_email || '')} 님이 ${esc(fmt(v.redeemed_at))}에 등록` : ''}</div>
+          </div>
+          <div class="row-actions">
+            <button class="btn btn-sm" type="button" data-copy="${esc(v.code)}">복사</button>
+            ${used ? '' : `<button class="btn btn-sm btn-danger" type="button" data-delete="${v.id}">삭제</button>`}
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = `<div class="empty"><strong>이용권 목록을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
+    }
+  }
+  $('#voucherList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-delete]'); if (!btn) return;
+    if (!confirmFirst(btn, '정말 삭제')) return;
+    try {
+      await api(`api/admin/vouchers/${btn.dataset.delete}/delete`, { method: 'POST' });
+      toast('이용권을 삭제했습니다.');
+      loadVouchers(); loadHome().catch(() => {});
+    } catch (err) { toast(err.message, true); }
   });
 
   // Start: try a remembered key, otherwise show the gate.

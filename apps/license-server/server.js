@@ -6,6 +6,7 @@ import { LicenseService } from './lib/license-service.js';
 import { QnaService } from './lib/qna-service.js';
 import { VisitService } from './lib/visit-service.js';
 import { ClientReportService } from './lib/client-report-service.js';
+import { InsightsService } from './lib/insights-service.js';
 
 export function createLicenseServer(db = null, options = {}) {
   const app = express();
@@ -14,6 +15,7 @@ export function createLicenseServer(db = null, options = {}) {
   const qna = new QnaService(database, options.qna);
   const visits = new VisitService(database, options.visits);
   const reports = new ClientReportService(database, service, options.reports);
+  const insights = new InsightsService(database, { service, reports, visits, ...(options.insights || {}) });
 
   app.use(express.json({ limit: '2mb' }));
 
@@ -134,8 +136,8 @@ export function createLicenseServer(db = null, options = {}) {
 
   // ---- Visitor counts for the promo site: each page sends one beacon per view ----
   app.post('/api/visit', (req, res) => {
-    const { visitor, page, referrer, source, campaign, content } = req.body || {};
-    const result = visits.record({ visitor, page, referrer, source, campaign, content, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
+    const { visitor, page, referrer, source, campaign, content, view, seconds, depth, seen } = req.body || {};
+    const result = visits.record({ visitor, page, referrer, source, campaign, content, view, seconds, depth, seen, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
     res.status(result.ok ? 204 : 400).end();
   });
 
@@ -168,6 +170,9 @@ export function createLicenseServer(db = null, options = {}) {
   const send = (res, result) => res.status(result.ok ? 200 : 400).json(result);
 
   app.get('/api/admin/summary', requireAdmin, (_req, res) => send(res, service.adminSummary()));
+  // Home: to-do list, funnel, 30-day trend, versions, news; `since` = when the admin last looked, `latest` = newest app version
+  app.get('/api/admin/home', requireAdmin, (req, res) => send(res, insights.home({ since: req.query.since, latest: req.query.latest })));
+  app.get('/api/admin/people', requireAdmin, (_req, res) => send(res, insights.people()));
   app.get('/api/admin/vouchers', requireAdmin, (req, res) => send(res, service.adminListVouchers({ status: req.query.status })));
   app.post('/api/admin/vouchers', requireAdmin, (req, res) => send(res, service.adminIssueVouchers(req.body || {})));
   app.post('/api/admin/vouchers/:id/delete', requireAdmin, (req, res) => send(res, service.adminDeleteVoucher(req.params.id)));
@@ -180,8 +185,10 @@ export function createLicenseServer(db = null, options = {}) {
   app.get('/api/admin/users/:id', requireAdmin, (req, res) => {
     const base = service.adminUserDetail(req.params.id);
     if (!base.ok) return send(res, base);
-    send(res, { ...base, ...reports.detail(req.params.id, { limit: req.query.limit, type: req.query.type, before: req.query.before }) });
+    send(res, { ...base, ...reports.detail(req.params.id, { limit: req.query.limit, type: req.query.type, before: req.query.before }), ...insights.customerExtras(req.params.id) });
   });
+  app.post('/api/admin/users/:id/notes', requireAdmin, (req, res) => send(res, insights.addNote(req.params.id, req.body || {})));
+  app.post('/api/admin/notes/:id/delete', requireAdmin, (req, res) => send(res, insights.deleteNote(req.params.id)));
   app.post('/api/admin/users/:id/owner', requireAdmin, (req, res) => send(res, reports.setOwner(req.params.id, req.body?.mine !== false)));
   app.post('/api/admin/users/:id/extend', requireAdmin, (req, res) => send(res, service.adminExtendUser(req.params.id, req.body?.days)));
   app.post('/api/admin/users/:id/reset-device', requireAdmin, (req, res) => send(res, service.adminResetDevice(req.params.id)));
@@ -190,11 +197,15 @@ export function createLicenseServer(db = null, options = {}) {
   app.get('/api/admin/visits/list', requireAdmin, (req, res) => send(res, visits.sessions({ limit: req.query.limit, includeMine: req.query.mine !== '0' })));
   // The admin page marks the browser it is opened in as the owner's ("나"); rows can be marked by hand too
   app.post('/api/admin/visits/owner', requireAdmin, (req, res) => send(res, visits.setOwner(req.body?.visitor, req.body?.mine !== false)));
-  app.get('/api/admin/qna', requireAdmin, (req, res) => send(res, qna.adminList({ status: req.query.status })));
+  app.get('/api/admin/qna', requireAdmin, (req, res) => {
+    const result = qna.adminList({ status: req.query.status });
+    if (result.ok) result.questions = insights.withAskers(result.questions);
+    send(res, result);
+  });
   app.post('/api/admin/qna/:id/answer', requireAdmin, (req, res) => send(res, qna.adminAnswer(req.params.id, req.body?.answer)));
   app.post('/api/admin/qna/:id/delete', requireAdmin, (req, res) => send(res, qna.adminDelete(req.params.id)));
 
-  return { app, database, service, qna, visits };
+  return { app, database, service, qna, visits, reports, insights };
 }
 
 // Start server when run directly

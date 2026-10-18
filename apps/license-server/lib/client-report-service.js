@@ -10,6 +10,10 @@ const clip = (value, max) => {
   return text.length <= max ? text : JSON.stringify({ truncated: true, head: text.slice(0, max - 40) });
 };
 const parse = (text) => { try { return JSON.parse(text); } catch { return {}; } };
+// The customer really used the program: pressed something (not just a screen loading data), or an automation finished a task.
+const USED = "((type IN ('api', 'api_error') AND json_extract(data_json, '$.method') != 'GET') OR (type = 'log' AND level = 'success'))";
+const kstDayOf = (column) => `substr(datetime(${column}, '+9 hours'), 1, 10)`;
+const NOT_OWNER = 'user_id NOT IN (SELECT user_id FROM owner_accounts)';
 
 // What each customer's program reports: the latest status (version, PC, AI, Naver blog, today's counts)
 // and an event stream (screen actions, errors, automation log lines). Feeds the admin customer view.
@@ -129,6 +133,7 @@ export class ClientReportService {
         naverConnected: Boolean(status.naver?.connected),
         aiEngine: status.ai?.engine || '',
         acceleration: status.ai?.acceleration || '',
+        modelMissing: status.ai?.engine === 'local' && status.ai?.modelDownloaded === false,
         today: status.today || null,
         firstReportAt: s.first_report_at,
         lastReportAt: s.updated_at
@@ -136,7 +141,56 @@ export class ClientReportService {
     }
     for (const c of counts) Object.assign(map.get(c.user_id) || map.set(c.user_id, {}).get(c.user_id), { events24h: c.events, errors24h: c.errors, actions24h: c.actions });
     for (const a of lastAction) Object.assign(map.get(a.user_id) || map.set(a.user_id, {}).get(a.user_id), { lastAction: a.name, lastActionAt: a.at });
+    // Days used in the last 7 days against the 7 before: a customer who used it daily and stopped shows up.
+    const now = this.now();
+    const week = new Date(now - 7 * DAY_MS).toISOString();
+    const twoWeeks = new Date(now - 14 * DAY_MS).toISOString();
+    const usage = this.db.prepare(`
+      SELECT user_id, COUNT(DISTINCT CASE WHEN at >= ? THEN ${kstDayOf('at')} END) AS days7,
+        COUNT(DISTINCT CASE WHEN at >= ? AND at < ? THEN ${kstDayOf('at')} END) AS prev7
+      FROM client_events WHERE at >= ? AND ${USED} GROUP BY user_id
+    `).all(week, twoWeeks, week, twoWeeks);
+    for (const u of usage) Object.assign(map.get(u.user_id) || map.set(u.user_id, {}).get(u.user_id), { activeDays7: Number(u.days7), activeDaysPrev7: Number(u.prev7) });
+    const used = this.db.prepare(`SELECT user_id, MIN(at) AS first, MAX(at) AS last FROM client_events WHERE ${USED} GROUP BY user_id`).all();
+    for (const u of used) Object.assign(map.get(u.user_id) || map.set(u.user_id, {}).get(u.user_id), { firstUsedAt: u.first, lastUsedAt: u.last });
     return { map, owners };
+  }
+
+  /** Per day for the last `count` days: customers who used the program, and errors (owners left out). */
+  daily(count = 30) {
+    const since = new Date(this.now() - count * DAY_MS).toISOString();
+    const rows = this.db.prepare(`
+      SELECT ${kstDayOf('at')} AS day, COUNT(DISTINCT CASE WHEN ${USED} THEN user_id END) AS active,
+        SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) AS errors
+      FROM client_events WHERE at >= ? AND ${NOT_OWNER} GROUP BY day
+    `).all(since);
+    return new Map(rows.map((r) => [r.day, { active: Number(r.active), errors: Number(r.errors) }]));
+  }
+
+  /** Customers on each program version, and how many errors each version had in the last day (owners left out). */
+  versions() {
+    const since = new Date(this.now() - DAY_MS).toISOString();
+    return this.db.prepare(`
+      SELECT s.app_version AS version, COUNT(*) AS users,
+        SUM(CASE WHEN s.updated_at >= ? THEN 1 ELSE 0 END) AS recent,
+        COALESCE(SUM((SELECT COUNT(*) FROM client_events e WHERE e.user_id = s.user_id AND e.level = 'error' AND e.at >= ?)), 0) AS errors,
+        SUM(CASE WHEN EXISTS (SELECT 1 FROM client_events e WHERE e.user_id = s.user_id AND e.level = 'error' AND e.at >= ?) THEN 1 ELSE 0 END) AS usersWithErrors
+      FROM client_status s WHERE s.${NOT_OWNER} GROUP BY s.app_version ORDER BY s.app_version DESC
+    `).all(since, since, since).map((r) => ({ version: r.version || '?', users: Number(r.users), recent: Number(r.recent), errors: Number(r.errors), usersWithErrors: Number(r.usersWithErrors) }));
+  }
+
+  /** Errors from customers' programs since an ISO time (owners left out). */
+  errorsSince(sinceIso) {
+    return Number(this.db.prepare(`SELECT COUNT(*) AS n FROM client_events WHERE level = 'error' AND at > ? AND ${NOT_OWNER}`).get(String(sinceIso || '')).n);
+  }
+
+  /** The newest errors and program starts across customers, for the home page news feed. */
+  recentNotable(limit = 30) {
+    return this.db.prepare(`
+      SELECT user_id, at, type, level, name, data_json FROM client_events
+      WHERE (level = 'error' OR type IN ('app_start', 'crash')) AND ${NOT_OWNER}
+      ORDER BY at DESC LIMIT ?
+    `).all(limit).map((e) => ({ userId: e.user_id, at: e.at, type: e.type, level: e.level, name: e.name, data: parse(e.data_json) }));
   }
 
   detail(userId, { limit = 300, type = '', before = '' } = {}) {

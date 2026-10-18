@@ -703,3 +703,80 @@ test('The app reports its status and activity; the admin sees them per customer'
     db.close();
   }
 });
+
+test('Home page: visitors are followed to the account they made, and the seller gets a to-do list, funnel and notes', async () => {
+  const db = new LicenseDatabase(':memory:');
+  const { app } = createLicenseServer(db, { adminSecret: 'admin-test-secret' });
+  const server = app.listen(0);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const admin = async (method, url, body) => (await fetch(`${baseUrl}${url}`, {
+    method, headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'admin-test-secret' }, body: body ? JSON.stringify(body) : undefined
+  })).json();
+  const from = (ip) => ({ 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', 'X-Forwarded-For': ip });
+  const visit = (ip, body) => fetch(`${baseUrl}/api/visit`, { method: 'POST', headers: from(ip), body: JSON.stringify(body) });
+  try {
+    // Someone comes from a Naver blog post, reads the pricing for two minutes, downloads and signs up from the same IP.
+    await visit('1.2.3.4', { visitor: 'visitor-aaaa-1111', page: 'home', referrer: 'https://blog.naver.com/promoblog/2233' });
+    await visit('1.2.3.4', { visitor: 'visitor-aaaa-1111', page: 'leave', view: 'view-0000-0001', seconds: 120, depth: 85, seen: 'pricing,download,<b>' });
+    await visit('1.2.3.4', { visitor: 'visitor-aaaa-1111', page: 'leave', view: 'view-0000-0001', seconds: 150, depth: 90, seen: 'pricing,download' });
+    await visit('1.2.3.4', { visitor: 'visitor-aaaa-1111', page: 'download' });
+    const reg = await (await fetch(`${baseUrl}/api/auth/register`, { method: 'POST', headers: from('1.2.3.4'), body: JSON.stringify({ email: 'found@test.com', password: 'password123', hwid: 'PC-F' }) })).json();
+    assert.strictEqual(reg.ok, true);
+    // Someone else downloads and never signs up; a third only looks.
+    await visit('5.6.7.8', { visitor: 'visitor-bbbb-2222', page: 'about' });
+    await visit('5.6.7.8', { visitor: 'visitor-bbbb-2222', page: 'download' });
+    await visit('9.9.9.9', { visitor: 'visitor-cccc-3333', page: 'home' });
+    assert.strictEqual((await visit('9.9.9.9', { visitor: 'visitor-cccc-3333', page: 'leave', view: 'bad' })).status, 400);
+
+    // The program reports in without a Naver connection.
+    await fetch(`${baseUrl}/api/client/report`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${reg.token}` },
+      body: JSON.stringify({ hwid: 'PC-F', status: { appVersion: '1.0.21', naver: { connected: false } }, events: [{ at: new Date().toISOString(), type: 'api', data: { method: 'POST', path: '/api/engagement/start', status: 200 } }] })
+    });
+
+    const { people, counts } = await admin('GET', '/api/admin/people');
+    const found = people.find((p) => p.visitor === 'visitor-aaaa-1111');
+    assert.strictEqual(found.customer.email, 'found@test.com');
+    assert.strictEqual(found.stage, 'customer');
+    assert.strictEqual(found.seconds, 150);
+    assert.strictEqual(found.depth, 90);
+    assert.deepStrictEqual(found.seen, ['pricing', 'download']);
+    assert.strictEqual(found.from.label, '네이버 블로그 · promoblog · 글 2233');
+    assert.strictEqual(people.find((p) => p.visitor === 'visitor-bbbb-2222').stage, 'download');
+    assert.strictEqual(people.find((p) => p.visitor === 'visitor-cccc-3333').stage, 'look');
+    assert.deepStrictEqual({ customer: counts.customer, download: counts.download, look: counts.look }, { customer: 1, download: 1, look: 1 });
+
+    const home = await admin('GET', `/api/admin/home?latest=1.0.22&since=${encodeURIComponent(new Date(Date.now() - 3600000).toISOString())}`);
+    const keys = home.todo.map((t) => t.title);
+    assert.ok(keys.includes('네이버 연결 안 함'), keys.join());
+    assert.ok(keys.includes('구버전 1.0.21'), keys.join());
+    assert.ok(keys.includes('설치 파일 받고 가입 안 한 사람 1명'), keys.join());
+    assert.deepStrictEqual(home.funnel.week, { days: 7, visitors: 3, downloads: 2, signups: 1, activated: 1, paid: 0 });
+    assert.strictEqual(home.daily.at(-1).visitors, 3);
+    assert.strictEqual(home.daily.at(-1).signups, 1);
+    assert.strictEqual(home.daily.at(-1).active, 1);
+    assert.deepStrictEqual(home.versions.map((v) => [v.version, v.users]), [['1.0.21', 1]]);
+    assert.strictEqual(home.fresh.signups, 1);
+    assert.strictEqual(home.fresh.downloads, 2);
+    assert.ok(home.news.some((n) => n.text === 'found@test.com 가입'));
+    assert.ok(home.news.some((n) => n.text.includes('설치 파일을 받음') && n.text.includes('found@test.com')));
+
+    // The customer page shows how they found us, notes, and questions asked from their IP.
+    await fetch(`${baseUrl}/api/qna`, { method: 'POST', headers: from('1.2.3.4'), body: JSON.stringify({ nickname: '찾은사람', password: '1234', title: '설치 문의', body: '설치가 안 돼요 도와주세요' }) });
+    const userId = (await admin('GET', '/api/admin/users')).users[0].id;
+    assert.strictEqual((await admin('POST', `/api/admin/users/${userId}/notes`, { kind: 'mail', body: '설치 안내 메일 보냄' })).ok, true);
+    assert.strictEqual((await admin('POST', `/api/admin/users/${userId}/notes`, { body: '  ' })).ok, false);
+    const detail = await admin('GET', `/api/admin/users/${userId}`);
+    assert.strictEqual(detail.origin[0].from.label, '네이버 블로그 · promoblog · 글 2233');
+    assert.strictEqual(detail.origin[0].download, true);
+    assert.strictEqual(detail.notes[0].kind, 'mail');
+    assert.strictEqual(detail.questions[0].title, '설치 문의');
+    const qna = await admin('GET', '/api/admin/qna?status=all');
+    assert.strictEqual(qna.questions[0].customer.email, 'found@test.com');
+    assert.strictEqual((await admin('POST', `/api/admin/notes/${detail.notes[0].id}/delete`)).ok, true);
+    assert.strictEqual((await admin('GET', `/api/admin/users/${userId}`)).notes.length, 0);
+  } finally {
+    server.close();
+    db.close();
+  }
+});
