@@ -947,7 +947,7 @@
     const custIds = new Set(todo.filter((t) => t.target?.view === 'customer').map((t) => t.target.id));
     $('#navHome').textContent = todo.length ? String(Math.min(99, todo.length)) : '';
     $('#navCustomers').textContent = custIds.size ? String(custIds.size) : '';
-    const qnaWaiting = (h.kpi.unansweredQuestions || 0) + (h.kpi.waitingInquiries || 0);
+    const qnaWaiting = h.kpi.unansweredQuestions || 0;
     $('#navQna').textContent = qnaWaiting ? String(qnaWaiting) : '';
     $('#navVisitors').textContent = h.kpi.visitorsToday ? String(h.kpi.visitorsToday) : '';
     document.title = `${todo.length ? `(${todo.length}) ` : ''}이웃메이트 판매자 관리`;
