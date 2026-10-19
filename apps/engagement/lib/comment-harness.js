@@ -198,7 +198,7 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   // "잘 보고 다녀갑니다", "답방 다녀갑니다": they are leaving my blog, not going on a trip.
   // Repeating what they said back to them ("신기하다고 하셨네요") answers nothing.
   if (/(?:다고|라고|다는|라는) (?:하셨|말씀하셨)(?:네요|군요|어요|는데|으니|다니)/.test(clean)) reasons.push(reason('echo', '상대가 한 말을 "~다고 하셨네요"로 되풀이하지 말고 글쓴이로서 답하세요.'));
-  if (/다녀갑|다녀가요|다녀가용|들렀다 갑|보고 ?갑|보고 ?가요|읽고 ?갑/.test(commentText) && /다녀오세요|잘 다녀|여행|즐겁게 다녀|보고 가세요|읽고 가세요/.test(clean)) reasons.push(reason('misread', '"다녀갑니다"는 내 블로그에 들렀다 간다는 인사입니다. 들러 줘서 고맙다고 답하세요.'));
+  if (/다녀갑|다녀가요|다녀가용|들렀다 갑|보고 ?갑|보고 ?가요|읽고 ?갑/.test(commentText) && /다녀오세요|잘 다녀|여행|즐겁게 다녀|보고 가세요|읽고 가세요|다녀가세요|보고 다녀가/.test(clean)) reasons.push(reason('misread', '"다녀갑니다"는 내 블로그에 들렀다 간다는 인사입니다. 들러 줘서 고맙다고 답하세요.'));
   const similar = recentReplies.find((reply) => commentSimilarity(clean, reply) >= 0.6);
   if (similar) {
     const exact = commentSimilarity(clean, similar) >= 0.7;
