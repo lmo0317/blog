@@ -275,8 +275,11 @@ export class EmbeddedLlamaServer extends EventEmitter {
 
       // Gemma 4 12B can take well over 30 seconds to load on first GPU start, and a laptop CPU with a slow
       // disk took over two minutes for E2B. Wait as long as the process is alive, up to 10 minutes.
+      const loadStarted = Date.now();
       const isReady = await this.waitForReady(gpuLayers > 0 ? 180000 : 600000);
+      const loadSeconds = Math.round((Date.now() - loadStarted) / 1000);
       if (isReady) {
+        this.addLog(`로컬 AI 준비 완료: ${activeModel.id}, ${this.acceleration}, ${loadSeconds}초`, 'info');
         this.status = 'running';
         this.setSetup('ready', '로컬 AI가 준비되었습니다. 이제 AI 댓글을 작성할 수 있습니다.', 100);
         this.emit('ready', { port: this.port, modelId: this.currentModelId });
@@ -286,6 +289,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
         await this.stop();
         this.status = 'fallback';
         const message = '내장 llama-server 구동 대기시간을 초과했습니다.';
+        this.addLog(`로컬 AI 준비 실패: ${activeModel.id}, ${this.acceleration}, ${loadSeconds}초 동안 응답 없음`, 'error');
         this.setSetup('runtime_error', message, 100);
         return { status: 'fallback', message };
       }

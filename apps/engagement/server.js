@@ -224,7 +224,8 @@ const telemetry = new TelemetryReporter({
     neighbors: () => automationManager,
     cleaner: () => neighborCleanerManager,
     health: () => neighborHealthManager,
-    autopilot: () => autopilot
+    autopilot: () => autopilot,
+    ai: () => embeddedLlama
   }
 });
 telemetry.track('app_start', { version: appVersion, installed: INSTALLED });

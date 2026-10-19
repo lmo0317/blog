@@ -382,7 +382,9 @@ export class AutopilotManager {
     this.nextRunAt = null;
     const cycle = { number: this.cycle, startedAt: this.now().toISOString(), finishedAt: null, keyword: '', results: [] };
     this.currentCycle = cycle;
-    this.log(`🚦 ${this.cycle}회차 자율 주행을 시작합니다.`, 'info');
+    const on = AUTOPILOT_STEPS.filter(({ id }) => this.settings.steps[id]).map(({ label }) => label);
+    const off = AUTOPILOT_STEPS.filter(({ id }) => !this.settings.steps[id]).map(({ label }) => label);
+    this.log(`🚦 ${this.cycle}회차 자율 주행을 시작합니다. (켜짐: ${on.join(', ') || '없음'}${off.length ? ` · 꺼짐: ${off.join(', ')}` : ''})`, 'info');
     let protectionTriggered = false;
 
     for (const step of AUTOPILOT_STEPS) {
@@ -397,12 +399,14 @@ export class AutopilotManager {
       this.message = `${step.icon} ${step.label} 중...`;
       this.log(`${step.icon} ${step.label}을(를) 시작합니다.`, 'info');
       const result = { step: step.id, label: step.label, status: 'done', summary: '' };
+      const startedAt = this.now().getTime();
       try {
         const output = step.id === 'engage' ? await this.runEngageStep(cycle) : await this.steps[step.id](this.settings);
         result.summary = output?.summary || '';
         result.status = output?.skipped ? 'skipped' : 'done';
         protectionTriggered = Boolean(output?.protectionTriggered);
-        this.log(`${result.status === 'skipped' ? '⏩' : '✅'} ${step.label}: ${result.summary || '완료'}`, result.status === 'skipped' ? 'info' : 'success');
+        result.seconds = Math.round((this.now().getTime() - startedAt) / 1000);
+        this.log(`${result.status === 'skipped' ? '⏩' : '✅'} ${step.label}: ${result.summary || '완료'} (${result.seconds}초)`, result.status === 'skipped' ? 'info' : 'success');
       } catch (error) {
         result.status = 'failed';
         result.summary = error.message;

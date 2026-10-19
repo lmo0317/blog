@@ -15,11 +15,17 @@ const QUIET_PATHS = [/\/events$/, /\/status$/, /^\/api\/health$/, /^\/api\/app-u
 const SECRET_KEY = /pass|token|cookie|secret|apikey|api_key|licensekey|auth|email|text|comment|content|body|html|reply|prompt|draft|title/i;
 
 // Numbers, booleans and short words from a request or response, never free text.
-export function summarizeValues(value, depth = 0) {
-  if (value == null || depth > 2) return undefined;
+// Deep enough for settings like autopilot.settings.steps.feed, and a cycle's step results are kept item by item;
+// other arrays (posts, comments) stay a count. 2026-10-19: steps:{count:5} hid which autopilot steps were off.
+const KEPT_ARRAYS = new Set(['results']);
+export function summarizeValues(value, depth = 0, key = '') {
+  if (value == null || depth > 4) return undefined;
   if (typeof value === 'number' || typeof value === 'boolean') return value;
   if (typeof value === 'string') return value.length <= 40 && !/\s{2,}|\n/.test(value) ? value : `(${value.length}자)`;
-  if (Array.isArray(value)) return { count: value.length };
+  if (Array.isArray(value)) {
+    if (!KEPT_ARRAYS.has(key) || value.length > 8) return { count: value.length };
+    return value.map((item) => summarizeValues(item, depth + 1)).filter((item) => item !== undefined);
+  }
   if (typeof value !== 'object') return undefined;
   const out = {};
   let n = 0;
@@ -27,7 +33,7 @@ export function summarizeValues(value, depth = 0) {
     if (n >= 24) break;
     if (SECRET_KEY.test(key) && typeof inner === 'string') continue;
     if (/logs?$/i.test(key) && Array.isArray(inner)) continue;
-    const summary = summarizeValues(inner, depth + 1);
+    const summary = summarizeValues(inner, depth + 1, key);
     if (summary === undefined || (typeof summary === 'object' && !Array.isArray(summary) && !Object.keys(summary).length)) continue;
     out[key] = summary;
     n++;
@@ -127,8 +133,22 @@ export class TelemetryReporter {
   }
 
   // Automation managers keep their own newest-first log arrays; pick up the lines added since last time.
+  // The local AI keeps an oldest-first log of {time, text, stream}: only its own notes and real errors are sent,
+  // not every llama-server line.
   collectLogs() {
     for (const [name, source] of Object.entries(this.logSources)) {
+      if (name === 'ai') {
+        for (const entry of this.logsOf(source)) {
+          if (!entry || typeof entry !== 'object' || this.seenLogs.has(entry)) continue;
+          this.seenLogs.add(entry);
+          const text = String(entry.text || entry.message || '');
+          const server = entry.stream === 'stdout' || entry.stream === 'stderr';
+          const level = server ? (/error|fail|out of memory|exception|abort/i.test(text) ? 'error' : '') : entry.stream || 'info';
+          if (!level) continue;
+          this.queue.push({ at: new Date(this.now()).toISOString(), type: 'log', data: { source: 'ai', level, message: text.slice(0, 300) } });
+        }
+        continue;
+      }
       const logs = this.logsOf(source);
       const fresh = [];
       for (const entry of logs) {

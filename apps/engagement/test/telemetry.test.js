@@ -80,3 +80,15 @@ test('a log source made later in server startup does not break the reporter', ()
   broken.collectLogs();
   assert.strictEqual(broken.queue.length, 0);
 });
+
+test('the report shows which autopilot steps are on, each step result, and the local AI notes', async () => {
+  const { summarizeValues, TelemetryReporter } = await import('../lib/telemetry.js');
+  const s = summarizeValues({ settings: { steps: { feed: false, engage: true } }, currentCycle: { results: [{ step: 'replies', status: 'skipped', summary: '답할 새 댓글이 없습니다.', seconds: 3 }] }, posts: [1, 2] });
+  assert.deepEqual(s.settings.steps, { feed: false, engage: true });
+  assert.equal(s.currentCycle.results[0].status, 'skipped');
+  assert.deepEqual(s.posts, { count: 2 });
+  const ai = { logs: [{ time: 't', text: '로컬 AI 준비 완료: gemma-4-e2b, CPU, 95초', stream: 'info' }, { time: 't', text: 'slot update_slots: id 0 | task 1', stream: 'stderr' }, { time: 't', text: 'error: failed to load model', stream: 'stderr' }] };
+  const reporter = new TelemetryReporter({ logSources: { ai: () => ai } });
+  reporter.collectLogs();
+  assert.deepEqual(reporter.queue.map((e) => e.data.level), ['info', 'error']);
+});
