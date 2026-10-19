@@ -53,6 +53,7 @@ ssh lmo0317@192.168.219.112 'cd /tmp/nmr/op && ALL=1 FIND="안 ?되|안 ?나|오
 - 관리자 페이지 **🏠 홈 → ✅ 지금 챙길 일**: 답변 안 한 질문, 오류 난 고객, 가입하고 안 켠 고객, 네이버 미연결, AI 모델 안 받음, 구버전, 체험 끝나감, 체험·이용권 끝나고 결제 안 함, 3일 넘게 안 씀, 사용 급감, 카톡 구매 버튼 누른 방문자, 설치 파일 받고 가입 안 한 방문자. 문의가 오기 전에 먼저 연락할 대상이다. (API `GET /api/admin/home?latest=<최신버전>`) 
 - 👥 고객 목록의 **⚠️ 챙길 고객** 필터도 같은 기준이다.
 - 사이트 Q&A: 관리자 페이지 **💬 문의** (같은 IP로 가입한 고객이 있으면 질문 옆에 이메일이 붙는다). API `GET /api/admin/qna`, 답변 `POST /api/admin/qna/:id/answer`.
+- 1:1 문의: 홈페이지 https://minohlee.mooo.com/neighbormate-app/contact.html (로그인 없음, 이메일 + 비밀 링크). 관리자 페이지 **💬 문의 → 📮 1:1 문의**에서 답변하면 고객 메일로 바로 간다. 새 문의·추가 메시지는 SMTP_USER Gmail로 알림이 온다. API `GET /api/admin/inquiries?status=all`, 답변 `POST /api/admin/inquiries/:id/reply` body `{body}`.
 - 메일: 운영자 네이버 메일 / Gmail 받은편지함.
 
 문의마다 기록할 것: 닉네임, 블로그 아이디(프로필 링크), 글 번호, **스레드 맨 위 댓글 번호(PARENT)**, 질문 원문, 작성 시각.
