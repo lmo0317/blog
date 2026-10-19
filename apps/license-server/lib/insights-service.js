@@ -146,6 +146,10 @@ export class InsightsService {
     for (const q of this.db.prepare('SELECT id, nickname, title, created_at FROM questions WHERE answer IS NULL ORDER BY id ASC').all()) {
       push({ key: `q-${q.id}`, level: 'warn', icon: '💬', title: '답변 안 한 질문', detail: `${q.nickname} · ${q.title}`, at: q.created_at, target: { view: 'qna' } });
     }
+    // 1:1 inquiries whose last message is the customer's
+    for (const q of this.db.prepare("SELECT id, email, name, updated_at FROM inquiries WHERE status = 'waiting' ORDER BY updated_at ASC").all()) {
+      push({ key: `i-${q.id}-${q.updated_at}`, level: 'warn', icon: '📮', title: '답변 안 한 1:1 문의', detail: q.name ? `${q.name} (${q.email})` : q.email, at: q.updated_at, target: { view: 'qna' } });
+    }
     for (const u of customers) {
       const c = u.client || {};
       const hoursSinceSignup = ago(u.createdAt) / HOUR_MS;
@@ -228,6 +232,7 @@ export class InsightsService {
       signupsToday: today.signups,
       week: daily.slice(-7).reduce((a, d) => ({ visitors: a.visitors + d.visitors, downloads: a.downloads + d.downloads, signups: a.signups + d.signups }), { visitors: 0, downloads: 0, signups: 0 }),
       unansweredQuestions: summary.unansweredQuestions,
+      waitingInquiries: Number(this.db.prepare("SELECT COUNT(*) AS n FROM inquiries WHERE status = 'waiting'").get().n),
       unusedVouchers: summary.unusedVouchers
     };
 
@@ -241,6 +246,9 @@ export class InsightsService {
       if (!isCustomer(a.user_id)) continue;
       const [icon, ...label] = AUDIT[a.action].split(' ');
       news.push({ at: a.created_at, icon, kind: 'account', text: `${email(a.user_id)} ${label.join(' ')}${a.action === 'ADMIN_EXTEND' && a.details ? ` (${a.details.replace('d', '일')})` : ''}`, target: { view: 'customer', id: a.user_id } });
+    }
+    for (const q of this.db.prepare('SELECT id, email, name, created_at FROM inquiries ORDER BY id DESC LIMIT 20').all()) {
+      news.push({ at: q.created_at, icon: '📮', kind: 'question', text: `1:1 문의: ${q.name || q.email}`, target: { view: 'qna' } });
     }
     for (const q of this.db.prepare('SELECT id, nickname, title, created_at FROM questions ORDER BY id DESC LIMIT 20').all()) {
       news.push({ at: q.created_at, icon: '💬', kind: 'question', text: `질문: ${q.title} (${q.nickname})`, target: { view: 'qna' } });

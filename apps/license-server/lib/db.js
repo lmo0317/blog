@@ -118,6 +118,30 @@ export class LicenseDatabase {
         created_at TEXT NOT NULL
       );
 
+      -- 1:1 inquiries from the promo site's contact page. No account: the customer keeps the thread through a
+      -- secret link (token) and gets replies by email.
+      CREATE TABLE IF NOT EXISTS inquiries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
+        topic TEXT NOT NULL DEFAULT 'other',
+        status TEXT NOT NULL DEFAULT 'waiting',
+        ip TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        admin_read_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS inquiry_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        inquiry_id INTEGER NOT NULL,
+        sender TEXT NOT NULL,
+        body TEXT NOT NULL,
+        mail_status TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_inquiry_messages ON inquiry_messages(inquiry_id);
+
       -- Accounts the seller uses for testing; left out of the customer counts.
       CREATE TABLE IF NOT EXISTS owner_accounts (user_id INTEGER PRIMARY KEY, created_at TEXT NOT NULL);
 

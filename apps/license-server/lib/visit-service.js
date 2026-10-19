@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-const PAGES = new Set(['home', 'about', 'qna']);
+const PAGES = new Set(['home', 'about', 'qna', 'contact']);
 // Clicks counted alongside page views: the installer download, the purchase (KakaoTalk) button and the promo video.
 const ACTIONS = new Set(['download', 'buy', 'video']);
 // Sent when a page is left (or hidden): how long it was read, how far it was scrolled, which sections were seen.
@@ -9,7 +9,7 @@ const SECTION = /^[a-z0-9-]{1,20}$/;
 // The site owner's own visits (browsers marked from the admin page, and the home network) are kept in
 // the visit list but left out of every count.
 const MINE = "(visitor IN (SELECT value FROM site_owners) OR ip LIKE '192.168.%' OR ip LIKE '10.%')";
-const ONLY_PAGES = `page IN ('home', 'about', 'qna') AND NOT ${MINE}`;
+const ONLY_PAGES = `page IN ('home', 'about', 'qna', 'contact') AND NOT ${MINE}`;
 const NOT_MINE = ` AND NOT ${MINE}`;
 const SESSION_GAP_MS = 30 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -173,7 +173,7 @@ export class VisitService {
     const now = this.now();
     const first = kstDay(now - (count - 1) * DAY_MS);
     const rows = new Map(this.db.prepare(`
-      SELECT day, COUNT(DISTINCT CASE WHEN page IN ('home', 'about', 'qna') THEN visitor END) AS visitors,
+      SELECT day, COUNT(DISTINCT CASE WHEN page IN ('home', 'about', 'qna', 'contact') THEN visitor END) AS visitors,
         COUNT(DISTINCT CASE WHEN page = 'download' THEN visitor END) AS downloads
       FROM site_visits WHERE day >= ?${NOT_MINE} GROUP BY day
     `).all(first).map((r) => [r.day, { visitors: Number(r.visitors), downloads: Number(r.downloads) }]));
@@ -186,7 +186,7 @@ export class VisitService {
   /** People (not the owner) who looked at a page / downloaded since an ISO time. */
   countSince(sinceIso) {
     const row = this.db.prepare(`
-      SELECT COUNT(DISTINCT CASE WHEN page IN ('home', 'about', 'qna') THEN visitor END) AS visitors,
+      SELECT COUNT(DISTINCT CASE WHEN page IN ('home', 'about', 'qna', 'contact') THEN visitor END) AS visitors,
         COUNT(DISTINCT CASE WHEN page = 'download' THEN visitor END) AS downloads
       FROM site_visits WHERE created_at > ?${NOT_MINE}
     `).get(String(sinceIso || ''));
@@ -223,7 +223,7 @@ export class VisitService {
     // Per campaign link: how many people came, and how many of them downloaded or pressed buy.
     const campaigns = this.db.prepare(`
       SELECT utm_source AS source, COALESCE(utm_campaign, '') AS campaign,
-        COUNT(DISTINCT CASE WHEN page IN ('home', 'about', 'qna') THEN visitor END) AS visitors,
+        COUNT(DISTINCT CASE WHEN page IN ('home', 'about', 'qna', 'contact') THEN visitor END) AS visitors,
         COUNT(DISTINCT CASE WHEN page = 'download' THEN visitor END) AS downloads,
         COUNT(DISTINCT CASE WHEN page = 'buy' THEN visitor END) AS buys
       FROM site_visits WHERE utm_source IS NOT NULL${NOT_MINE} GROUP BY utm_source, utm_campaign ORDER BY visitors DESC, downloads DESC LIMIT 10
@@ -247,7 +247,7 @@ export class VisitService {
         campaigns,
         actions,
         since: one('SELECT MIN(day) AS d FROM site_visits').d || null,
-        mine: Number(one(`SELECT COUNT(*) AS n FROM site_visits WHERE page IN ('home', 'about', 'qna') AND ${MINE}`).n)
+        mine: Number(one(`SELECT COUNT(*) AS n FROM site_visits WHERE page IN ('home', 'about', 'qna', 'contact') AND ${MINE}`).n)
       }
     };
   }

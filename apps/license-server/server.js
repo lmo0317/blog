@@ -7,6 +7,8 @@ import { QnaService } from './lib/qna-service.js';
 import { VisitService } from './lib/visit-service.js';
 import { ClientReportService } from './lib/client-report-service.js';
 import { InsightsService } from './lib/insights-service.js';
+import { InquiryService } from './lib/inquiry-service.js';
+import { Mailer } from './lib/mailer.js';
 
 export function createLicenseServer(db = null, options = {}) {
   const app = express();
@@ -15,6 +17,7 @@ export function createLicenseServer(db = null, options = {}) {
   const qna = new QnaService(database, options.qna);
   const visits = new VisitService(database, options.visits);
   const reports = new ClientReportService(database, service, options.reports);
+  const inquiries = new InquiryService(database, { mailer: options.mailer || new Mailer(), notifyTo: process.env.INQUIRY_NOTIFY_TO, ...(options.inquiries || {}) });
   const insights = new InsightsService(database, { service, reports, visits, ...(options.insights || {}) });
 
   app.use(express.json({ limit: '2mb' }));
@@ -134,6 +137,13 @@ export function createLicenseServer(db = null, options = {}) {
   app.post('/api/qna/:id/open', (req, res) => qnaSend(res, qna.open(req.params.id, { password: req.body?.password, ip: getClientIp(req) })));
   app.post('/api/qna/:id/delete', (req, res) => qnaSend(res, qna.remove(req.params.id, { password: req.body?.password, ip: getClientIp(req) })));
 
+  // ---- 1:1 inquiries from the contact page (/neighbormate-app/contact.html); the token is the customer's key ----
+  const inquiryStatus = (result) => (result.ok ? 200 : ({ NOT_FOUND: 404, TOO_MANY: 429 }[result.error] || 400));
+  const inquirySend = (res, result) => res.status(inquiryStatus(result)).json(result);
+  app.post('/api/inquiries', (req, res) => inquirySend(res, inquiries.create({ ...(req.body || {}), ip: getClientIp(req) })));
+  app.get('/api/inquiries/:token', (req, res) => inquirySend(res, inquiries.thread(req.params.token)));
+  app.post('/api/inquiries/:token/messages', (req, res) => inquirySend(res, inquiries.reply(req.params.token, { body: req.body?.body, ip: getClientIp(req) })));
+
   // ---- Visitor counts for the promo site: each page sends one beacon per view ----
   app.post('/api/visit', (req, res) => {
     const { visitor, page, referrer, source, campaign, content, view, seconds, depth, seen } = req.body || {};
@@ -204,8 +214,12 @@ export function createLicenseServer(db = null, options = {}) {
   });
   app.post('/api/admin/qna/:id/answer', requireAdmin, (req, res) => send(res, qna.adminAnswer(req.params.id, req.body?.answer)));
   app.post('/api/admin/qna/:id/delete', requireAdmin, (req, res) => send(res, qna.adminDelete(req.params.id)));
+  app.get('/api/admin/inquiries', requireAdmin, (req, res) => send(res, inquiries.adminList({ status: req.query.status })));
+  app.post('/api/admin/inquiries/:id/read', requireAdmin, (req, res) => send(res, inquiries.adminRead(req.params.id)));
+  app.post('/api/admin/inquiries/:id/reply', requireAdmin, (req, res) => send(res, inquiries.adminReply(req.params.id, req.body?.body)));
+  app.post('/api/admin/inquiries/:id/status', requireAdmin, (req, res) => send(res, inquiries.adminSetStatus(req.params.id, req.body?.status)));
 
-  return { app, database, service, qna, visits, reports, insights };
+  return { app, database, service, qna, visits, reports, insights, inquiries };
 }
 
 // Start server when run directly

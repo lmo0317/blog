@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1:1 문의 — 이웃메이트</title>
+<meta name="description" content="로그인 없이 이메일만 적고 바로 문의하세요. 제작자가 직접 답변을 메일로 보내 드립니다.">
+<meta property="og:title" content="1:1 문의 — 이웃메이트">
+<meta property="og:description" content="로그인 없이 바로 문의하세요. 답변은 메일로 보내 드립니다.">
+<meta property="og:image" content="https://minohlee.mooo.com/neighbormate-app/assets/autopilot.webp">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/site.css?v=20261019">
+</head>
+<body class="board-body">
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><span class="brand-mark" aria-hidden="true"></span>이웃메이트</a>
+    <nav class="nav" aria-label="사이트 메뉴">
+      <a href="./">홈</a>
+      <a href="about.html">기능 소개</a>
+      <a href="./#pricing">가격</a>
+      <a href="qna.html">질문 게시판</a>
+      <a href="contact.html" aria-current="page">1:1 문의</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="https://minohlee.mooo.com/updates/neighbormate/NeighborMate-Setup.exe">무료 체험</a>
+  </div>
+</header>
+
+<main class="board-main">
+  <div class="wrap contact-wrap">
+    <div class="board-title">
+      <div>
+        <h1>📮 1:1 문의</h1>
+        <p>로그인 없이 바로 물어보세요. 제작자가 직접 읽고, 답변은 적어 주신 메일로 보내 드립니다.</p>
+      </div>
+    </div>
+
+    <!-- Earlier inquiry on this browser -->
+    <div class="contact-resume" id="resume" hidden>
+      <span>💬 이 브라우저에서 남긴 문의가 있어요.</span>
+      <button class="btn btn-ghost btn-md" type="button" id="resumeBtn">이전 문의 보기</button>
+    </div>
+
+    <!-- New inquiry -->
+    <section id="formView" hidden>
+      <form class="contact-card" id="askForm" novalidate>
+        <div class="contact-field">
+          <span class="contact-label">어떤 문의인가요?</span>
+          <div class="topic-grid" role="radiogroup" aria-label="문의 종류">
+            <label class="topic"><input type="radio" name="topic" value="usage" checked><span>🧭</span><b>사용 방법</b></label>
+            <label class="topic"><input type="radio" name="topic" value="error"><span>🛠️</span><b>오류·버그</b></label>
+            <label class="topic"><input type="radio" name="topic" value="billing"><span>💳</span><b>구매·이용권</b></label>
+            <label class="topic"><input type="radio" name="topic" value="other"><span>💬</span><b>기타</b></label>
+          </div>
+        </div>
+        <div class="contact-row">
+          <div class="contact-field">
+            <label class="contact-label" for="fEmail">답변 받을 이메일 <em>*</em></label>
+            <input class="input" id="fEmail" type="email" maxlength="120" autocomplete="email" inputmode="email" placeholder="example@naver.com">
+          </div>
+          <div class="contact-field">
+            <label class="contact-label" for="fName">이름 또는 블로그 닉네임 <small>(선택)</small></label>
+            <input class="input" id="fName" maxlength="20" autocomplete="nickname" placeholder="예: 맛집탐험가">
+          </div>
+        </div>
+        <div class="contact-field">
+          <label class="contact-label" for="fBody">문의 내용 <em>*</em></label>
+          <textarea class="textarea" id="fBody" maxlength="3000" placeholder="궁금한 점을 편하게 적어 주세요.&#10;오류라면 화면에 뜬 문구와 앱 버전(상단 v1.0.x)을 함께 적어 주시면 더 빨리 해결해 드릴 수 있어요."></textarea>
+          <span class="count" id="bodyCount">0 / 3000</span>
+        </div>
+        <div class="hp" aria-hidden="true"><label>웹사이트 <input id="fSite" tabindex="-1" autocomplete="off"></label></div>
+        <div class="form-error" id="formError" role="alert"></div>
+        <div class="contact-submit">
+          <p>🔒 이메일은 답변을 보내는 데만 쓰고, 다른 사람에게 보이지 않아요.</p>
+          <button class="btn btn-primary" type="submit" id="submitBtn">문의 보내기</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Conversation -->
+    <section id="threadView" hidden>
+      <div class="contact-card thread">
+        <div class="thread-head">
+          <div>
+            <b id="tTopic"></b>
+            <span id="tMeta"></span>
+          </div>
+          <span class="status-pill" id="tStatus"></span>
+        </div>
+        <div class="thread-msgs" id="tMsgs" aria-live="polite"></div>
+        <form class="thread-reply" id="replyForm" novalidate>
+          <textarea class="textarea" id="rBody" maxlength="3000" placeholder="추가로 궁금한 점이나 답변에 대한 회신을 적어 주세요." aria-label="추가 메시지"></textarea>
+          <div class="thread-reply-foot">
+            <span class="form-error" id="replyError" role="alert"></span>
+            <button class="btn btn-primary btn-md" type="submit" id="replyBtn">보내기</button>
+          </div>
+        </form>
+      </div>
+      <div class="thread-help">
+        <p>📧 답변이 오면 <b id="tEmail"></b>(으)로 메일을 보내 드려요. 메일 속 링크로 언제든 이 대화로 돌아올 수 있어요.</p>
+        <div class="thread-help-actions">
+          <button class="btn btn-ghost btn-md" type="button" id="copyLink">🔗 이 대화 주소 복사</button>
+          <button class="btn btn-ghost btn-md" type="button" id="newAsk">✏️ 새 문의 쓰기</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="missingView" hidden>
+      <div class="contact-card empty-card">
+        <strong>문의를 찾지 못했어요</strong>
+        <p>링크가 잘렸거나 잘못 복사됐을 수 있어요. 받은 메일의 링크를 다시 눌러 보시거나, 새로 문의해 주세요.</p>
+        <button class="btn btn-primary btn-md" type="button" data-new>새 문의 쓰기</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 이웃메이트 · 네이버와 제휴하지 않은 독립 소프트웨어입니다.</span>
+    <span class="foot-links"><a href="./">홈</a><a href="about.html">기능 소개</a><a href="qna.html">질문 게시판</a><a href="contact.html">1:1 문의</a></span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const API = '/license/api/inquiries';
+  const STORE = 'nm-inquiries';
+  const TOPIC_LABEL = { usage: '사용 방법', error: '오류·버그', billing: '구매·이용권', other: '기타' };
+  const STATUS = { waiting: ['답변 준비 중', 'wait'], answered: ['답변 완료', 'done'], closed: ['종료된 문의', 'closed'] };
+  const $ = (s) => document.querySelector(s);
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pad = (n) => String(n).padStart(2, '0');
+  const when = (iso) => { const d = new Date(iso); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+
+  // Tokens of inquiries made in this browser, newest first; the page also works when storage is blocked.
+  const saved = () => { try { return JSON.parse(localStorage.getItem(STORE) || '[]'); } catch { return []; } };
+  const remember = (token) => { try { localStorage.setItem(STORE, JSON.stringify([token, ...saved().filter((t) => t !== token)].slice(0, 5))); } catch {} };
+
+  let toastTimer;
+  function toast(message, error = false) {
+    const el = $('#toast');
+    el.textContent = message;
+    el.className = `toast show${error ? ' error' : ''}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = 'toast'; }, 2800);
+  }
+
+  async function call(path, { method = 'GET', body } = {}) {
+    try {
+      const res = await fetch(`${API}${path}`, {
+        method, cache: 'no-store',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined
+      });
+      return await res.json();
+    } catch {
+      return { ok: false, message: '서버와 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.' };
+    }
+  }
+
+  const tokenFromHash = () => new URLSearchParams(location.hash.slice(1)).get('t') || '';
+  let token = '';
+  let lastCount = 0;
+
+  function show(view) {
+    for (const id of ['formView', 'threadView', 'missingView']) $(`#${id}`).hidden = id !== view;
+    const others = saved().filter((t) => t !== token);
+    $('#resume').hidden = view !== 'formView' || !others.length;
+  }
+
+  function newAsk() {
+    token = '';
+    history.replaceState(null, '', 'contact.html' + location.search);
+    show('formView');
+    $('#fBody').focus();
+  }
+
+  function render(data) {
+    const { inquiry, messages } = data;
+    const [label, cls] = STATUS[inquiry.status] || STATUS.waiting;
+    $('#tTopic').textContent = `${TOPIC_LABEL[inquiry.topic] || '기타'} 문의`;
+    $('#tMeta').textContent = `${when(inquiry.createdAt)} 접수`;
+    $('#tStatus').textContent = label;
+    $('#tStatus').className = `status-pill ${cls}`;
+    $('#tEmail').textContent = inquiry.email;
+    const box = $('#tMsgs');
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    box.innerHTML = messages.map((m) => `
+      <div class="msg ${m.sender === 'admin' ? 'from-admin' : 'from-me'}">
+        <span class="who">${m.sender === 'admin' ? '👨‍💻 이웃메이트 제작자' : '나'}</span>
+        <div class="bubble">${esc(m.body)}</div>
+        <time>${when(m.createdAt)}</time>
+      </div>`).join('') + (inquiry.status === 'waiting'
+      ? '<div class="msg-note">⏳ 문의가 잘 접수됐어요. 보통 하루 안에 답변드리고, 답변이 오면 메일로 알려 드릴게요.</div>' : '');
+    if (messages.length !== lastCount || atBottom) box.scrollTop = box.scrollHeight;
+    lastCount = messages.length;
+  }
+
+  async function openThread(t, { quiet = false } = {}) {
+    const data = await call(`/${encodeURIComponent(t)}`);
+    if (!data.ok) {
+      if (!quiet) show('missingView');
+      return;
+    }
+    token = t;
+    remember(t);
+    render(data);
+    show('threadView');
+  }
+
+  // ---- New inquiry ----
+  const params = new URLSearchParams(location.search);
+  if (TOPIC_LABEL[params.get('topic')]) $(`input[name="topic"][value="${params.get('topic')}"]`).checked = true;
+  $('#fBody').addEventListener('input', () => { $('#bodyCount').textContent = `${$('#fBody').value.length} / 3000`; });
+
+  $('#askForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('#fEmail').value.trim();
+    const body = $('#fBody').value.trim();
+    const err = $('#formError');
+    err.textContent = '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = '답변 받을 이메일 주소를 정확히 입력해 주세요.'; $('#fEmail').focus(); return; }
+    if (body.length < 5) { err.textContent = '문의 내용을 다섯 글자 이상 적어 주세요.'; $('#fBody').focus(); return; }
+    const btn = $('#submitBtn');
+    btn.disabled = true;
+    btn.textContent = '보내는 중...';
+    const result = await call('', { method: 'POST', body: {
+      email, body, name: $('#fName').value.trim(), topic: document.querySelector('input[name="topic"]:checked')?.value || 'other', website: $('#fSite').value
+    } });
+    btn.disabled = false;
+    btn.textContent = '문의 보내기';
+    if (!result.ok) { err.textContent = result.message || '문의를 보내지 못했습니다.'; return; }
+    $('#askForm').reset();
+    $('#bodyCount').textContent = '0 / 3000';
+    token = result.token;
+    remember(token);
+    history.replaceState(null, '', `contact.html#t=${token}`);
+    lastCount = 0;
+    render(result);
+    show('threadView');
+    window.scrollTo({ top: 0 });
+    toast('✅ 문의를 보냈어요. 답변은 메일로도 알려 드릴게요.');
+  });
+
+  // ---- Conversation ----
+  $('#replyForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = $('#rBody').value.trim();
+    const err = $('#replyError');
+    err.textContent = '';
+    if (body.length < 2) { err.textContent = '메시지를 입력해 주세요.'; return; }
+    const btn = $('#replyBtn');
+    btn.disabled = true;
+    const result = await call(`/${encodeURIComponent(token)}/messages`, { method: 'POST', body: { body } });
+    btn.disabled = false;
+    if (!result.ok) { err.textContent = result.message || '메시지를 보내지 못했습니다.'; return; }
+    $('#rBody').value = '';
+    render(result);
+    toast('✅ 메시지를 보냈어요.');
+  });
+
+  $('#copyLink').addEventListener('click', async () => {
+    const url = `${location.origin}${location.pathname}#t=${token}`;
+    try { await navigator.clipboard.writeText(url); toast('🔗 대화 주소를 복사했어요. 즐겨찾기에 넣어 두셔도 좋아요.'); }
+    catch { toast(url); }
+  });
+  $('#newAsk').addEventListener('click', newAsk);
+  document.querySelectorAll('[data-new]').forEach((b) => b.addEventListener('click', newAsk));
+  $('#resumeBtn').addEventListener('click', () => {
+    const t = saved()[0];
+    if (!t) return;
+    history.replaceState(null, '', `contact.html#t=${t}`);
+    openThread(t);
+  });
+
+  // New answers show up while the page is open.
+  setInterval(() => { if (token && document.visibilityState === 'visible') openThread(token, { quiet: true }); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (token && document.visibilityState === 'visible') openThread(token, { quiet: true }); });
+
+  const start = tokenFromHash();
+  if (start) openThread(start); else show('formView');
+})();
+</script>
+<script src="assets/visit.js?v=20261019" data-page="contact"></script>
+</body>
+</html>
