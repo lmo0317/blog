@@ -132,7 +132,25 @@ export function createLicenseServer(db = null, options = {}) {
   const qnaStatus = (result) => (result.ok ? 200 : ({ NOT_FOUND: 404, PRIVATE: 403, WRONG_PASSWORD: 403, TOO_MANY_ATTEMPTS: 429, TOO_MANY_POSTS: 429 }[result.error] || 400));
   const qnaSend = (res, result) => res.status(qnaStatus(result)).json(result);
   app.get('/api/qna', (req, res) => qnaSend(res, qna.list({ page: req.query.page, limit: req.query.limit, query: req.query.q, field: req.query.field })));
-  app.post('/api/qna', (req, res) => qnaSend(res, qna.create({ ...(req.body || {}), ip: getClientIp(req) })));
+  // The board is where customers ask; each new post is mailed to the seller so it is answered quickly.
+  app.post('/api/qna', (req, res) => {
+    const result = qna.create({ ...(req.body || {}), ip: getClientIp(req) });
+    if (result.ok && inquiries.mailer?.configured && inquiries.notifyTo) {
+      const q = result.question;
+      inquiries.mailer.send({
+        to: inquiries.notifyTo,
+        subject: `[이웃메이트 문의 게시판] ${q.isPrivate ? '🔒 ' : ''}${q.title} · ${q.nickname}`,
+        text: `${q.nickname} 님이 문의 게시판에 글을 남겼습니다${q.isPrivate ? ' (비밀글)' : ''}.
+
+제목: ${q.title}
+
+${q.body}
+
+답변하기: https://minohlee.mooo.com/license/admin#qna`
+      }).then((sent) => { if (!sent.ok) console.warn(`[qna] 알림 메일 실패: ${sent.error}`); });
+    }
+    qnaSend(res, result);
+  });
   app.get('/api/qna/:id', (req, res) => qnaSend(res, qna.read(req.params.id)));
   app.post('/api/qna/:id/open', (req, res) => qnaSend(res, qna.open(req.params.id, { password: req.body?.password, ip: getClientIp(req) })));
   app.post('/api/qna/:id/delete', (req, res) => qnaSend(res, qna.remove(req.params.id, { password: req.body?.password, ip: getClientIp(req) })));

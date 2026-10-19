@@ -69,6 +69,7 @@ test('1:1 inquiry: no account, a secret link, seller mailed on each customer mes
 
     const home = await (await admin('GET', '/api/admin/home')).json();
     assert.equal(home.kpi.waitingInquiries, 1);
+    assert.ok(home.todo.some((t) => t.icon === '📮'));
 
     // Rate limit per IP for new inquiries.
     await call('POST', '/api/inquiries', { email: 'x@y.co', body: '두 번째 문의입니다' });
@@ -93,4 +94,19 @@ test('mail headers cannot be injected and Korean text survives encoding', () => 
   assert.equal(message.split('\r\n\r\n')[0].includes('Bcc:'), false);
   assert.match(message, /Subject: =\?UTF-8\?B\?/);
   assert.equal(decodeBody(message), '안녕하세요\r\n줄바꿈');
+});
+
+test('a new board post is mailed to the seller', async () => {
+  const sent = [];
+  const mailer = new Mailer({ user: 'seller@example.com', pass: 'x', transport: async (envelope, message) => sent.push({ ...envelope, message }) });
+  const { app } = createLicenseServer(new LicenseDatabase(':memory:'), { adminSecret: 's', mailer });
+  const server = app.listen(0);
+  try {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/qna`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nickname: '블로거', password: '1234', title: '결제 문의', body: '계좌이체도 되나요?', isPrivate: true }) });
+    assert.equal(res.status, 200);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].to, 'seller@example.com');
+    assert.match(decodeBody(sent[0].message), /계좌이체도 되나요/);
+  } finally { server.close(); }
 });

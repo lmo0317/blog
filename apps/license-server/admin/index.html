@@ -444,6 +444,7 @@
         <a href="#home" data-view="home"><span class="ico">🏠</span><span class="lbl">홈</span><em class="nav-count" id="navHome"></em></a>
         <a href="#customers" data-view="customers"><span class="ico">👥</span><span class="lbl">고객</span><em class="nav-count" id="navCustomers"></em></a>
         <a href="#visitors" data-view="visitors"><span class="ico">👀</span><span class="lbl">방문자</span><em class="nav-count soft" id="navVisitors"></em></a>
+        <a href="#qna" data-view="qna"><span class="ico">💬</span><span class="lbl">문의 게시판</span><em class="nav-count" id="navQna"></em></a>
         <a href="#vouchers" data-view="vouchers"><span class="ico">🎟️</span><span class="lbl">이용권</span></a>
       </nav>
       <div class="side-foot">
@@ -583,6 +584,30 @@
                 <div class="vtable" id="vCampaigns"></div>
               </div>
             </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- Q&A -->
+      <section class="view hidden" id="view-qna">
+        <div class="page-head">
+          <div><h2>💬 문의 게시판</h2><p>홈페이지 문의 게시판의 글입니다. 새 글이 올라오면 메일로 알려 드립니다. 같은 IP로 가입한 고객이 있으면 함께 보여 줍니다.</p></div>
+          <div class="tools">
+            <a class="btn btn-sm" href="/neighbormate-app/qna.html" target="_blank" rel="noopener">게시판 열기 ↗</a>
+            <button class="btn btn-sm" type="button" data-refresh>🔄 새로고침</button>
+          </div>
+        </div>
+        <section class="card">
+          <div class="card-head"><h3>💬 문의 목록</h3></div>
+          <div class="card-body">
+            <div class="toolbar">
+              <div class="chips" id="qnaFilter">
+                <button type="button" class="chip active" data-status="unanswered">답변 대기</button>
+                <button type="button" class="chip" data-status="all">전체</button>
+              </div>
+            </div>
+            <div class="list" id="qnaList"></div>
+            <div class="hint">블로그 댓글·메일로 온 문의는 고객 화면의 [응대·메모]에 적어 두면 한곳에 모입니다.</div>
           </div>
         </section>
       </section>
@@ -783,7 +808,7 @@
   const STAT_NAMES = { processed: '처리', liked: '공감', likes: '공감', commented: '댓글', comments: '댓글', replied: '대댓글', skipped: '건너뜀', failed: '실패', errors: '오류', requested: '이웃 신청', neighborRequested: '이웃 신청', accepted: '수락', rejected: '거절', canceled: '취소', removed: '정리', visited: '방문', total: '전체', cycle: '회차' };
   const RUNTIME_NAMES = { running: '실행 중', starting: '켜는 중', stopped: '꺼짐', error: '오류' };
   const CHANNEL_NAMES = { trial: '가입 시 지급', admin: '관리자', kmong: '크몽', toss: '토스 결제', direct: '직접', manual: '수동' };
-  const PAGE_NAMES = { home: '홈', about: '기능 소개', qna: '질문 게시판', contact: '1:1 문의' };
+  const PAGE_NAMES = { home: '홈', about: '기능 소개', qna: '문의 게시판', contact: '1:1 문의' };
   const SEEN_NAMES = { pricing: '💳 가격', download: '⬇️ 설치 안내', faq: '❓ FAQ', video: '🎬 영상', 'punch-hero': '첫 화면', hero: '첫 화면', chores: '하는 일', numbers: '숫자', why: '왜 필요한지', 'report-home': '활동 보고서', report: '활동 보고서', final: '마지막 안내', autopilot: '자율 주행', comments: '댓글', engagement: '소통', replies: '대댓글', neighbors: '이웃', keyword: '키워드', safety: '안전', ai: 'AI' };
   const KEY_SECTIONS = new Set(['pricing', 'download', 'video']);
   const NOTE_KINDS = { note: ['📝', '메모'], mail: ['✉️', '메일 보냄'], reply: ['💬', '답글 달았음'], call: ['📞', '연락함'], credit: ['🎁', '서비스 지급'] };
@@ -864,6 +889,7 @@
     if (state.view === 'customers') jobs.push(loadUsers({ quiet }));
     else loadUsers({ quiet: true }).catch(() => {});
     if (state.view === 'visitors') jobs.push(loadVisitors());
+    if (state.view === 'qna') jobs.push(loadQna());
     if (state.view === 'vouchers') jobs.push(loadVouchers());
     if (state.view === 'customer' && !quiet) jobs.push(reloadCustomer());
     try { await Promise.all(jobs); if (!quiet) toast('🔄 새로 불러왔습니다.'); }
@@ -872,8 +898,8 @@
   document.addEventListener('click', (e) => { if (e.target.closest('[data-refresh]')) refreshView(); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autoTimer) refreshView({ quiet: true }); });
 
-  // ---- Routing: #home, #customers[/filter], #customer/<id>[/tab], #visitors[/filter], #vouchers ----
-  const VIEWS = new Set(['home', 'customers', 'customer', 'visitors', 'vouchers']);
+  // ---- Routing: #home, #customers[/filter], #customer/<id>[/tab], #visitors[/filter], #qna, #vouchers ----
+  const VIEWS = new Set(['home', 'customers', 'customer', 'visitors', 'qna', 'vouchers']);
   function route() {
     const [rawView = 'home', a = '', b = ''] = decodeURIComponent(location.hash.replace(/^#/, '')).split('/');
     const view = VIEWS.has(rawView) ? rawView : 'home';
@@ -886,6 +912,7 @@
     if (view === 'customers') { if (a) setCustFilter(a); renderUsers(); loadUsers({ quiet: true }).catch(() => {}); }
     if (view === 'customer') showCustomer(Number(a), b || 'overview');
     if (view === 'visitors') { if (a) state.peopleFilter = a; loadVisitors().catch((err) => toast(err.message, true)); }
+    if (view === 'qna') loadQna();
     if (view === 'vouchers') loadVouchers();
   }
   window.addEventListener('hashchange', route);
@@ -920,6 +947,8 @@
     const custIds = new Set(todo.filter((t) => t.target?.view === 'customer').map((t) => t.target.id));
     $('#navHome').textContent = todo.length ? String(Math.min(99, todo.length)) : '';
     $('#navCustomers').textContent = custIds.size ? String(custIds.size) : '';
+    const qnaWaiting = (h.kpi.unansweredQuestions || 0) + (h.kpi.waitingInquiries || 0);
+    $('#navQna').textContent = qnaWaiting ? String(qnaWaiting) : '';
     $('#navVisitors').textContent = h.kpi.visitorsToday ? String(h.kpi.visitorsToday) : '';
     document.title = `${todo.length ? `(${todo.length}) ` : ''}이웃메이트 판매자 관리`;
   }
@@ -1360,7 +1389,7 @@
     const d = detail;
     const items = [
       ...d.notes.map((x) => ({ at: x.at, icon: NOTE_KINDS[x.kind]?.[0] || '📝', title: NOTE_KINDS[x.kind]?.[1] || '메모', body: x.body, noteId: x.id })),
-      ...d.questions.map((q) => ({ at: q.createdAt, icon: '💬', title: `게시판 질문${q.answer == null ? ' · 답변 대기' : ' · 답변함'} (${q.nickname}, 같은 IP)`, body: `${q.title}\n${q.body}${q.answer ? `\n\n↳ 답변: ${q.answer}` : ''}`, qna: true })),
+      ...d.questions.map((q) => ({ at: q.createdAt, icon: '💬', title: `게시판 문의${q.answer == null ? ' · 답변 대기' : ' · 답변함'} (${q.nickname}, 같은 IP)`, body: `${q.title}\n${q.body}${q.answer ? `\n\n↳ 답변: ${q.answer}` : ''}`, qna: true })),
       ...d.audit.filter((a) => /^ADMIN_/.test(a.action)).map((a) => ({ at: a.at, icon: a.action === 'ADMIN_EXTEND' ? '🎁' : '🖥️', title: a.action === 'ADMIN_EXTEND' ? `기간 연장 ${String(a.details || '').replace('d', '일')}` : (AUDIT_NAMES[a.action] || a.action), body: '' }))
     ].sort((x, y) => new Date(y.at) - new Date(x.at));
     const kinds = Object.entries(NOTE_KINDS).filter(([k]) => k !== 'credit');
@@ -1371,7 +1400,7 @@
       </div>`) + sec(`🗂️ 이 고객과 있었던 일 (${n(items.length)})`, items.length ? items.map((x) => `<div class="care-item">
         <div class="care-ico">${esc(x.icon)}</div>
         <div class="care-text"><b>${esc(x.title)}</b> <small>${esc(fmt(x.at))}</small>${x.body ? `<p>${esc(x.body)}</p>` : ''}</div>
-        <div>${x.noteId ? `<button class="btn btn-xs btn-ghost" type="button" data-note-delete="${x.noteId}">삭제</button>` : ''}</div>
+        <div>${x.noteId ? `<button class="btn btn-xs btn-ghost" type="button" data-note-delete="${x.noteId}">삭제</button>` : x.qna ? '<a class="btn btn-xs" href="#qna">게시판으로 →</a>' : ''}</div>
       </div>`).join('') : '<div class="vempty">아직 기록이 없습니다. 메일·답글·서비스 지급 같은 응대를 적어 두세요.</div>');
   }
 
@@ -1745,6 +1774,64 @@
       await api('api/admin/visits/owner', { method: 'POST', body: { visitor: btn.dataset.logowner, mine: btn.dataset.mine === '1' } });
       toast(btn.dataset.mine === '1' ? '🙋 내 방문으로 표시했습니다. 숫자에서 빠집니다.' : '방문자 숫자에 다시 넣었습니다.');
       await loadVisitors();
+    } catch (err) { toast(err.message, true); btn.disabled = false; }
+  });
+
+  // ---- Q&A ----
+  let qnaStatus = 'unanswered';
+  $('#qnaFilter').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    qnaStatus = chip.dataset.status;
+    $$('#qnaFilter .chip').forEach((c) => c.classList.toggle('active', c === chip));
+    loadQna();
+  });
+  async function loadQna() {
+    const list = $('#qnaList');
+    try {
+      const { questions } = await api(`api/admin/qna?status=${qnaStatus}`);
+      if (!questions.length) {
+        list.innerHTML = `<div class="empty"><strong>${qnaStatus === 'unanswered' ? '답변을 기다리는 질문이 없습니다 🎉' : '아직 문의가 없습니다'}</strong>홈페이지 문의 게시판에 올라온 글이 여기에 나옵니다.</div>`;
+        return;
+      }
+      list.innerHTML = questions.map((q) => {
+        const pending = q.answer == null;
+        return `<div class="q${pending ? ' pending' : ''}" data-q="${q.id}">
+          <div class="row-main">
+            <div class="row-title">${esc(q.title)}${q.isPrivate ? '<span class="badge gray">🔒 비밀글</span>' : ''}${pending ? '<span class="badge warn">답변 대기</span>' : '<span class="badge ok">답변 완료</span>'}</div>
+            <div class="row-meta"><span>${esc(q.nickname)} · ${esc(fmt(q.createdAt))}${q.answeredAt ? ` · 답변 ${esc(fmt(q.answeredAt))}` : ''}</span>
+              ${q.customer ? `<a class="who" href="#customer/${q.customer.id}">👤 ${esc(q.customer.email)} (같은 IP) →</a>` : '<span class="who none">가입한 고객과 연결 안 됨</span>'}</div>
+          </div>
+          <div class="q-body">${esc(q.body)}</div>
+          <textarea class="textarea" placeholder="답변을 입력하세요. 저장하면 게시판에 바로 보입니다." aria-label="답변" style="min-height:84px">${esc(q.answer || '')}</textarea>
+          <div class="q-actions">
+            <button class="btn btn-sm btn-danger" type="button" data-qdelete>삭제</button>
+            <button class="btn btn-sm btn-green" type="button" data-qsave>${pending ? '답변 등록' : '답변 수정'}</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = `<div class="empty"><strong>질문을 불러오지 못했습니다</strong>${esc(err.message)}</div>`;
+    }
+  }
+  $('#qnaList').addEventListener('click', async (e) => {
+    const card = e.target.closest('[data-q]');
+    const save = e.target.closest('[data-qsave]');
+    const del = e.target.closest('[data-qdelete]');
+    if (!card || (!save && !del)) return;
+    if (del && !confirmFirst(del, '정말 삭제')) return;
+    const answer = card.querySelector('textarea').value.trim();
+    if (save && !answer) return toast('답변을 입력해주세요.', true);
+    const btn = save || del;
+    btn.disabled = true;
+    try {
+      if (save) {
+        await api(`api/admin/qna/${card.dataset.q}/answer`, { method: 'POST', body: { answer } });
+        toast('💬 답변을 등록했습니다. 게시판에 바로 보입니다.');
+      } else {
+        await api(`api/admin/qna/${card.dataset.q}/delete`, { method: 'POST' });
+        toast('질문을 삭제했습니다.');
+      }
+      loadQna(); loadHome().catch(() => {});
     } catch (err) { toast(err.message, true); btn.disabled = false; }
   });
 
