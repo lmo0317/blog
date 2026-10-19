@@ -11,7 +11,6 @@ import path from 'node:path';
 export const AUTOPILOT_STEPS = Object.freeze([
   { id: 'acceptNeighbors', label: '이웃 관리 (신청 수락·회수)', icon: '🤝' },
   { id: 'replies', label: '내 글 새 댓글에 대댓글', icon: '💬' },
-  { id: 'returnVisit', label: '댓글 단 이웃 답방', icon: '🏃' },
   { id: 'engage', label: '서이추 (키워드 글 소통)', icon: '👥' },
   { id: 'feed', label: '이웃 새글 댓글', icon: '📰' }
 ]);
@@ -30,9 +29,6 @@ export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
   doComment: true,
   doNeighbor: true,
   allowGradeB: false,
-  returnVisitPerCycle: 10,
-  returnVisitLike: true,
-  returnVisitComment: true,
   repliesPerCycle: 10,
   replyNeighbor: true,
   feedLike: true,
@@ -41,7 +37,7 @@ export const DEFAULT_AUTOPILOT_SETTINGS = Object.freeze({
   cancelSentDays: 14,
   pruneDormant: false,
   pruneDormantDays: 60,
-  steps: { acceptNeighbors: true, replies: true, returnVisit: true, engage: true, feed: true }
+  steps: { acceptNeighbors: true, replies: true, engage: true, feed: true }
 });
 
 const KEYWORD_REUSE_DAYS = 7;
@@ -58,6 +54,9 @@ const clampInt = (value, min, max, fallback) => {
 
 export function normalizeAutopilotSettings(input = {}, base = DEFAULT_AUTOPILOT_SETTINGS) {
   const merged = { ...base, ...input, steps: { ...base.steps, ...(input.steps || {}) } };
+  // The 답방 step was removed (2026-10-20); the neighbor-feed step now visits commenters' new posts first,
+  // so a save that had 답방 on keeps doing that through the feed step.
+  if (input.steps?.returnVisit === true) merged.steps.feed = true;
   const list = (value, max) => [...new Set(String(value || '').split(/[,，\n]+/).map((item) => item.trim()).filter(Boolean))].slice(0, max).join(', ');
   // Older saves shared one set of 공감/댓글/서이추 switches across steps; carry them over.
   const flag = (key, legacyKey) => {
@@ -77,9 +76,6 @@ export function normalizeAutopilotSettings(input = {}, base = DEFAULT_AUTOPILOT_
     doComment: merged.doComment !== false,
     doNeighbor: merged.doNeighbor !== false,
     allowGradeB: merged.allowGradeB === true,
-    returnVisitPerCycle: clampInt(merged.returnVisitPerCycle, 1, 30, 10),
-    returnVisitLike: flag('returnVisitLike', 'doLike'),
-    returnVisitComment: flag('returnVisitComment', 'doComment'),
     repliesPerCycle: clampInt(merged.repliesPerCycle, 1, 30, 10),
     replyNeighbor: flag('replyNeighbor', 'doNeighbor'),
     feedLike: flag('feedLike', 'doLike'),

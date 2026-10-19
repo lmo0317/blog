@@ -52,7 +52,6 @@ function makeManager(overrides = {}) {
   const steps = {
     acceptNeighbors: async () => { calls.push('acceptNeighbors'); return { summary: '수락 1건' }; },
     replies: async () => { calls.push('replies'); return { skipped: true, summary: '새 댓글 없음' }; },
-    returnVisit: async () => { calls.push('returnVisit'); return { summary: '답방 2건' }; },
     findKeywords: async (seed) => { calls.push(`find:${seed}`); return { items: [{ keyword: `${seed} 추천`, grade: 'S' }] }; },
     engage: async ({ keyword }) => { calls.push(`engage:${keyword}`); return { summary: '공감 3' }; },
     feed: async () => { calls.push('feed'); return { summary: '공감 2' }; },
@@ -79,8 +78,8 @@ test('a cycle runs every enabled step in order, rotates topics and then rests fo
   await manager.loopPromise;
 
   assert.deepEqual(calls, [
-    'acceptNeighbors', 'replies', 'returnVisit', 'find:캠핑', 'engage:캠핑 추천', 'feed',
-    'acceptNeighbors', 'replies', 'returnVisit', 'find:여행', 'engage:여행 추천', 'feed'
+    'acceptNeighbors', 'replies', 'find:캠핑', 'engage:캠핑 추천', 'feed',
+    'acceptNeighbors', 'replies', 'find:여행', 'engage:여행 추천', 'feed'
   ]);
   assert.equal(manager.cycle, 2);
   assert.equal(waits[0], 60 * 60 * 1000);
@@ -128,7 +127,7 @@ test('autopilot waits outside active hours, while disconnected, and while a manu
 
   // Validation catches a missing topic and an empty step list.
   assert.throws(() => manager.start({ seedTopics: '', steps: { engage: true } }), /주제/);
-  assert.throws(() => manager.start({ seedTopics: '캠핑', steps: { acceptNeighbors: false, replies: false, returnVisit: false, engage: false, feed: false } }), /하나 이상/);
+  assert.throws(() => manager.start({ seedTopics: '캠핑', steps: { acceptNeighbors: false, replies: false, engage: false, feed: false } }), /하나 이상/);
   connected = true;
   busy = '';
   await rm(statePath, { force: true });
@@ -174,15 +173,6 @@ test('neighbor management settings default to AI screening and a 14-day sent-req
   assert.equal(normalizeAutopilotSettings({ cancelSentDays: 99 }).cancelSentDays, 14);
 });
 
-test('return visits are their own step: they run with replies switched off', async () => {
-  const { manager, calls, statePath } = makeManager();
-  manager.start({ seedTopics: '캠핑', returnVisitPerCycle: 5, steps: { acceptNeighbors: false, replies: false, engage: false, feed: false, returnVisit: true } });
-  await manager.loopPromise;
-  assert.deepEqual(calls, ['returnVisit']);
-  assert.equal(manager.settings.returnVisitPerCycle, 5);
-  await rm(statePath, { force: true });
-});
-
 test('dormant-neighbor pruning in autopilot is off by default and only accepts 60/90/180 days', () => {
   const defaults = normalizeAutopilotSettings({});
   assert.equal(defaults.pruneDormant, false);
@@ -211,7 +201,7 @@ test('서이추 can rotate fixed keywords instead of searching golden keywords',
   const calls = [];
   const manager = new AutopilotManager({
     steps: {
-      acceptNeighbors: async () => ({}), replies: async () => ({}), returnVisit: async () => ({}), feed: async () => ({}),
+      acceptNeighbors: async () => ({}), replies: async () => ({}), feed: async () => ({}),
       findKeywords: async (seed) => { calls.push(`find:${seed}`); return { items: [] }; },
       engage: async ({ keyword }) => { calls.push(`engage:${keyword}`); return { summary: '서이추 2' }; }
     },
@@ -230,7 +220,6 @@ test('서이추 can rotate fixed keywords instead of searching golden keywords',
 test('each step keeps its own 공감·댓글·서이추 options, carried over from older saves', () => {
   const old = normalizeAutopilotSettings({ doLike: false, doComment: true, doNeighbor: false });
   assert.equal(old.feedLike, false);
-  assert.equal(old.returnVisitLike, false);
   assert.equal(old.replyNeighbor, false);
   const split = normalizeAutopilotSettings({ doLike: false, feedLike: true, repliesPerCycle: 99 });
   assert.equal(split.feedLike, true);
@@ -244,7 +233,7 @@ test('halting for app shutdown starts no new cycle and keeps autopilot switched 
   const manager = new AutopilotManager({
     steps: {
       acceptNeighbors: async () => { calls.push('accept'); return {}; },
-      replies: async () => ({}), returnVisit: async () => ({}), feed: async () => ({}),
+      replies: async () => ({}), feed: async () => ({}),
       findKeywords: async () => ({ items: [{ keyword: '캠핑 추천', grade: 'S' }] }),
       engage: async () => ({ summary: 'ok' })
     },
@@ -259,4 +248,10 @@ test('halting for app shutdown starts no new cycle and keeps autopilot switched 
   assert.equal(calls.length, 1);
   assert.equal(manager.cycle, 1);
   assert.equal(manager.enabled, true);
+});
+
+test('a save with the removed 답방 step on keeps working through the neighbor-feed step', () => {
+  const s = normalizeAutopilotSettings({ steps: { acceptNeighbors: false, replies: false, returnVisit: true, engage: false, feed: false } });
+  assert.equal(s.steps.feed, true);
+  assert.equal('returnVisit' in s.steps, false);
 });

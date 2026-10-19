@@ -1612,47 +1612,6 @@ const autopilot = new AutopilotManager({
       const output = await processMyBlogComments(fresh, { requestNeighbor: settings.replyNeighbor });
       return { summary: `대댓글 ${output.completed}건`, protectionTriggered: output.protectionTriggered };
     },
-    // Independent of replies: visits the newest post of people who commented on my posts.
-    returnVisit: async (settings) => {
-      if (!settings.returnVisitLike && !settings.returnVisitComment) return { skipped: true, summary: '답방의 공감·댓글이 모두 꺼져 있습니다.' };
-      const scan = await scanMyCommentsCached();
-      const seen = new Set();
-      const commenters = [];
-      for (const comment of scan.comments || []) {
-        const id = String(comment.authorId || '').trim();
-        if (!id || id.toLowerCase() === String(scan.myBlogId || '').toLowerCase() || seen.has(id.toLowerCase())) continue;
-        seen.add(id.toLowerCase());
-        commenters.push({ blogId: id, name: comment.authorName || id });
-      }
-      if (!commenters.length) return { skipped: true, summary: '답방할 댓글 이웃이 없습니다.' };
-
-      let visited = 0;
-      let protectionTriggered = false;
-      let limitMessage = '';
-      for (const person of commenters) {
-        if (!autopilot.enabled || visited >= settings.returnVisitPerCycle) break;
-        const result = await returnVisitCommenter({
-          blogId: person.blogId,
-          bloggerName: person.name,
-          browserSession,
-          embeddedLlama,
-          historyStore: engagementHistoryStore,
-          getTodayUsage: getCombinedTodayUsage,
-          doLike: settings.returnVisitLike,
-          doComment: settings.returnVisitComment,
-          assessActivity
-        }).catch((error) => ({ status: 'failed', message: error.message }));
-        if (result.protectionTriggered) { protectionTriggered = true; break; }
-        if (/일일 한도/.test(result.message || '')) { limitMessage = result.message; break; }
-        if (result.status === 'visited') {
-          visited += 1;
-          autopilot.log(`🏃 @${person.blogId} 님 최신 글에 답방했습니다.`, 'success');
-          await pause(20000 + Math.floor(Math.random() * 20000));
-        }
-      }
-      if (!visited) return { skipped: true, summary: limitMessage || '새 글이 올라온 댓글 이웃이 없어 답방할 곳이 없습니다.', protectionTriggered };
-      return { summary: `답방 ${visited}건${limitMessage ? ' (일일 한도 도달)' : ''}`, protectionTriggered };
-    },
     findKeywords: (seed) => discoverGoldenKeywords({ keyword: seed, limit: 15 }),
     engage: async ({ keyword, settings }) => {
       engagementManager.start({
@@ -1671,7 +1630,9 @@ const autopilot = new AutopilotManager({
     },
     feed: async (settings) => {
       if (!settings.feedPerCycle || (!settings.feedLike && !settings.feedComment)) return { skipped: true, summary: '이웃 새글의 공감·댓글이 모두 꺼져 있습니다.' };
-      await feedManager.start({ targetCount: settings.feedPerCycle, doLike: settings.feedLike, doComment: settings.feedComment, minDelaySec: 25, maxDelaySec: 45 });
+      // People who commented on my posts come first (this replaced the separate 답방 step, 2026-10-20).
+      const commenters = await scanMyCommentsCached().then((scan) => (scan.comments || []).map((c) => c.authorId).filter(Boolean)).catch(() => []);
+      await feedManager.start({ targetCount: settings.feedPerCycle, doLike: settings.feedLike, doComment: settings.feedComment, minDelaySec: 25, maxDelaySec: 45, priorityBlogIds: commenters });
       await waitForJob(() => feedManager.state);
       const stats = feedManager.getState().stats || {};
       if (stats.dailyLimitReached && !stats.successCount) return { skipped: true, summary: '오늘 공감·댓글 한도에 도달했습니다.' };

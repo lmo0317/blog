@@ -369,3 +369,20 @@ test('an empty feed because the Naver login expired says so and disconnects', as
   assert.ok(manager.logs.some((l) => /로그인이 풀려/.test(l.message || l.text || String(l))));
   await rm(path.join(process.cwd(), '.data', 'test-feed-expired.json'), { force: true });
 });
+
+test('neighbors who commented on my posts get their new post visited first', async () => {
+  const store = new FeedEngagementHistoryStore(path.join(process.cwd(), '.data', 'test-feed-priority.json'));
+  const posts = ['a', 'b', 'c'].map((id, i) => ({ blogId: id, logNo: String(1000 + i), author: id, title: `글 ${id}`, url: `https://m.blog.naver.com/${id}/${1000 + i}` }));
+  const order = [];
+  const session = {
+    connected: true,
+    context: { async newPage() { return { async goto() {}, async waitForTimeout() {}, async evaluate(fn) { return typeof fn === 'function' ? posts : []; }, async close() {}, isClosed() { return false; } }; } },
+    inspectPostForEngagement: async () => ({ title: 't', snippet: 's', images: [], alreadyCommented: false, canComment: true }),
+    likeAndCommentPost: async ({ postUrl }) => { order.push(postUrl.split('/')[3]); return { liked: true, commented: false, status: 'success', message: '' }; }
+  };
+  const manager = new FeedEngagementManager({ browserSession: session, embeddedLlama: null, historyStore: store });
+  await manager.start({ targetCount: 3, doLike: true, doComment: false, minDelaySec: 0, maxDelaySec: 0, priorityBlogIds: ['C'] });
+  for (let i = 0; i < 100 && manager.state === 'running'; i++) await new Promise((r) => setTimeout(r, 20));
+  assert.equal(order[0], 'c');
+  await rm(path.join(process.cwd(), '.data', 'test-feed-priority.json'), { force: true });
+});

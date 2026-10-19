@@ -548,7 +548,8 @@ export class FeedEngagementManager {
     selectedPosts = null,
     commentMode = 'ai',
     commentPhrases = '',
-    secretComment = false
+    secretComment = false,
+    priorityBlogIds = []
   } = {}) {
     if (this.state === 'running') {
       throw new Error('이미 이웃 새글 자동 소통 작업이 실행 중입니다.');
@@ -559,6 +560,7 @@ export class FeedEngagementManager {
     }
 
     this.selectedPosts = Array.isArray(selectedPosts) && selectedPosts.length > 0 ? selectedPosts : null;
+    this.priorityBlogIds = new Set((Array.isArray(priorityBlogIds) ? priorityBlogIds : []).map((id) => String(id).toLowerCase()).filter(Boolean));
     const defaultTarget = this.selectedPosts ? this.selectedPosts.length : 10;
     const boundTarget = Math.max(1, Math.min(Number(targetCount) || defaultTarget, 50));
 
@@ -632,7 +634,10 @@ export class FeedEngagementManager {
         feedPage = null;
 
         this.stats.totalFound = feedPosts.length;
-        this.log(`📰 총 ${feedPosts.length}개의 이웃 새글을 발견했습니다. 순차적으로 소통을 시작합니다.`, 'info');
+        // Neighbors who commented on my posts first: their new post is where a visit back means the most.
+        const first = feedPosts.filter((post) => this.priorityBlogIds?.has(String(post.blogId).toLowerCase()));
+        if (first.length) feedPosts = [...first, ...feedPosts.filter((post) => !first.includes(post))];
+        this.log(`📰 총 ${feedPosts.length}개의 이웃 새글을 발견했습니다${first.length ? ` (내 글에 댓글 남긴 이웃 글 ${first.length}개 먼저)` : ''}. 순차적으로 소통을 시작합니다.`, 'info');
       }
 
       // An expired Naver login shows an empty feed; 2026-10-19 a customer saw only "새글이 없습니다" until they

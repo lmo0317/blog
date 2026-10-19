@@ -252,7 +252,7 @@
                 <div class="ap-step-head">
                   <label class="ap-switch" title="켜기/끄기"><input type="checkbox" id="apStepFeed" checked aria-label="이웃 새글 댓글 켜기"><span class="ap-switch-track" aria-hidden="true"></span></label>
                   <button type="button" class="ap-step-text" data-panel="apFeedPanel">
-                    <strong>📰 이웃 새글에 댓글</strong>
+                    <strong>📰 이웃 새글에 공감·댓글</strong>
                     <span class="ap-step-summary" id="apSumFeed"></span>
                   </button>
                   <button type="button" class="ap-step-more" data-panel="apFeedPanel" aria-expanded="false" aria-controls="apFeedPanel">설정<i aria-hidden="true">▾</i></button>
@@ -261,7 +261,7 @@
                   <div class="ap-panel-section">
                     <span class="ap-panel-label">세팅</span>
                     <div class="form-group">
-                      <label><strong>회차당 이웃 새글</strong></label>
+                      <label><strong>회차당 이웃 새글</strong> <small>(내 글에 댓글 남긴 이웃의 글부터)</small></label>
                       <div class="option-chip-row" id="apFeedChips" data-target-input="apFeedPerCycle">
                         <button type="button" class="chip-btn" data-value="5">5건</button>
                         <button type="button" class="chip-btn active" data-value="10">10건</button>
@@ -276,38 +276,6 @@
                     <div class="ap-inline-toggles">
                       <label class="ap-mini-toggle"><input type="checkbox" id="apFeedLike" checked><span>❤️ 공감</span></label>
                       <label class="ap-mini-toggle"><input type="checkbox" id="apFeedComment" checked><span>💬 AI 댓글</span></label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="ap-step">
-                <div class="ap-step-head">
-                  <label class="ap-switch" title="켜기/끄기"><input type="checkbox" id="apStepReturnVisit" checked aria-label="답방 켜기"><span class="ap-switch-track" aria-hidden="true"></span></label>
-                  <button type="button" class="ap-step-text" data-panel="apReturnVisitPanel">
-                    <strong>🏃 댓글 단 이웃 최신글에 공감·댓글</strong>
-                    <span class="ap-step-summary" id="apSumReturnVisit"></span>
-                  </button>
-                  <button type="button" class="ap-step-more" data-panel="apReturnVisitPanel" aria-expanded="false" aria-controls="apReturnVisitPanel">설정<i aria-hidden="true">▾</i></button>
-                </div>
-                <div class="ap-sub-panel hidden" id="apReturnVisitPanel">
-                  <div class="ap-panel-section">
-                    <span class="ap-panel-label">세팅</span>
-                    <div class="form-group">
-                      <label><strong>회차당 찾아갈 이웃</strong> <small>(한 명당 20~40초 쉬어감)</small></label>
-                      <div class="option-chip-row" id="apReturnVisitChips" data-target-input="apReturnVisitPerCycle">
-                        <button type="button" class="chip-btn" data-value="5">5명</button>
-                        <button type="button" class="chip-btn active" data-value="10">10명</button>
-                        <button type="button" class="chip-btn" data-value="20">20명</button>
-                      </div>
-                      <input type="hidden" id="apReturnVisitPerCycle" value="10">
-                    </div>
-                  </div>
-                  <div class="ap-panel-section">
-                    <span class="ap-panel-label">옵션</span>
-                    <div class="ap-inline-toggles">
-                      <label class="ap-mini-toggle"><input type="checkbox" id="apReturnVisitLike" checked><span>❤️ 공감</span></label>
-                      <label class="ap-mini-toggle"><input type="checkbox" id="apReturnVisitComment" checked><span>💬 AI 댓글</span></label>
                     </div>
                   </div>
                 </div>
@@ -2956,6 +2924,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=71"></script>
+  <script type="module" src="app.js?v=72"></script>
 </body>
 </html>

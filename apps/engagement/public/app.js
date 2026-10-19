@@ -5435,7 +5435,6 @@ initGrowthOptions();
 const AP_STEP_INPUTS = {
   acceptNeighbors: '#apStepAcceptNeighbors',
   replies: '#apStepReplies',
-  returnVisit: '#apStepReturnVisit',
   engage: '#apStepEngage',
   feed: '#apStepFeed'
 };
@@ -5461,8 +5460,6 @@ function readAutopilotSettings() {
     replyNeighbor: $('#apReplyNeighbor')?.checked !== false,
     feedLike: $('#apFeedLike')?.checked !== false,
     feedComment: $('#apFeedComment')?.checked !== false,
-    returnVisitLike: $('#apReturnVisitLike')?.checked !== false,
-    returnVisitComment: $('#apReturnVisitComment')?.checked !== false,
     postsPerCycle: Number($('#apPostsPerCycle')?.value) || 20,
     feedPerCycle: Number($('#apFeedPerCycle')?.value) || 10,
     intervalMinutes: Number($('#apIntervalMinutes')?.value) || 90,
@@ -5472,7 +5469,6 @@ function readAutopilotSettings() {
     doComment: $('#apDoComment')?.checked !== false,
     doNeighbor: $('#apDoNeighbor')?.checked !== false,
     allowGradeB: $('#apAllowGradeB')?.checked === true,
-    returnVisitPerCycle: Number($('#apReturnVisitPerCycle')?.value) || 10,
     acceptMode: $('#apAcceptMode')?.value || 'screen',
     cancelSentDays: Number($('#apCancelSentDays')?.value ?? 14),
     pruneDormant: $('#apPruneDormant')?.checked === true,
@@ -5492,8 +5488,6 @@ function applyAutopilotSettings(settings) {
   setChecked('#apReplyNeighbor', settings.replyNeighbor !== false);
   setChecked('#apFeedLike', settings.feedLike !== false);
   setChecked('#apFeedComment', settings.feedComment !== false);
-  setChecked('#apReturnVisitLike', settings.returnVisitLike !== false);
-  setChecked('#apReturnVisitComment', settings.returnVisitComment !== false);
   setOptionChipValue('apPostsChips', String(settings.postsPerCycle));
   setOptionChipValue('apFeedChips', String(settings.feedPerCycle));
   setOptionChipValue('apIntervalChips', String(settings.intervalMinutes));
@@ -5507,7 +5501,6 @@ function applyAutopilotSettings(settings) {
   setChecked('#apDoComment', settings.doComment);
   setChecked('#apDoNeighbor', settings.doNeighbor);
   setChecked('#apAllowGradeB', settings.allowGradeB);
-  setOptionChipValue('apReturnVisitChips', String(settings.returnVisitPerCycle ?? 10));
   Object.entries(AP_STEP_INPUTS).forEach(([id, selector]) => setChecked(selector, settings.steps?.[id] !== false));
   syncAutopilotSubPanels();
   apApplyingSettings = false;
@@ -5517,7 +5510,6 @@ function applyAutopilotSettings(settings) {
 const AP_STEP_PANELS = [
   ['#apStepAcceptNeighbors', 'apNeighborPanel'],
   ['#apStepReplies', 'apRepliesPanel'],
-  ['#apStepReturnVisit', 'apReturnVisitPanel'],
   ['#apStepEngage', 'apEngagePanel'],
   ['#apStepFeed', 'apFeedPanel']
 ];
@@ -5542,12 +5534,11 @@ function autopilotStepSummaries() {
     apSumEngage: source.startsWith('⚠️') ? source : `${source} · 회차당 ${s.postsPerCycle}개 · ${join([s.doNeighbor && '서이추', s.doLike && '공감', s.doComment && '댓글'], '작업 없음')}`,
     apSumReplies: `회차당 ${s.repliesPerCycle}건${s.replyNeighbor ? ' · 댓글 단 이웃 서이추' : ''}`,
     apSumFeed: `회차당 ${s.feedPerCycle}건 · ${join([s.feedLike && '공감', s.feedComment && '댓글'], '⚠️ 공감·댓글이 모두 꺼져 있음')}`,
-    apSumReturnVisit: `회차당 ${s.returnVisitPerCycle}명 · ${join([s.returnVisitLike && '공감', s.returnVisitComment && '댓글'], '⚠️ 공감·댓글이 모두 꺼져 있음')}`
   };
 }
 
 function syncAutopilotSubPanels() {
-  const stepInputs = { apSumNeighbors: '#apStepAcceptNeighbors', apSumReplies: '#apStepReplies', apSumReturnVisit: '#apStepReturnVisit', apSumEngage: '#apStepEngage', apSumFeed: '#apStepFeed' };
+  const stepInputs = { apSumNeighbors: '#apStepAcceptNeighbors', apSumReplies: '#apStepReplies', apSumEngage: '#apStepEngage', apSumFeed: '#apStepFeed' };
   Object.entries(autopilotStepSummaries()).forEach(([id, text]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -5577,7 +5568,7 @@ function syncAutopilotSubPanels() {
     if ($(el)) $(el).textContent = `${on} / ${selectors.length} 켜짐`;
   };
   countOn(['#apStepAcceptNeighbors', '#apStepEngage'], '#apGroupNeighborCount');
-  countOn(['#apStepReplies', '#apStepFeed', '#apStepReturnVisit'], '#apGroupCommentCount');
+  countOn(['#apStepReplies', '#apStepFeed'], '#apGroupCommentCount');
 }
 
 function scheduleAutopilotSave() {
