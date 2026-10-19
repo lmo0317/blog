@@ -1700,7 +1700,10 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
     let btnHtml = '';
     let statusPill = '';
 
-    if (isActive) {
+    if (m.allowed === false) {
+      btnHtml = '<button type="button" class="button small ghost model-select-btn" disabled>이 PC에서 사용 불가</button>';
+      statusPill = '<span class="pill" style="font-size:11px; background:#edf2f7; color:#718096;">사양 부족</span>';
+    } else if (isActive) {
       btnHtml = '<button type="button" class="button small model-select-btn" disabled style="background:#2b6cb0; color:#fff; font-weight:700;">사용 중</button>';
       statusPill = '<span class="pill pill-green" style="font-size:11px;">활성</span>';
     } else if (isInstalled) {
@@ -1718,7 +1721,7 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
     };
 
     return `
-      <div class="ai-model-card ${isRecommended ? 'recommended' : ''} ${isActive ? 'active-model' : ''}" data-model="${escapeHtml(m.id)}">
+      <div class="ai-model-card ${isRecommended ? 'recommended' : ''} ${isActive ? 'active-model' : ''} ${m.allowed === false ? 'model-blocked' : ''}" data-model="${escapeHtml(m.id)}"${m.allowed === false ? ' style="opacity:.6;"' : ''}>
         <div class="model-card-header">
           <div>
             <strong>${escapeHtml(m.name)}</strong>
@@ -1730,6 +1733,7 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
           </div>
         </div>
         <p class="model-card-desc">${escapeHtml(m.description || '')}</p>
+        ${m.allowed === false ? `<p class="model-card-desc" style="color:#c05621; font-weight:600;">⚠️ ${escapeHtml(m.blockedReason || '이 PC 사양으로는 사용할 수 없습니다.')}</p>` : ''}
         <div class="model-card-footer">
           <span class="model-vram-hint">최소 VRAM ${(m.minVramMb / 1024).toFixed(1)}GB</span>
           ${btnHtml}
@@ -1746,12 +1750,17 @@ function renderModelCards(models, activeId, recommendedId, containerSelector = '
       if (!modelId) return;
 
       if (action === 'select') {
+        // Loading a model takes minutes on a laptop CPU; one click is enough, so lock every model button meanwhile.
+        const buttons = [...container.querySelectorAll('.model-select-btn')];
+        buttons.forEach((b) => { b.disabled = true; });
+        btn.textContent = '모델 불러오는 중... (최대 몇 분)';
         try {
           await api('api/models/select', { method: 'POST', body: JSON.stringify({ modelId }) });
           toast(`활성 AI 모델이 '${modelId}'(으)로 전환되었습니다.`);
-          initAiHardwareAndModels();
         } catch (err) {
           toast(err.message, true);
+        } finally {
+          initAiHardwareAndModels();
         }
       } else if (action === 'download') {
         try {

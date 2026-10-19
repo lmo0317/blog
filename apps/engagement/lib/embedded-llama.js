@@ -272,14 +272,17 @@ export class EmbeddedLlamaServer extends EventEmitter {
         this.serverProcess = null;
       });
 
-      // Gemma 4 12B can take well over 30 seconds to load on first GPU start.
-      const isReady = await this.waitForReady(120000);
+      // Gemma 4 12B can take well over 30 seconds to load on first GPU start, and a laptop CPU with a slow
+      // disk took over two minutes for E2B. Wait as long as the process is alive, up to 10 minutes.
+      const isReady = await this.waitForReady(gpuLayers > 0 ? 180000 : 600000);
       if (isReady) {
         this.status = 'running';
         this.setSetup('ready', '로컬 AI가 준비되었습니다. 이제 AI 댓글을 작성할 수 있습니다.', 100);
         this.emit('ready', { port: this.port, modelId: this.currentModelId });
         return { status: 'running', port: this.port, modelId: this.currentModelId };
       } else {
+        // Do not leave a half-loaded server holding the port for the next attempt.
+        await this.stop();
         this.status = 'fallback';
         const message = '내장 llama-server 구동 대기시간을 초과했습니다.';
         this.setSetup('runtime_error', message, 100);
@@ -315,7 +318,10 @@ export class EmbeddedLlamaServer extends EventEmitter {
 
   async waitForReady(timeoutMs = 15000) {
     const start = Date.now();
+    const child = this.serverProcess;
     while (Date.now() - start < timeoutMs) {
+      // The process died (bad model file, out of memory): no use waiting out the timeout.
+      if (child && this.serverProcess !== child) return false;
       try {
         const res = await fetch(`http://${this.host}:${this.port}/health`, { signal: AbortSignal.timeout(1000) });
         if (res.ok) return true;
@@ -338,11 +344,23 @@ export class EmbeddedLlamaServer extends EventEmitter {
     this.emit('stopped');
   }
 
+  // Serialized: a second request while a model loads (the user clicking again) used to kill the loading
+  // process and start over, so a slow PC never finished. The same model already running or loading is reused.
   async restartWithModel(modelId) {
     if (this.remoteUrl) return this.start();
-    await this.stop();
-    await this.modelManager.setActiveModel(modelId);
-    return this.start();
+    const previous = this.restartChain || Promise.resolve();
+    const run = previous.catch(() => {}).then(async () => {
+      if (this.currentModelId === modelId && (this.status === 'running' || this.startPromise)) return this.start();
+      await this.stop();
+      await this.modelManager.setActiveModel(modelId);
+      return this.start();
+    });
+    this.restartChain = run;
+    try {
+      return await run;
+    } finally {
+      if (this.restartChain === run) this.restartChain = null;
+    }
   }
 
   /** The connected Claude/Gemini subscriptions (CloudLlmManager), used instead of or after the local model. */
@@ -465,7 +483,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
     let lastError = '';
     const result = await runHarness({
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-      complete: (messages, { temperature }) => this.chatCompletion(messages, { temperature, maxTokens: 140, timeoutMs: this.acceleration !== 'GPU' ? 45000 : 15000 })
+      complete: (messages, { temperature }) => this.chatCompletion(messages, { temperature, maxTokens: 140, timeoutMs: this.acceleration !== 'GPU' ? 90000 : 15000 })
         .catch((err) => { lastError = err.message; return ''; }),
       check: (text) => checkReply(text, { commentText: source, postTitle, postSnippet }, recent),
       onReject: (text, reasons, attempt) => this.addLog(`Reply rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
@@ -481,7 +499,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
     try {
       const text = (await this.chatCompletion(
         buildNeighborMessagePrompt({ bloggerName, title, contentSnippet, baseMessage }),
-        { temperature: 0.7, maxTokens: 110, timeoutMs: this.acceleration !== 'GPU' ? 45000 : 20000 }
+        { temperature: 0.7, maxTokens: 110, timeoutMs: this.acceleration !== 'GPU' ? 90000 : 20000 }
       )).trim();
       const checked = validateNeighborMessage(text, { title, contentSnippet });
       if (checked.ok) return checked.text;
@@ -502,7 +520,8 @@ export class EmbeddedLlamaServer extends EventEmitter {
     const commentContext = String(contentSnippet || '').slice(0, cpuMode ? 360 : 500);
     const recent = this.recentOutputsOf('comment', recentComments);
     const messages = buildBlogCommentMessages({ title, contentSnippet: commentContext, imageSummary, tone, recentComments: recent, guidance: styleGuidance(recent) });
-    const timeoutMs = cpuMode ? 60000 : 25000;
+    // A laptop CPU (i5-8265U) needed over 60 s for some comments; give it two minutes before giving up.
+    const timeoutMs = cpuMode ? 120000 : 25000;
     const maxTokens = cpuMode ? 90 : 150;
     this.lastCommentFailure = '';
     let failed = false;
@@ -569,7 +588,7 @@ JSON 출력 형식 예시 (오직 유효한 JSON만 반환):
       const content = (await this.chatCompletion([
         { role: 'system', content: 'You are a Korean blog analytics assistant. Output ONLY valid JSON matching the requested schema.' },
         { role: 'user', content: prompt }
-      ], { temperature: 0.3, maxTokens: 600, timeoutMs: 15000 })).trim();
+      ], { temperature: 0.3, maxTokens: 600, timeoutMs: this.acceleration !== 'GPU' ? 120000 : 15000 })).trim();
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return defaultResponse;
 

@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { COMMENT_PROMPT_VERSION } from './comment-prompt.js';
-import { composeComment, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
+import { composeComment, isCommentClosedByAuthor, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
 import { fetchLatestPostsFromRss, MAX_SEED_BLOGS, normalizeBlogIdList, resolveLatestPosts } from './blog-targets.js';
 
 export const TARGET_SOURCES = Object.freeze(['keyword', 'seed_commenters', 'id_list']);
@@ -607,7 +607,8 @@ export class EngagementAutomationManager extends EventEmitter {
           } else if (result.liked && !result.commented) {
             this.stats.likeSuccessCount += 1;
             const commentReason = result.commentReason || '작성자가 댓글 비허용 또는 작성 권한 없음';
-            this.log(`❌ [댓글 등록 실패] @${post.blogId} 공감(❤️) 완료 · 댓글 미등록 사유: ${commentReason}`, 'error');
+            if (isCommentClosedByAuthor(commentReason)) this.log(`⏭️ [댓글 건너뜀] @${post.blogId} 공감(❤️) 완료 · 작성자가 댓글을 막아 둔 글이라 댓글은 달지 않았습니다.`, 'info');
+            else this.log(`❌ [댓글 등록 실패] @${post.blogId} 공감(❤️) 완료 · 댓글 미등록 사유: ${commentReason}`, 'error');
           } else if (!result.liked && result.commented) {
             this.stats.commentSuccessCount += 1;
             const likeReason = result.likeReason || '작성자가 공감 비허용';

@@ -55,3 +55,9 @@ export async function composeComment({ mode = 'ai', phrases = [], recentComments
   }
   return { text: '', source: 'ai' };
 }
+
+// The blogger turned comments off (or closed the box): nothing went wrong, the post is just skipped for
+// comments. Logged as a skip, not an error, so the customer's error count shows real problems only.
+export function isCommentClosedByAuthor(reason = '') {
+  return /댓글 비허용|댓글창 닫힘|작성 권한 없음/.test(String(reason));
+}

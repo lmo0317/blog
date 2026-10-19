@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { composeComment, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
+import { composeComment, isCommentClosedByAuthor, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
 
 function koreaDateKey(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -731,7 +731,10 @@ export class FeedEngagementManager {
                   imageSummary,
                   tone: this.config.commentTone,
                   recentComments
-                }).catch(() => '')
+                }).catch((error) => {
+                  this.embeddedLlama.lastCommentFailure = `AI 댓글 생성 실패: ${error.message}`;
+                  return '';
+                })
                 : Promise.resolve(''))
             });
             generatedComment = composed.text;
@@ -784,7 +787,9 @@ export class FeedEngagementManager {
             this.currentPost.commented = result.commented;
 
             const actions = [result.liked ? '공감(❤️)' : '', result.commented ? 'AI 댓글(💬)' : ''].filter(Boolean).join(' 및 ');
-            if (allowed.comment && !result.commented) {
+            if (allowed.comment && !result.commented && isCommentClosedByAuthor(result.commentReason)) {
+              this.log(`⏭️ [댓글 건너뜀] ${postLabel} ${actions || '공감'} 완료 · 작성자가 댓글을 막아 둔 글이라 댓글은 달지 않았습니다.`, 'info');
+            } else if (allowed.comment && !result.commented) {
               this.log(`❌ [댓글 등록 실패] ${postLabel} ${actions || '공감'} 완료 · 댓글 미등록 사유: ${result.commentReason || '확인되지 않은 오류'}`, 'error');
             } else {
               this.log(`✅ [새글 소통 완료] ${postLabel} ${actions} 등록 완료! (누적 성공: ${this.stats.successCount}/${this.config.targetCount})`, 'success');

@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { readFile, rm, mkdir, writeFile } from 'node:fs/promises';
-import { detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG } from '../lib/hardware.js';
+import { BASE_MODEL_ID, detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG, modelBlockedReason } from '../lib/hardware.js';
+import { isCommentClosedByAuthor } from '../lib/comment-style.js';
 import { ModelManager } from '../lib/model-manager.js';
 import { EmbeddedLlamaServer, normalizeCommentText, validateBlogComment } from '../lib/embedded-llama.js';
 import { EngagementAutomationManager, ENGAGEMENT_LIMITS, buildNeighborMessage, selectPostActions } from '../lib/engagement-automation.js';
@@ -54,6 +55,67 @@ test('ModelManager handles local models catalog and active model selection', asy
   delete MODEL_CATALOG[trained.id];
   await rm(testModelsDir, { recursive: true, force: true }).catch(() => {});
   await rm(testConfigPath, { force: true }).catch(() => {});
+});
+
+test('a PC without a dedicated GPU may only use the smallest model; a GPU unlocks what its memory fits', () => {
+  const e4b = MODEL_CATALOG['gemma-4-e4b-it-qat-q4-0'];
+  const big = MODEL_CATALOG['gemma-4-12b-it-qat-q4-0'];
+  const laptop = { hasDedicatedGpu: false, isIntegrated: true, totalVramMb: 1024 }; // i5-8265U + UHD 620, the 2026-10-19 case
+  assert.equal(modelBlockedReason(MODEL_CATALOG[BASE_MODEL_ID], laptop), '');
+  assert.match(modelBlockedReason(e4b, laptop), /그래픽카드/);
+  assert.match(modelBlockedReason(big, laptop), /그래픽카드/);
+  assert.match(modelBlockedReason(e4b, {}), /그래픽카드/, 'unknown hardware gets the safe model only');
+  const gpu8 = { hasDedicatedGpu: true, totalVramMb: 8192 };
+  assert.equal(modelBlockedReason(e4b, gpu8), '');
+  assert.match(modelBlockedReason(big, { hasDedicatedGpu: true, totalVramMb: 6144 }), /8GB 이상/);
+});
+
+test('ModelManager refuses models the PC cannot run and falls back to the installed smallest one', async () => {
+  const dir = path.join(process.cwd(), '.models-test-gate');
+  const config = path.join(process.cwd(), '.data', 'test-ai-config-gate.json');
+  await rm(dir, { recursive: true, force: true }).catch(() => {});
+  await mkdir(dir, { recursive: true });
+  await mkdir(path.dirname(config), { recursive: true });
+  const e4b = MODEL_CATALOG['gemma-4-e4b-it-qat-q4-0'];
+  const e2b = MODEL_CATALOG[BASE_MODEL_ID];
+  await writeFile(path.join(dir, e4b.filename), 'x');
+  await writeFile(path.join(dir, e2b.filename), 'x');
+  // An older version left the heavy model active on a CPU-only laptop.
+  await writeFile(config, JSON.stringify({ activeModelId: e4b.id }));
+  const manager = new ModelManager(dir, config, { blockedReason: async (meta) => modelBlockedReason(meta, { hasDedicatedGpu: false }) });
+  await manager.init();
+  const listed = await manager.getInstalledModels();
+  assert.equal(listed.find((m) => m.id === e4b.id).allowed, false);
+  assert.equal((await manager.getActiveModel()).id, e2b.id);
+  await assert.rejects(manager.setActiveModel(e4b.id), (err) => err.status === 400 && /쓸 수 없습니다/.test(err.message));
+  await assert.rejects(manager.downloadModel(e4b.id), /쓸 수 없습니다/);
+  // Only the heavy model installed: nothing is started with it.
+  await rm(path.join(dir, e2b.filename));
+  assert.equal(await manager.getActiveModel(), null);
+  await rm(dir, { recursive: true, force: true }).catch(() => {});
+  await rm(config, { force: true }).catch(() => {});
+});
+
+test('selecting a model again while it loads does not kill the loading server', async () => {
+  const selected = [];
+  const llama = new EmbeddedLlamaServer({ modelManager: { setActiveModel: async (id) => selected.push(id) } });
+  let stops = 0;
+  llama.stop = async () => { stops += 1; llama.status = 'stopped'; };
+  let finishLoad;
+  llama._start = () => { llama.status = 'starting'; llama.currentModelId = selected.at(-1); return new Promise((resolve) => { finishLoad = () => { llama.status = 'running'; resolve({ status: 'running' }); }; }); };
+  const clicks = [llama.restartWithModel('m'), llama.restartWithModel('m'), llama.restartWithModel('m')];
+  await new Promise((r) => setTimeout(r, 20));
+  finishLoad();
+  const results = await Promise.all(clicks);
+  assert.deepEqual(results.map((r) => r.status), ['running', 'running', 'running']);
+  assert.equal(stops, 1, 'only the first click restarts the server');
+  assert.deepEqual(selected, ['m']);
+});
+
+test('a post whose author turned comments off is a skip, not an error', () => {
+  assert.equal(isCommentClosedByAuthor('작성자가 댓글 비허용 또는 댓글창 닫힘'), true);
+  assert.equal(isCommentClosedByAuthor('작성자가 댓글 비허용 또는 작성 권한 없음'), true);
+  assert.equal(isCommentClosedByAuthor('AI 댓글 생성 실패: The operation was aborted due to timeout'), false);
 });
 
 test('EmbeddedLlamaServer skips the comment when no AI answers and cleans AI output', async () => {

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { stat, mkdir, readdir, unlink, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
-import { MODEL_CATALOG } from './hardware.js';
+import { BASE_MODEL_ID, MODEL_CATALOG } from './hardware.js';
 
 // Versions before the catalog correction called Gemma 2 files "Gemma 4".
 // Preserve the user's usable local model while removing the false identity.
@@ -13,8 +13,11 @@ const LEGACY_MODEL_ID_ALIASES = {
 };
 
 export class ModelManager extends EventEmitter {
-  constructor(modelsDir = path.join(process.cwd(), '.models'), configPath = path.join(process.cwd(), '.data', 'ai-config.json')) {
+  // blockedReason(meta) → '' when this PC can run the model, otherwise why not. Models it cannot run are
+  // never listed as usable, selected, downloaded or started.
+  constructor(modelsDir = path.join(process.cwd(), '.models'), configPath = path.join(process.cwd(), '.data', 'ai-config.json'), { blockedReason = async () => '' } = {}) {
     super();
+    this.blockedReason = blockedReason;
     this.modelsDir = modelsDir;
     this.configPath = configPath;
     this.activeDownloads = new Map(); // modelId -> AbortController
@@ -70,8 +73,11 @@ export class ModelManager extends EventEmitter {
         } catch {}
       }
 
+      const blockedReason = await this.blockedReason(meta).catch(() => '');
       result.push({
         ...meta,
+        allowed: !blockedReason,
+        blockedReason,
         isInstalled,
         isActive: this.activeModelId === id,
         fileSizeBytes,
@@ -88,10 +94,11 @@ export class ModelManager extends EventEmitter {
 
   async getActiveModel() {
     const models = await this.getInstalledModels();
-    let active = models.find((m) => m.isActive && m.isInstalled);
+    let active = models.find((m) => m.isActive && m.isInstalled && m.allowed);
     if (!active) {
-      // Pick first installed model if active one is not found
-      active = models.find((m) => m.isInstalled);
+      // The configured model is missing or too heavy for this PC: fall back to an installed one it can run,
+      // the smallest first.
+      active = models.find((m) => m.id === BASE_MODEL_ID && m.isInstalled) || models.find((m) => m.isInstalled && m.allowed);
       if (active) {
         this.activeModelId = active.id;
         await this.saveConfig();
@@ -100,9 +107,15 @@ export class ModelManager extends EventEmitter {
     return active || null;
   }
 
+  async assertAllowed(meta) {
+    const reason = await this.blockedReason(meta).catch(() => '');
+    if (reason) throw Object.assign(new Error(`이 PC에서는 ${meta.name} 모델을 쓸 수 없습니다. ${reason}`), { status: 400 });
+  }
+
   async setActiveModel(modelId) {
     const meta = MODEL_CATALOG[modelId];
     if (!meta) throw new Error(`존재하지 않는 모델 ID입니다: ${modelId}`);
+    await this.assertAllowed(meta);
     
     const targetPath = path.join(this.modelsDir, meta.filename);
     if (!fs.existsSync(targetPath)) {
@@ -129,6 +142,7 @@ export class ModelManager extends EventEmitter {
     if (this.activeDownloads.has(modelId)) {
       throw new Error('해당 모델은 이미 다운로드가 진행 중입니다.');
     }
+    await this.assertAllowed(meta);
 
     if (meta.requiresModelId) {
       const dependency = MODEL_CATALOG[meta.requiresModelId];

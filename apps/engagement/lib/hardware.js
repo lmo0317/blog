@@ -49,6 +49,19 @@ export const MODEL_CATALOG = {
   }
 };
 
+// The smallest model always runs; it is the only one a PC without a dedicated GPU gets, because the CPU
+// runtime needs minutes to load and over a minute per comment with anything bigger (seen on an i5-8265U, 8GB).
+export const BASE_MODEL_ID = 'gemma-4-e2b-it-qat-q4-0';
+
+/** Why this PC cannot run the model, or '' when it can. */
+export function modelBlockedReason(model, gpu = {}) {
+  if (!model || model.id === BASE_MODEL_ID) return '';
+  if (!gpu.hasDedicatedGpu) return '전용 그래픽카드(GPU)가 없는 PC에서는 너무 느려서 쓸 수 없습니다.';
+  const vramMb = Number(gpu.totalVramMb) || 0;
+  if (vramMb < model.minVramMb) return `그래픽카드 메모리가 ${(model.minVramMb / 1024).toFixed(0)}GB 이상 필요합니다 (이 PC ${(vramMb / 1024).toFixed(1)}GB).`;
+  return '';
+}
+
 /**
  * Detects GPUs and dedicated VRAM on Windows systems.
  */
@@ -147,7 +160,9 @@ export async function getSystemHardwareSummary() {
   let tierLabel = 'Gemma 4 E2B 경량 모드';
   let recommendationReason = '낮은 VRAM에서도 사용할 수 있는 Gemma 4 E2B를 추천합니다.';
 
-  if (gpuInfo.totalVramMb >= 12288) {
+  if (!gpuInfo.hasDedicatedGpu) {
+    recommendationReason = '전용 그래픽카드가 없는 PC라 CPU로도 빠르게 도는 Gemma 4 E2B만 사용할 수 있습니다.';
+  } else if (gpuInfo.totalVramMb >= 12288) {
     recommendedModelId = 'gemma-4-12b-it-qat-q4-0';
     tierLabel = 'Gemma 4 12B 권장 모드';
     recommendationReason = `감지된 VRAM(${gpuInfo.vramFormatted})에서 공식 Gemma 4 12B Q4_0을 사용할 수 있습니다. 모델을 실제로 설치한 뒤 선택하세요.`;
@@ -182,7 +197,9 @@ export async function getSystemHardwareSummary() {
     catalog: Object.values(MODEL_CATALOG).map((model) => ({
       ...model,
       isRecommended: model.id === recommendedModelId,
-      canFullOffload: gpuInfo.totalVramMb >= model.minVramMb
+      canFullOffload: gpuInfo.totalVramMb >= model.minVramMb,
+      allowed: !modelBlockedReason(model, gpuInfo),
+      blockedReason: modelBlockedReason(model, gpuInfo)
     }))
   };
 }

@@ -13,7 +13,7 @@ import { appendImageAttributions, cleanupDownloadedImages, downloadCommonsImages
 import { extractArticleContent } from './lib/article-scraper.js';
 import { NeighborHistoryStore, EngagementHistoryStore } from './lib/history.js';
 import { NeighborAutomationManager } from './lib/automation.js';
-import { getSystemHardwareSummary, MODEL_CATALOG } from './lib/hardware.js';
+import { BASE_MODEL_ID, detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG, modelBlockedReason } from './lib/hardware.js';
 import { ModelManager } from './lib/model-manager.js';
 import { EmbeddedLlamaServer } from './lib/embedded-llama.js';
 import { buildBlogCommentMessages } from './lib/comment-prompt.js';
@@ -40,9 +40,13 @@ if (!INSTALLED && existsSync(path.join(__dirname, '.env'))) loadEnvFile(path.joi
 const app = express();
 const port = Number(process.env.PORT || 4310);
 
+// The GPU does not change while the app runs; detect it once and keep models it cannot run unusable.
+let gpuSpecsPromise = null;
+const gpuSpecs = () => (gpuSpecsPromise ||= detectGpuSpecs().catch(() => ({})));
 const modelManager = new ModelManager(
   modelsDir,
-  dataPath('ai-config.json')
+  dataPath('ai-config.json'),
+  { blockedReason: async (meta) => (process.env.NEIGHBORMATE_LLM_URL ? '' : modelBlockedReason(meta, await gpuSpecs())) }
 );
 const embeddedLlama = new EmbeddedLlamaServer({ 
   modelManager, 
@@ -117,7 +121,15 @@ async function startActiveEmbeddedModel() {
     return result;
   }
   const activeModel = await modelManager.getActiveModel();
-  if (!activeModel) return { status: 'no_model', message: '다운로드된 로컬 AI 모델이 없습니다.' };
+  if (!activeModel) {
+    // Only a model too heavy for this PC is installed (an older version let anyone pick one): fetch the one it can run.
+    const installed = await modelManager.getInstalledModels();
+    if (installed.some((m) => m.isInstalled) && !installed.some((m) => m.isDownloading)) {
+      modelManager.downloadModel(BASE_MODEL_ID).catch((error) => console.warn(`Base model download failed: ${error.message}`));
+      return { status: 'downloading', message: '이 PC에 맞는 가벼운 AI 모델을 내려받고 있습니다.' };
+    }
+    return { status: 'no_model', message: '다운로드된 로컬 AI 모델이 없습니다.' };
+  }
   const result = await embeddedLlama.restartWithModel(activeModel.id);
   if (result.status !== 'running') throw new Error(result.message || '로컬 AI 서버를 시작하지 못했습니다.');
   return result;
@@ -2251,7 +2263,7 @@ app.use((error, _req, res, _next) => {
   console.error(`[${new Date().toISOString()}]`, message);
   const status = error?.code === 'NAVER_API_NOT_CONFIGURED' ? 503
     : error?.code === 'NAVER_SESSION_EXPIRED' ? 401
-      : 500;
+      : (Number(error?.status) >= 400 && Number(error?.status) < 500 ? Number(error.status) : 500);
   res.status(status).json({ error: message });
 });
 
