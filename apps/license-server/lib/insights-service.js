@@ -152,7 +152,7 @@ export class InsightsService {
       const reportedRecently = ago(c.lastReportAt) < 2 * DAY_MS;
       const licensed = u.planType && u.daysLeft > 0;
       if ((c.errors24h || 0) > 0) {
-        push({ key: `err-${u.id}-${kstDay(now)}`, level: 'danger', icon: '🚨', title: `오류 ${c.errors24h}건`, detail: `${u.email} · 최근 하루 동안 프로그램에서 오류가 났습니다`, target: who(u), at: c.lastReportAt });
+        push({ key: `err-${u.id}-${c.lastErrorAt || kstDay(now)}`, level: 'danger', icon: '🚨', title: `오류 ${c.errors24h}건`, detail: `${u.email} · 최근 하루 동안 프로그램에서 오류가 났습니다`, target: who(u), at: c.lastErrorAt || c.lastReportAt });
       }
       if (!c.lastReportAt && hoursSinceSignup > 1) {
         const old = u.lastSeenAt && ago(u.lastSeenAt) < 3 * DAY_MS;
@@ -167,7 +167,7 @@ export class InsightsService {
         push({ key: `model-${u.id}`, level: 'warn', icon: '🤖', title: 'AI 모델을 안 받음', detail: `${u.email} · 댓글을 쓰려면 모델 다운로드가 필요합니다`, target: who(u), at: c.lastReportAt });
       }
       if (latest && c.appVersion && reportedRecently && verNum(c.appVersion) < verNum(latest)) {
-        push({ key: `ver-${u.id}-${latest}`, level: 'info', icon: '⬆️', title: `구버전 ${c.appVersion}`, detail: `${u.email} · 최신은 ${latest}`, target: who(u), at: c.lastReportAt });
+        push({ key: `ver-${u.id}-${c.appVersion}`, level: 'info', icon: '⬆️', title: `구버전 ${c.appVersion}`, detail: `${u.email} · 최신은 ${latest}`, target: who(u), at: c.lastReportAt });
       }
       if (u.planType === 'free_trial' && u.daysLeft > 0 && u.daysLeft <= 1) {
         push({ key: `trial-end-${u.id}`, level: 'warn', icon: '⏰', title: '체험이 곧 끝남', detail: `${u.email} · 유료 안내를 보낼 때입니다`, target: who(u), at: u.expiresAt });

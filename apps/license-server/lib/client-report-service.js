@@ -118,6 +118,7 @@ export class ClientReportService {
     const counts = this.db.prepare(`
       SELECT user_id, COUNT(*) AS events,
              SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) AS errors,
+             MAX(CASE WHEN level = 'error' THEN at END) AS last_error_at,
              SUM(CASE WHEN type = 'api' AND name NOT LIKE '/api/%/summary' THEN 1 ELSE 0 END) AS actions
       FROM client_events WHERE at >= ? GROUP BY user_id
     `).all(since);
@@ -141,7 +142,7 @@ export class ClientReportService {
         lastReportAt: s.updated_at
       });
     }
-    for (const c of counts) Object.assign(map.get(c.user_id) || map.set(c.user_id, {}).get(c.user_id), { events24h: c.events, errors24h: c.errors, actions24h: c.actions });
+    for (const c of counts) Object.assign(map.get(c.user_id) || map.set(c.user_id, {}).get(c.user_id), { events24h: c.events, errors24h: c.errors, lastErrorAt: c.last_error_at || '', actions24h: c.actions });
     for (const a of lastAction) Object.assign(map.get(a.user_id) || map.set(a.user_id, {}).get(a.user_id), { lastAction: a.name, lastActionAt: a.at });
     // Days used in the last 7 days against the 7 before: a customer who used it daily and stopped shows up.
     const now = this.now();
