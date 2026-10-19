@@ -138,6 +138,8 @@ export function checkComment(text, context = {}, recent = []) {
 export function classifyComment(text) {
   const clean = normalizeCommentText(text);
   if (/\?|어떻게|어디서|어디에|언제|얼마|되나요|있나요|인가요|할까요|건가요/.test(clean)) return 'question';
+  // "답방 왔어요! 제 블로그도 놀러 와 주세요" asks for a visit, which the autopilot answers itself; not a request for the owner.
+  if (/답방|놀러 ?(?:와|오|갈)|(?:와|들러|방문해) ?주(?:세요|시면|실)/.test(clean) && !/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|보내 ?주|알려 ?주|공유해 ?주|가능할까|가능한가|문의|요청/.test(clean)) return 'greeting';
   if (/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|부탁|주세요|주실 수|가능할까|가능한가|문의|요청(?:드립|합니|해요|드려)/.test(clean)) return 'request';
   // Words glued without spaces ("해주셔서잘보고갑니다") still count as greeting when they carry a greeting phrase.
   const words = stems(clean).filter((word) => !COMMON_WORDS.has(word) && !GREETING_WORD.test(word) && !SMALL_TALK.test(word)

@@ -109,3 +109,12 @@ test('a reply that reuses one of the visitor sentences is an echo', () => {
   const r = checkReply('답방 왔어요! 저도 자주 놀러 갈게요.', { postTitle: '블로그 서로이웃 늘리는 법', commentText: '답방 왔어요! 제 블로그도 놀러 와 주세요' });
   assert.ok(r.reasons.some((x) => x.code === 'echo'));
 });
+
+test('a visit request is answered by the autopilot; a request for the program goes to the owner', async () => {
+  const { classifyComment } = await import('../lib/comment-harness.js');
+  assert.equal(classifyComment('답방 왔어요! 제 블로그도 놀러 와 주세요'), 'greeting');
+  assert.equal(classifyComment('시간 나실때 제 블로그에도 방문해주시면 감사하겠습니다'), 'greeting');
+  assert.equal(classifyComment('Storm1399@naver.com 카멜클라우드 pc용 배포 요청드립니다.'), 'request');
+  assert.equal(classifyComment('프로그램 공유받고 싶어요. 메일로 보내 주세요'), 'request');
+  assert.equal(classifyComment('이거 맥에서도 되나요?'), 'question');
+});
