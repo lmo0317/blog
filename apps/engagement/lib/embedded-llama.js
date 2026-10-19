@@ -410,6 +410,14 @@ export class EmbeddedLlamaServer extends EventEmitter {
     return String((await response.json()).choices?.[0]?.message?.content || '');
   }
 
+  // One line per comment for the activity report: which draft passed and why the earlier ones did not.
+  noteHarnessOutcome(kind, result) {
+    const rejected = (result.attempts || []).filter((attempt) => attempt.reasons?.length);
+    if (!rejected.length) return;
+    const why = [...new Set(rejected.flatMap((attempt) => attempt.reasons.map((item) => item.code)))].join(', ');
+    this.addLog(`${kind} ${rejected.length + 1}번째 초안에서 통과 (고친 이유: ${why})`, 'info');
+  }
+
   addLog(text, stream = 'info') {
     const lines = String(text || '').split('\n').filter(Boolean);
     for (const line of lines) {
@@ -494,7 +502,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
       check: (text) => checkReply(text, { commentText: source, postTitle, postSnippet }, recent),
       onReject: (text, reasons, attempt) => this.addLog(`Reply rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
     });
-    if (result.text) { this.rememberOutput('reply', result.text); return result.text; }
+    if (result.text) { this.noteHarnessOutcome('대댓글', result); this.rememberOutput('reply', result.text); return result.text; }
     // A greeting or a remark the model could not answer well gets a default reply; a question needs a real answer.
     const fallback = !lastError && pickDefaultReply(classifyComment(source), source, recent);
     if (fallback) { this.rememberOutput('reply', fallback); this.lastReplyKind = 'default'; return fallback; }
@@ -547,7 +555,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
       check: (text) => checkComment(text, { title, contentSnippet: commentContext, imageSummary }, recent),
       onReject: (text, reasons, attempt) => this.addLog(`Comment rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
     });
-    if (result.text) { this.rememberOutput('comment', result.text); return result.text; }
+    if (result.text) { this.noteHarnessOutcome('댓글', result); this.rememberOutput('comment', result.text); return result.text; }
     // The model answered but nothing it wrote was safe to post (or it said SKIP): a default comment that says
     // nothing about the post. Not when the engine itself failed: that would put the same lines on every post.
     if (!failed) {

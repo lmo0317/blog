@@ -144,7 +144,8 @@ export class TelemetryReporter {
           const text = String(entry.text || entry.message || '');
           const server = entry.stream === 'stdout' || entry.stream === 'stderr';
           const level = server ? (/error|fail|out of memory|exception|abort/i.test(text) ? 'error' : '') : entry.stream || 'info';
-          if (!level) continue;
+          // Each rejected draft is a normal step of write-check-rewrite, not an error; the outcome line says it.
+          if (!level || /rejected \(\d\/3\)/i.test(text)) continue;
           this.queue.push({ at: new Date(this.now()).toISOString(), type: 'log', data: { source: 'ai', level, message: text.slice(0, 300) } });
         }
         continue;

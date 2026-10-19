@@ -78,6 +78,8 @@ export class ClientReportService {
       if (!event || typeof event !== 'object') continue;
       const type = String(event.type || 'event').slice(0, 30);
       const data = event.data && typeof event.data === 'object' ? event.data : {};
+      // Apps 1.0.27~1.0.30 sent every rejected AI draft (a normal rewrite step); they buried the real events.
+      if (type === 'log' && data.source === 'ai' && /rejected \(\d\/3\)/i.test(String(data.message || ''))) continue;
       const at = Number.isFinite(Date.parse(event.at)) ? new Date(event.at).toISOString() : nowIso;
       const level = type === 'log' ? String(data.level || 'info').slice(0, 10) : (/error|crash/.test(type) ? 'error' : 'info');
       const name = type === 'log' ? String(data.source || '').slice(0, 30) : String(data.path || data.kind || '').slice(0, 80);
