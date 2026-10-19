@@ -188,7 +188,9 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   const theirGrams = grams(theirs);
   // Share of MY reply made of their bigrams: a short comment inside a longer reply of my own is not copying.
   const borrowed = mineGrams.size ? [...mineGrams].filter((gram) => theirGrams.has(gram)).length / mineGrams.size : 0;
-  const copied = theirs.length >= 6 && (borrowed >= 0.6
+  // Taking up their words as a reflection ("…맛있어 보였다니 다행이네요") is answering them, not copying.
+  const reflects = /다니|다는 말|라는 말|다고 하|셨다|주셔서|주신|시는/.test(clean);
+  const copied = theirs.length >= 6 && ((borrowed >= 0.6 && !reflects)
     || (mine.startsWith(theirs.slice(0, 6)) && borrowed >= 0.4)
     // A sentence of theirs reused as mine ("답방 왔어요! 저도 자주 놀러 갈게요").
     || normalizeCommentText(commentText).split(/[.!?~^…]+/).map((part) => part.replace(/[^가-힣A-Za-z0-9]/g, '')).filter((part) => part.length >= 4)
@@ -199,7 +201,7 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
     || runs.some((run) => READER_WORDS.test(run) && !/다니|다는|라는|신다|셔서|주신|가신/.test(mine.slice(mine.indexOf(run), mine.indexOf(run) + 16))));
   if (copied) reasons.push(reason('echo', '상대 댓글을 따라 쓰지 마세요. 글쓴이로서 고마움이나 대답을 내 말로 쓰세요.'));
   // What a reader says after reading ("기억해 두려고요", "시도해 봐야겠네요") is not what the author says.
-  if (/(?:해|봐|써|가|먹어|시도해) ?봐야겠|기억해 ?(?:두려|둘게|둬야|두겠)|알아가|알아갑|저장해 ?(?:두려|둘게|둬야|두겠)|참고할게요|꼭 따라|배워 ?갑/.test(clean)) reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. "해 봐야겠네요", "기억해 둘게요" 같은 독자 말투 대신 글쓴이로서 답하세요.'));
+  if (/(?:해|봐|써|가|먹어|시도해) ?봐야겠|기억해 ?(?:두려|둘게|둬야|두겠)|알아가|알아갑|저장해 ?(?:두려|둘게|둬야|두겠|두었|뒀)|찜해 ?(?:두|뒀|둘)|참고할게요|꼭 따라|배워 ?갑/.test(clean)) reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. "해 봐야겠네요", "기억해 둘게요" 같은 독자 말투 대신 글쓴이로서 답하세요.'));
   // "잘 보고 다녀갑니다", "답방 다녀갑니다": they are leaving my blog, not going on a trip.
   // Repeating what they said back to them ("신기하다고 하셨네요") answers nothing.
   if (/(?:다고|라고|다는|라는) (?:하셨|말씀하셨)(?:네요|군요|어요|는데|으니|다니)/.test(clean)) reasons.push(reason('echo', '상대가 한 말을 "~다고 하셨네요"로 되풀이하지 말고 글쓴이로서 답하세요.'));
