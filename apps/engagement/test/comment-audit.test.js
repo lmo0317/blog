@@ -84,6 +84,7 @@ test('a reply is the author speaking, and "다녀갑니다" is a goodbye, not a 
 test('found on the deployed E2B: restating the visitor and "보고 가세요"', () => {
   const post = { postTitle: '블로그 서로이웃 늘리는 법', postSnippet: '하루 한도 안에서 천천히' };
   assert.ok(checkReply('오호, 신기하다고 하셨네요.', { ...post, commentText: '오호 신기하네요ㅎㅎ' }).reasons.some((r) => r.code === 'echo'));
+  assert.ok(checkReply('오호 신기하네요ㅎㅎ 꾸준함이 중요하다고 생각해요.', { ...post, commentText: '오호 신기하네요ㅎㅎ' }).reasons.some((r) => r.code === 'echo'));
   assert.ok(checkReply('네, 이웃님도 잘 보고 가세요. 😊', { ...post, commentText: '잘 보고 다녀갑니다😊' }).reasons.some((r) => r.code === 'misread'));
   assert.match(sensitivePostReason({ title: '“암 진행 가능성” 10kg 감량했던 개그우먼 갑상선 4분의 3 절제 후 전한 속사정' }), /투병/);
 });

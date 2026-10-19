@@ -188,6 +188,8 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   const borrowed = mineGrams.size ? [...mineGrams].filter((gram) => theirGrams.has(gram)).length / mineGrams.size : 0;
   const copied = theirs.length >= 6 && (borrowed >= 0.6
     || (mine.startsWith(theirs.slice(0, 6)) && borrowed >= 0.4)
+    // A short comment pasted whole into the reply ("오호 신기하네요ㅎㅎ 꾸준함이 중요하다고 생각해요").
+    || (theirs.length <= 20 && mine.includes(theirs))
     // "잘 보고 가신다니", "남겨 주셔서": their words turned into a thank-you are a reflection, not a copy.
     || runs.some((run) => READER_WORDS.test(run) && !/다니|다는|라는|신다|셔서|주신|가신/.test(mine.slice(mine.indexOf(run), mine.indexOf(run) + 16))));
   if (copied) reasons.push(reason('echo', '상대 댓글을 따라 쓰지 마세요. 글쓴이로서 고마움이나 대답을 내 말로 쓰세요.'));
