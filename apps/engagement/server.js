@@ -1331,9 +1331,11 @@ async function processMyBlogComments(comments, { requestNeighbor = true, returnV
 
       // A visitor asking for something only the blogger can do (send the program, share a file, a price) gets no
       // AI answer: 2026-10-19 audit, "프로그램 공유받고 싶어요" got "다행이네요" with no way to get it. Left for the owner.
-      if (classifyComment(comment.text) === 'request') {
-        console.log(`[CommentManagement] 직접 답해야 할 요청이라 AI 대댓글을 달지 않음 (${comment.commentId})`);
-        results.push(await commentReplyStore.add({ ...comment, replyText: '', replied: false, status: 'needs_owner', message: '부탁·요청 댓글이라 AI가 대신 답하지 않았습니다. 직접 답해 주세요.' }));
+      // Questions too: "이거 맥에서도 되나요?" got "맥에서도 되니 잘 쓰시겠어요" from E2B, a made-up product fact.
+      const kind = classifyComment(comment.text);
+      if (kind === 'request' || kind === 'question') {
+        console.log(`[CommentManagement] 직접 답해야 할 ${kind === 'question' ? '질문' : '요청'}이라 AI 대댓글을 달지 않음 (${comment.commentId})`);
+        results.push(await commentReplyStore.add({ ...comment, replyText: '', replied: false, status: 'needs_owner', message: `${kind === 'question' ? '질문' : '부탁·요청'} 댓글이라 AI가 대신 답하지 않았습니다. 직접 답해 주세요.` }));
         continue;
       }
 

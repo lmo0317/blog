@@ -104,3 +104,8 @@ test('default comments: only after the model answered, never on sensitive posts,
   // They say nothing about any post, so they cannot misread one.
   for (const line of DEFAULT_COMMENTS) assert.doesNotMatch(line, /저도|저희|우리 |하셨다니|다녀오|맛있|예쁘|사진/);
 });
+
+test('a reply that reuses one of the visitor sentences is an echo', () => {
+  const r = checkReply('답방 왔어요! 저도 자주 놀러 갈게요.', { postTitle: '블로그 서로이웃 늘리는 법', commentText: '답방 왔어요! 제 블로그도 놀러 와 주세요' });
+  assert.ok(r.reasons.some((x) => x.code === 'echo'));
+});

@@ -188,6 +188,9 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   const borrowed = mineGrams.size ? [...mineGrams].filter((gram) => theirGrams.has(gram)).length / mineGrams.size : 0;
   const copied = theirs.length >= 6 && (borrowed >= 0.6
     || (mine.startsWith(theirs.slice(0, 6)) && borrowed >= 0.4)
+    // A sentence of theirs reused as mine ("답방 왔어요! 저도 자주 놀러 갈게요").
+    || normalizeCommentText(commentText).split(/[.!?~^…]+/).map((part) => part.replace(/[^가-힣A-Za-z0-9]/g, '')).filter((part) => part.length >= 4)
+      .some((part) => clean.split(/[.!?~^…]+/).some((minepart) => minepart.replace(/[^가-힣A-Za-z0-9]/g, '') === part))
     // A short comment pasted whole into the reply ("오호 신기하네요ㅎㅎ 꾸준함이 중요하다고 생각해요").
     || (theirs.length <= 20 && mine.includes(theirs))
     // "잘 보고 가신다니", "남겨 주셔서": their words turned into a thank-you are a reflection, not a copy.
