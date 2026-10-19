@@ -175,8 +175,9 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   if (UNSOLICITED_ADVICE.test(clean)) reasons.push(reason('unsolicited_advice', '상대가 묻지 않은 충고나 훈계("~하지 않는 게 중요해요")를 하지 마세요.'));
   // E2B often answered by repeating the visitor ("오호 신기하네요ㅎㅎ" → "오호 신기하네요ㅎㅎ", "완전 도움됐어요~"), which
   // makes me sound like a reader of my own post. Any 8-character run of the comment counts as copying.
-  const theirs = normalizeCommentText(commentText).replace(/\s/g, '');
-  const mine = clean.replace(/\s/g, '');
+  // Letters only: "오호, 신기하다" still starts like "오호 신기하네요".
+  const theirs = normalizeCommentText(commentText).replace(/[^가-힣A-Za-z0-9]/g, '');
+  const mine = clean.replace(/[^가-힣A-Za-z0-9]/g, '');
   // Quoting the visitor back ("교류하지 않으면 의미가 없다는 말씀에") is fine; taking over their reader's words is not.
   const READER_WORDS = /도움|알아가|알아갑|잘보|잘읽|기억해|활용해|사용해보|해봐야|신기하|있군요|있었네|궁금했|감사합|감사해|좋은정보|꿀정보|보구|보고갑/;
   const runs = Array.from({ length: Math.max(0, theirs.length - 7) }, (_, i) => theirs.slice(i, i + 8)).filter((run) => mine.includes(run));
@@ -193,7 +194,9 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   // What a reader says after reading ("기억해 두려고요", "시도해 봐야겠네요") is not what the author says.
   if (/(?:해|봐|써|가|먹어|시도해) ?봐야겠|기억해 ?(?:두려|둘게|둬야|두겠)|알아가|알아갑|저장해 ?(?:두려|둘게|둬야|두겠)|참고할게요|꼭 따라|배워 ?갑/.test(clean)) reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. "해 봐야겠네요", "기억해 둘게요" 같은 독자 말투 대신 글쓴이로서 답하세요.'));
   // "잘 보고 다녀갑니다", "답방 다녀갑니다": they are leaving my blog, not going on a trip.
-  if (/다녀갑|다녀가요|다녀가용|들렀다 갑/.test(commentText) && /다녀오세요|잘 다녀|여행|즐겁게 다녀/.test(clean)) reasons.push(reason('misread', '"다녀갑니다"는 내 블로그에 들렀다 간다는 인사입니다. 들러 줘서 고맙다고 답하세요.'));
+  // Repeating what they said back to them ("신기하다고 하셨네요") answers nothing.
+  if (/(?:다고|라고|다는|라는) (?:하셨|말씀하셨)(?:네요|군요|어요)/.test(clean)) reasons.push(reason('echo', '상대가 한 말을 "~다고 하셨네요"로 되풀이하지 말고 글쓴이로서 답하세요.'));
+  if (/다녀갑|다녀가요|다녀가용|들렀다 갑|보고 ?갑|보고 ?가요|읽고 ?갑/.test(commentText) && /다녀오세요|잘 다녀|여행|즐겁게 다녀|보고 가세요|읽고 가세요/.test(clean)) reasons.push(reason('misread', '"다녀갑니다"는 내 블로그에 들렀다 간다는 인사입니다. 들러 줘서 고맙다고 답하세요.'));
   const similar = recentReplies.find((reply) => commentSimilarity(clean, reply) >= 0.6);
   if (similar) {
     const exact = commentSimilarity(clean, similar) >= 0.7;
