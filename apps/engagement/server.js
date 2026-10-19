@@ -230,6 +230,33 @@ const telemetry = new TelemetryReporter({
 });
 telemetry.track('app_start', { version: appVersion, installed: INSTALLED });
 
+// Every AI comment and reply that was posted, with the post it went on, so a bad one can be checked against its
+// post (2026-10-19 audit). Privacy policy scope: the post's blogger, title and address, and our own comment.
+// Never a visitor's comment, and never the text of a secret comment.
+function trackAiComment({ kind, source, postUrl = '', postTitle = '', blogId = '', text = '', secret = false }) {
+  if (!text) return;
+  telemetry.track('ai_comment', {
+    kind,
+    source,
+    postUrl: String(postUrl || '').slice(0, 160),
+    postTitle: String(postTitle || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+    blogId: String(blogId || '').slice(0, 40),
+    text: secret ? '(비밀댓글)' : String(text).slice(0, 300),
+    by: embeddedLlama.lastUsedModelId || '',
+    fallback: kind === 'reply' ? embeddedLlama.lastReplyKind === 'default' : embeddedLlama.lastCommentKind === 'default'
+  });
+}
+for (const [store, source, manager] of [[feedHistoryStore, 'feed', feedManager], [engagementHistoryStore, 'engagement', engagementManager]]) {
+  const addRecord = store.addRecord.bind(store);
+  store.addRecord = async (record = {}) => {
+    const saved = await addRecord(record);
+    if (record.commented && record.commentText) {
+      trackAiComment({ kind: 'comment', source, postUrl: record.url || record.postUrl, postTitle: record.title, blogId: record.blogId, text: record.commentText, secret: Boolean(manager.config?.secretComment) });
+    }
+    return saved;
+  };
+}
+
 async function resolveActiveLlmEndpoint() {
   if (embeddedLlama.remoteUrl) {
     if (embeddedLlama.status !== 'running') await embeddedLlama.start();
@@ -1374,6 +1401,7 @@ async function processMyBlogComments(comments, { requestNeighbor = true, returnV
           replyText
         });
         console.log(`[CommentManagement] 대댓글 등록 완료!`);
+        if (replyResult?.replied !== false) trackAiComment({ kind: 'reply', source: 'replies', postUrl: comment.postUrl, postTitle: comment.postTitle, blogId: comment.myBlogId, text: replyText });
 
         const commenterActivity = requestNeighbor && comment.authorId && comment.authorId !== comment.myBlogId
           ? await assessActivity(comment.authorId).catch(() => null)

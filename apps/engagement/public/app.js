@@ -1532,8 +1532,12 @@ async function refreshRuntimeStatus() {
   const activeModel = currentModelsList.find((model) => model.id === activeModelId)
     || (runtime.remote ? { id: runtime.modelId || 'remote', name: `${runtime.modelId || '원격 LLM'} (원격 서버)` } : null);
   updateLocalAiSummaryUI(activeModel, runtime.status === 'running' ? { baseUrl: 'http://127.0.0.1:8089' } : null, runtime);
-  const preparing = Boolean(activeModel) && (['starting', 'stopped'].includes(runtime.status) || ['checking_runtime', 'installing_runtime', 'downloading_runtime', 'extracting_runtime', 'runtime_installed', 'loading_model'].includes(runtime.setup?.phase));
-  if (!preparing && runtimeStatusTimer) {
+  // Keep watching until the local AI is running (or failed, or a subscription AI is used instead). The first
+  // poll can come before the model list has loaded; stopping there left the screen at "준비 대기 중 0%" while the
+  // AI was already ready.
+  const modelsKnown = currentModelsList.length > 0;
+  const waiting = !cloudEngineLabel && runtime.status !== 'running' && runtime.setup?.phase !== 'runtime_error' && (!modelsKnown || Boolean(activeModel));
+  if (!waiting && runtimeStatusTimer) {
     clearInterval(runtimeStatusTimer);
     runtimeStatusTimer = null;
   }

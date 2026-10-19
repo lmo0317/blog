@@ -1381,7 +1381,7 @@
 
   function activityTab() {
     return sec('🧾 활동 기록', `<div class="tl-filter" id="tlFilter">
-        ${[['', '전체'], ['action', '🖱️ 행동'], ['error', '🚨 오류'], ['log', '⚙️ 자동 작업'], ['ui', '👀 화면']].map(([k, label]) => `<button type="button" class="chip chip-sm${k === tlFilter ? ' active' : ''}" data-tl="${k}">${label}</button>`).join('')}
+        ${[['', '전체'], ['action', '🖱️ 행동'], ['error', '🚨 오류'], ['ai_comment', '💬 AI 댓글'], ['log', '⚙️ 자동 작업'], ['ui', '👀 화면']].map(([k, label]) => `<button type="button" class="chip chip-sm${k === tlFilter ? ' active' : ''}" data-tl="${k}">${label}</button>`).join('')}
       </div><div class="timeline" id="timeline">${timelineHtml(tlEvents)}</div>`, '<small>최근 것부터 · 60일 보관</small>');
   }
 
@@ -1453,6 +1453,15 @@
     if (e.type === 'app_start') return { cls: 'success', icon: '▶️', text: `프로그램 시작${d.version ? ` · ${d.version}` : ''}` };
     if (e.type === 'app_stop') return { cls: '', icon: '⏹️', text: `프로그램 종료 · ${n(d.uptimeMin)}분 사용` };
     if (e.type === 'crash') return { cls: 'error', icon: '💥', text: `프로그램 오류 ${String(d.error || '').split('\n')[0]}` };
+    if (e.type === 'ai_comment') {
+      const where = { feed: '이웃 새글', engagement: '서이추 소통', replies: '내 글 대댓글' }[d.source] || d.source || '';
+      return {
+        cls: 'success', icon: d.kind === 'reply' ? '↩️' : '💬',
+        text: `[${where}] ${d.fallback ? '기본 문구 ' : ''}"${d.text || ''}"`,
+        extra: `${d.blogId ? `@${d.blogId} · ` : ''}${d.postTitle || ''}`,
+        link: d.postUrl || ''
+      };
+    }
     if (e.type === 'api' || e.type === 'api_error') {
       const bits = [];
       for (const [k, v] of Object.entries(d.result || {})) {
@@ -1480,7 +1489,7 @@
       if (day !== lastDay) { out.push(`<div class="tl-day">${esc(day)}</div>`); lastDay = day; }
       const line = eventLine(e);
       const clock = [dt.getHours(), dt.getMinutes(), dt.getSeconds()].map((x) => String(x).padStart(2, '0')).join(':');
-      out.push(`<div class="tl ${line.cls}"><time>${clock}</time><span>${line.icon}</span><span class="what">${esc(line.text)}${line.extra ? `<small>${esc(line.extra)}</small>` : ''}</span></div>`);
+      out.push(`<div class="tl ${line.cls}"><time>${clock}</time><span>${line.icon}</span><span class="what">${esc(line.text)}${line.extra ? `<small>${line.link && /^https:\/\/(m\.)?blog\.naver\.com\//.test(line.link) ? `<a href="${esc(line.link)}" target="_blank" rel="noopener">${esc(line.extra)} ↗</a>` : esc(line.extra)}</small>` : ''}</span></div>`);
     }
     if (events.length >= 300 && events.length % 300 === 0) out.push('<div class="tl-more"><button class="btn btn-sm" type="button" data-tlmore>더 오래된 기록 보기</button></div>');
     return out.join('');
