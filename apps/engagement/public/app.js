@@ -322,8 +322,8 @@ async function loadCommentManagementHistory() {
             <span class="mhc-time">${escapeHtml(timeFormatted)}</span>
           </div>
         </div>
-        <span class="mhc-status-pill ${isCompleted ? 'pill-success' : 'pill-danger'}">
-          ${isCompleted ? '완료' : '실패'}
+        <span class="mhc-status-pill ${isCompleted ? 'pill-success' : item.status === 'needs_owner' ? 'pill-warning' : 'pill-danger'}">
+          ${isCompleted ? '완료' : item.status === 'needs_owner' ? '🙋 직접 답해 주세요' : '실패'}
         </span>
       </div>
       <div class="mhc-body">
@@ -333,7 +333,7 @@ async function loadCommentManagementHistory() {
         </div>
         <div class="mhc-quote reply">
           <span class="quote-label">작성된 AI 대댓글</span>
-          <div class="quote-text">${escapeHtml(friendlyUiMessage(item.replyText || item.error || '-'))}</div>
+          <div class="quote-text">${escapeHtml(friendlyUiMessage(item.replyText || item.message || item.error || '-'))}</div>
         </div>
       </div>
       ${neighborText ? `<div class="mhc-footer">

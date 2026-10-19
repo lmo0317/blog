@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { detectGpuSpecs } from './hardware.js';
-import { buildBlogCommentMessages, buildNeighborMessagePrompt, normalizeCommentText, validateNeighborMessage } from './comment-prompt.js';
+import { buildBlogCommentMessages, buildNeighborMessagePrompt, normalizeCommentText, sensitivePostReason, validateNeighborMessage } from './comment-prompt.js';
 import { checkComment, checkReply, replyGuidance, runHarness, styleGuidance } from './comment-harness.js';
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
@@ -514,6 +514,8 @@ export class EmbeddedLlamaServer extends EventEmitter {
   // experience, and not sounding like the last comments (same opening, ending, 정말, 😊 every time).
   // '' when no attempt passes, so the caller likes the post and skips the comment.
   async generateBlogComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
+    const sensitive = sensitivePostReason({ title, contentSnippet });
+    if (sensitive) { this.lastCommentFailure = sensitive; return ''; }
     const cpuMode = this.acceleration !== 'GPU';
     // Integrated graphics uses the CPU runtime. Keep its prompt compact and
     // give the first-token generation enough time on ordinary laptops.

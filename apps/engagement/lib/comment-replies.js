@@ -9,7 +9,7 @@ export class CommentReplyStore {
     this.loaded = true;
   }
   key(postUrl, commentId) { return `${String(postUrl).replace(/[?#].*$/, '')}::${String(commentId)}`; }
-  async has(postUrl, commentId) { await this.load(); const key = this.key(postUrl, commentId); return this.records.some((item) => item.key === key && (item.replied || item.status === 'completed' || item.status === 'duplicate')); }
+  async has(postUrl, commentId) { await this.load(); const key = this.key(postUrl, commentId); return this.records.some((item) => item.key === key && (item.replied || item.status === 'completed' || item.status === 'duplicate' || item.status === 'needs_owner')); }
   // The same person leaving the same words again on the same post (macro "잘 보고 갑니다"): one reply is enough.
   async repliedSame({ postUrl, authorId, authorName, text }) {
     await this.load();

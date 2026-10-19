@@ -19,7 +19,7 @@ const READER_VOICE = /(?:정리|공유|소개|설명|모아|짚어|알려|추천
 // Advice or a lesson nobody asked for.
 const UNSOLICITED_ADVICE = /(?:너무|과도하게) (?:의존|집착|관리하려)|(?:하지 않으시는|안 하시는|않는) 게 (?:중요|좋)|초점을 맞추시는 게|(?:하시는|하시면) 게 (?:더 )?(?:좋을|나을|중요)|(?:지치지|무리하지) 않도록|적당한 선을/;
 // The reply claims the commenter said something ("…신다는 말씀", "…셨다니").
-const ATTRIBUTION = /([가-힣A-Za-z0-9 ]{2,30}?)(?:신다는|하신다는|다는) 말씀|([가-힣A-Za-z0-9 ]{2,30}?)(?:셨다니|하셨다니|되셨다니|이셨다니)/g;
+const ATTRIBUTION = /([가-힣A-Za-z0-9 ]{2,30}?)(?:신다는|하신다는|다는) 말씀|([가-힣A-Za-z0-9 ]{2,30}?)(?:셨다니|하셨다니|되셨다니|이셨다니|신다니|하신다니)/g;
 
 // Endings that turn every comment into the same sentence.
 const ENDING_FAMILIES = [
@@ -115,7 +115,8 @@ export function checkComment(text, context = {}, recent = []) {
     unsupported_reader_context: '"찾고 있었는데", "궁금했는데"처럼 내 사정을 지어내지 마세요.',
     unsupported_hearsay: '"~라고 들었는데" 같은 소문을 쓰지 마세요.',
     irrelevant: `글에 실제로 나온 대상(${keywords.join(', ') || '글의 핵심 단어'})을 하나 넣으세요.`,
-    duplicate: '최근 댓글과 너무 비슷합니다. 문장 구조를 완전히 바꾸세요.'
+    duplicate: '최근 댓글과 너무 비슷합니다. 문장 구조를 완전히 바꾸세요.',
+    news_as_person: '글쓴이는 소식을 전한 사람입니다. 기사 속 인물에게 말하듯 "~하셨다니", "근황을 나눠 주셔서"라고 쓰지 말고 소식에 대한 생각을 쓰세요.'
   };
   const reasons = base.reasons.map((code) => reason(code, fixes[code] || code));
   const profile = styleProfile(recent);
@@ -172,6 +173,27 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   if (STOCK_REPLY.test(clean)) reasons.push(reason('stock', '"도움이 되셨다니", "궁금한 점 있으시면 언제든" 같은 상투적인 문장을 빼세요.'));
   if (READER_VOICE.test(clean)) reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. "정리해 주셔서", "좋은 글 감사" 같은 독자 말투를 쓰지 마세요.'));
   if (UNSOLICITED_ADVICE.test(clean)) reasons.push(reason('unsolicited_advice', '상대가 묻지 않은 충고나 훈계("~하지 않는 게 중요해요")를 하지 마세요.'));
+  // E2B often answered by repeating the visitor ("오호 신기하네요ㅎㅎ" → "오호 신기하네요ㅎㅎ", "완전 도움됐어요~"), which
+  // makes me sound like a reader of my own post. Any 8-character run of the comment counts as copying.
+  const theirs = normalizeCommentText(commentText).replace(/\s/g, '');
+  const mine = clean.replace(/\s/g, '');
+  // Quoting the visitor back ("교류하지 않으면 의미가 없다는 말씀에") is fine; taking over their reader's words is not.
+  const READER_WORDS = /도움|알아가|알아갑|잘보|잘읽|기억해|활용해|사용해보|해봐야|신기하|있군요|있었네|궁금했|감사합|감사해|좋은정보|꿀정보|보구|보고갑/;
+  const runs = Array.from({ length: Math.max(0, theirs.length - 7) }, (_, i) => theirs.slice(i, i + 8)).filter((run) => mine.includes(run));
+  const grams = (text) => new Set(Array.from({ length: Math.max(0, text.length - 1) }, (_, i) => text.slice(i, i + 2)));
+  const mineGrams = grams(mine);
+  const theirGrams = grams(theirs);
+  // Share of MY reply made of their bigrams: a short comment inside a longer reply of my own is not copying.
+  const borrowed = mineGrams.size ? [...mineGrams].filter((gram) => theirGrams.has(gram)).length / mineGrams.size : 0;
+  const copied = theirs.length >= 6 && (borrowed >= 0.6
+    || (mine.startsWith(theirs.slice(0, 6)) && borrowed >= 0.4)
+    // "잘 보고 가신다니", "남겨 주셔서": their words turned into a thank-you are a reflection, not a copy.
+    || runs.some((run) => READER_WORDS.test(run) && !/다니|다는|라는|신다|셔서|주신|가신/.test(mine.slice(mine.indexOf(run), mine.indexOf(run) + 16))));
+  if (copied) reasons.push(reason('echo', '상대 댓글을 따라 쓰지 마세요. 글쓴이로서 고마움이나 대답을 내 말로 쓰세요.'));
+  // What a reader says after reading ("기억해 두려고요", "시도해 봐야겠네요") is not what the author says.
+  if (/(?:해|봐|써|가|먹어|시도해) ?봐야겠|기억해 ?(?:두려|둘게|둬야|두겠)|알아가|알아갑|저장해 ?(?:두려|둘게|둬야|두겠)|참고할게요|꼭 따라|배워 ?갑/.test(clean)) reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. "해 봐야겠네요", "기억해 둘게요" 같은 독자 말투 대신 글쓴이로서 답하세요.'));
+  // "잘 보고 다녀갑니다", "답방 다녀갑니다": they are leaving my blog, not going on a trip.
+  if (/다녀갑|다녀가요|다녀가용|들렀다 갑/.test(commentText) && /다녀오세요|잘 다녀|여행|즐겁게 다녀/.test(clean)) reasons.push(reason('misread', '"다녀갑니다"는 내 블로그에 들렀다 간다는 인사입니다. 들러 줘서 고맙다고 답하세요.'));
   const similar = recentReplies.find((reply) => commentSimilarity(clean, reply) >= 0.6);
   if (similar) {
     const exact = commentSimilarity(clean, similar) >= 0.7;
@@ -221,8 +243,13 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
     const answered = asked.some((word) => clean.includes(word) || clean.includes(word.slice(0, 2)));
     if (asked.length && !answered) reasons.push(reason('ignored_request', `댓글의 ${type === 'question' ? '질문' : '요청'}("${normalizeCommentText(commentText).slice(0, 30)}")에 먼저 답하세요.`));
   }
-  if (/답방|놀러 ?와|와 ?주실/.test(commentText) && !/답방|들를|갈게|가 ?볼게|찾아갈|놀러 ?갈|방문할/.test(clean)) {
+  // 2026-10-18: "시간 나실때 제 블로그에도 방문해주시면 참으로 감사하겠습니다" got an unrelated story; it asks for a visit.
+  if (/답방|놀러 ?와|놀러 ?오|와 ?주실|와 ?주시면|방문(?:해)? ?주|들러 ?주/.test(commentText) && !/답방|들를|갈게|가 ?볼게|찾아갈|놀러 ?갈|방문할|찾아뵐|놀러 갈/.test(clean)) {
     reasons.push(reason('ignored_request', '상대가 답방을 청했습니다. 들르겠다고 답하세요("꼭 들를게요").'));
+  }
+  // "저도 이런 경험 많이 해서 공감되네요" to a visitor who told no story: an experience nobody mentioned.
+  if (/저도 .{0,14}(?:경험|겪|그랬|그런 적)/.test(clean) && !/경험|겪|그랬|적이|봤|해 ?보|써 ?보|가 ?보|다녀/.test(commentText)) {
+    reasons.push(reason('invented_experience', '상대가 경험을 말하지 않았는데 "저도 그런 경험이"라고 쓰지 마세요. 상대가 쓴 말에 답하세요.'));
   }
   if (type === 'greeting' && /\?[\s\p{Extended_Pictographic}]*$/u.test(clean)) reasons.push(reason('question_on_greeting', '인사만 한 사람에게 질문으로 끝내지 마세요.'));
   if (PRESUMPTION.test(clean) && !/관심|좋아|궁금/.test(commentText)) reasons.push(reason('presumption', '인사만 한 사람의 관심이나 마음을 넘겨짚지 마세요("관심이 많으신 것 같네요"). 인사에 화답하세요.'));

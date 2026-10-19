@@ -1,7 +1,17 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { composeComment, isCommentClosedByAuthor, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
+import { composeComment, isCommentClosedByAuthor, isDeliberateCommentSkip, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
+// The feed card's author link also carries its section label ("당신을 위한 추천글 히진"), which then became the name
+// in "{이름}님" comments. Only the nickname is kept.
+const FEED_SECTION_LABELS = /^(?:당신을 위한 추천글|내 이웃의 인기글|내 이웃이 반응한 글|최근 방문한 블로그의 다른 글|이웃 새글|이웃의 새 글|추천글)\s*/;
+export function cleanFeedAuthor(author, blogId = '') {
+  const name = String(author || '').replace(/\s+/g, ' ').trim();
+  let cleaned = name;
+  while (FEED_SECTION_LABELS.test(cleaned)) cleaned = cleaned.replace(FEED_SECTION_LABELS, '').trim();
+  return cleaned || blogId || name;
+}
+
 
 function koreaDateKey(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -657,6 +667,7 @@ export class FeedEngagementManager {
         }
 
         const post = feedPosts[i];
+        post.author = cleanFeedAuthor(post.author, post.blogId);
         const postLabel = `@${post.author} ('${post.title.slice(0, 24)}...')`;
 
         this.currentPost = {
@@ -740,7 +751,7 @@ export class FeedEngagementManager {
             generatedComment = composed.text;
 
             if (!generatedComment) {
-              this.log('⏩ 적합한 댓글을 생성하지 못해 댓글 작성을 건너뜁니다.', 'warn');
+              if (!isDeliberateCommentSkip(this.embeddedLlama?.lastCommentFailure)) this.log('⏩ 적합한 댓글을 생성하지 못해 댓글 작성을 건너뜁니다.', 'warn');
             } else {
               this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : '검증된 찐이웃'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
             }
@@ -787,8 +798,8 @@ export class FeedEngagementManager {
             this.currentPost.commented = result.commented;
 
             const actions = [result.liked ? '공감(❤️)' : '', result.commented ? 'AI 댓글(💬)' : ''].filter(Boolean).join(' 및 ');
-            if (allowed.comment && !result.commented && isCommentClosedByAuthor(result.commentReason)) {
-              this.log(`⏭️ [댓글 건너뜀] ${postLabel} ${actions || '공감'} 완료 · 작성자가 댓글을 막아 둔 글이라 댓글은 달지 않았습니다.`, 'info');
+            if (allowed.comment && !result.commented && isDeliberateCommentSkip(result.commentReason)) {
+              this.log(`⏭️ [댓글 건너뜀] ${postLabel} ${actions || '공감'} 완료 · ${isCommentClosedByAuthor(result.commentReason) ? '작성자가 댓글을 막아 둔 글이라 댓글은 달지 않았습니다.' : result.commentReason}`, 'info');
             } else if (allowed.comment && !result.commented) {
               this.log(`❌ [댓글 등록 실패] ${postLabel} ${actions || '공감'} 완료 · 댓글 미등록 사유: ${result.commentReason || '확인되지 않은 오류'}`, 'error');
             } else {

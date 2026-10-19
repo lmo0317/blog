@@ -61,3 +61,8 @@ export async function composeComment({ mode = 'ai', phrases = [], recentComments
 export function isCommentClosedByAuthor(reason = '') {
   return /댓글 비허용|댓글창 닫힘|작성 권한 없음/.test(String(reason));
 }
+
+// A comment left out on purpose (comments closed, a sensitive post, the AI judged it better to skip): a skip, not an error.
+export function isDeliberateCommentSkip(reason = '') {
+  return isCommentClosedByAuthor(reason) || /민감한 주제|댓글을 달지 않는 게 낫다/.test(String(reason));
+}

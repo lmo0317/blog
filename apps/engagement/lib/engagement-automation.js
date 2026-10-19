@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { COMMENT_PROMPT_VERSION } from './comment-prompt.js';
-import { composeComment, isCommentClosedByAuthor, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
+import { composeComment, isCommentClosedByAuthor, isDeliberateCommentSkip, normalizeCommentMode, normalizeCommentPhrases } from './comment-style.js';
 import { fetchLatestPostsFromRss, MAX_SEED_BLOGS, normalizeBlogIdList, resolveLatestPosts } from './blog-targets.js';
 
 export const TARGET_SOURCES = Object.freeze(['keyword', 'seed_commenters', 'id_list']);
@@ -567,8 +567,9 @@ export class EngagementAutomationManager extends EventEmitter {
               })
             });
             generatedComment = composed.text;
-            if (!generatedComment) this.log('⏩ 글 관련성·문자·중복 검증을 통과한 댓글을 만들지 못해 댓글 등록을 건너뜁니다.', 'warn');
-            else this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : '검증된 AI'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
+            if (!generatedComment) {
+              if (!isDeliberateCommentSkip(this.embeddedLlama?.lastCommentFailure)) this.log('⏩ 글 관련성·문자·중복 검증을 통과한 댓글을 만들지 못해 댓글 등록을 건너뜁니다.', 'warn');
+            } else this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : '검증된 AI'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
           }
 
           // 3. Like and Comment
@@ -604,10 +605,16 @@ export class EngagementAutomationManager extends EventEmitter {
             this.stats.likeSuccessCount += 1;
             this.stats.commentSuccessCount += 1;
             this.log(`✅ [소통 완료] @${post.blogId} 포스팅에 공감(❤️) 및 AI 댓글 등록 완료!`, 'success');
+          } else if (result.liked && !doCommentForPost) {
+            // The comment was never attempted (daily comment limit, or this post's action slots went to like + 서이추):
+            // that is not a failure and certainly not "the author turned comments off".
+            this.stats.likeSuccessCount += 1;
+            const why = !this.config.doComment ? '' : (Number(todaySummary.todayComments) || 0) + (Number(sharedToday?.comments) || 0) >= ENGAGEMENT_LIMITS.commentsPerDay ? ' (오늘 댓글 한도라 댓글은 생략)' : ' (이 글은 공감·서이추만 진행)';
+            this.log(`✅ [공감 완료] @${post.blogId} 공감(❤️) 완료${why}`, 'success');
           } else if (result.liked && !result.commented) {
             this.stats.likeSuccessCount += 1;
             const commentReason = result.commentReason || '작성자가 댓글 비허용 또는 작성 권한 없음';
-            if (isCommentClosedByAuthor(commentReason)) this.log(`⏭️ [댓글 건너뜀] @${post.blogId} 공감(❤️) 완료 · 작성자가 댓글을 막아 둔 글이라 댓글은 달지 않았습니다.`, 'info');
+            if (isDeliberateCommentSkip(commentReason)) this.log(`⏭️ [댓글 건너뜀] @${post.blogId} 공감(❤️) 완료 · ${isCommentClosedByAuthor(commentReason) ? '작성자가 댓글을 막아 둔 글이라 댓글은 달지 않았습니다.' : commentReason}`, 'info');
             else this.log(`❌ [댓글 등록 실패] @${post.blogId} 공감(❤️) 완료 · 댓글 미등록 사유: ${commentReason}`, 'error');
           } else if (!result.liked && result.commented) {
             this.stats.commentSuccessCount += 1;

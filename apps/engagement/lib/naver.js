@@ -1390,7 +1390,7 @@ export class NaverBrowserSession {
       }
 
       // Find active frame (support PC iframe#mainFrame or mobile page)
-      const frame = page.frames().find((f) => f.name() === 'mainFrame') || page.mainFrame();
+      let frame = page.frames().find((f) => f.name() === 'mainFrame') || page.mainFrame();
 
       // Scroll down on both page and frame to trigger lazy loading of Like and Comment components
       await frame.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.85)).catch(() => {});
@@ -1526,17 +1526,53 @@ export class NaverBrowserSession {
               'textarea[title*="댓글"]'
             ];
 
-            let textarea = null;
-            for (const selector of textareaSelectors) {
-              const el = frame.locator(selector).first();
-              if (await el.isVisible().catch(() => false)) {
-                textarea = el;
-                break;
+            const findEditor = async (timeoutMs = 0) => {
+              const until = Date.now() + timeoutMs;
+              do {
+                for (const selector of textareaSelectors) {
+                  const el = frame.locator(selector).first();
+                  if (await el.isVisible().catch(() => false)) return el;
+                }
+                if (Date.now() < until) await page.waitForTimeout(500);
+              } while (Date.now() < until);
+              return null;
+            };
+            let textarea = await findEditor();
+
+            // The comment module loads late on slow posts, or its button was off-screen at 85% scroll. These posts
+            // allow comments (commentEnable="true") but used to be logged as "author turned comments off" and lost
+            // the comment: scroll to the end, open it again and wait, then fall back to the comment-only page.
+            const commentEnable = await page.evaluate(() => (document.documentElement.innerHTML.match(/commentEnable="(true|false)"/) || [])[1] || '').catch(() => '');
+            if (!textarea && commentEnable !== 'false') {
+              await frame.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
+              await page.waitForTimeout(800);
+              for (const selector of commentOpenSelectors.slice(0, 3)) {
+                const openBtn = frame.locator(selector).first();
+                if (await openBtn.isVisible().catch(() => false)) {
+                  await openBtn.click({ force: true }).catch(() => {});
+                  break;
+                }
               }
+              textarea = await findEditor(8000);
+            }
+            const postLogNo = (page.url().match(/\/(\d{8,15})/) || targetUrl.match(/\/(\d{8,15})/) || [])[1];
+            if (!textarea && commentEnable !== 'false' && blogId && postLogNo) {
+              await page.goto(`https://m.blog.naver.com/CommentList.naver?blogId=${blogId}&logNo=${postLogNo}`, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+              await page.waitForTimeout(2500);
+              frame = page.mainFrame();
+              const mine = await frame.locator('.u_cbox_comment_my, .u_cbox_mine, .u_cbox_btn_delete').first().isVisible().catch(() => false);
+              if (mine) { result.commentReason = '이미 내가 작성한 댓글이 있는 포스팅'; return result; }
+              for (const sel of placeholderSelectors) {
+                const box = frame.locator(sel).first();
+                if (await box.isVisible().catch(() => false)) { await box.click({ force: true }).catch(() => {}); await page.waitForTimeout(600); break; }
+              }
+              textarea = await findEditor(6000);
             }
 
             if (!textarea) {
-              result.commentReason = '작성자가 댓글 비허용 또는 댓글창 닫힘';
+              result.commentReason = commentEnable === 'false'
+                ? '작성자가 댓글 비허용 또는 댓글창 닫힘'
+                : '댓글 입력창을 찾지 못함 (네이버 화면이 늦게 열림 · 다음에 다시 시도)';
             } else {
               await textarea.focus().catch(() => {});
               await textarea.click({ force: true }).catch(() => {});

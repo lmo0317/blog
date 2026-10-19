@@ -16,6 +16,7 @@ import { NeighborAutomationManager } from './lib/automation.js';
 import { BASE_MODEL_ID, detectGpuSpecs, getSystemHardwareSummary, MODEL_CATALOG, modelBlockedReason } from './lib/hardware.js';
 import { ModelManager } from './lib/model-manager.js';
 import { EmbeddedLlamaServer } from './lib/embedded-llama.js';
+import { classifyComment } from './lib/comment-harness.js';
 import { buildBlogCommentMessages } from './lib/comment-prompt.js';
 import { EngagementAutomationManager } from './lib/engagement-automation.js';
 import { renderVisualCardsForPost, renderVisualCardToPng } from './lib/visual-renderer.js';
@@ -1325,6 +1326,14 @@ async function processMyBlogComments(comments, { requestNeighbor = true, returnV
       if (await commentReplyStore.repliedSame(comment)) {
         console.log(`[CommentManagement] 같은 사람이 같은 글에 같은 댓글을 다시 남겨 건너뜀 (${comment.commentId})`);
         results.push(await commentReplyStore.add({ ...comment, replyText: '', replied: false, status: 'duplicate', message: '같은 댓글에 이미 답했습니다.' }));
+        continue;
+      }
+
+      // A visitor asking for something only the blogger can do (send the program, share a file, a price) gets no
+      // AI answer: 2026-10-19 audit, "프로그램 공유받고 싶어요" got "다행이네요" with no way to get it. Left for the owner.
+      if (classifyComment(comment.text) === 'request') {
+        console.log(`[CommentManagement] 직접 답해야 할 요청이라 AI 대댓글을 달지 않음 (${comment.commentId})`);
+        results.push(await commentReplyStore.add({ ...comment, replyText: '', replied: false, status: 'needs_owner', message: '부탁·요청 댓글이라 AI가 대신 답하지 않았습니다. 직접 답해 주세요.' }));
         continue;
       }
 
