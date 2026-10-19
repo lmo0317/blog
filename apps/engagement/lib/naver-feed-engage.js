@@ -635,6 +635,16 @@ export class FeedEngagementManager {
         this.log(`📰 총 ${feedPosts.length}개의 이웃 새글을 발견했습니다. 순차적으로 소통을 시작합니다.`, 'info');
       }
 
+      // An expired Naver login shows an empty feed; 2026-10-19 a customer saw only "새글이 없습니다" until they
+      // logged in again by hand. Say what is wrong instead.
+      if (!feedPosts.length && !this.selectedPosts?.length && this.browserSession.hasAuthenticatedSession
+        && !await this.browserSession.hasAuthenticatedSession().catch(() => true)) {
+        this.browserSession.connected = false;
+        this.log('🔑 네이버 로그인이 풀려 이웃 새글을 볼 수 없습니다. [설정]에서 네이버 계정을 다시 연결해 주세요.', 'error');
+        this.state = 'stopped';
+        this.currentPost = null;
+        return;
+      }
       if (!feedPosts.length) {
         this.log('⚠️ 현재 소통할 이웃 새글이 없습니다.', 'warn');
         this.state = 'completed';

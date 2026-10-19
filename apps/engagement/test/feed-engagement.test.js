@@ -354,3 +354,18 @@ test('FeedEngagementManager respects the shared daily caps and takes batch break
 
   await rm(testDbPath, { force: true }).catch(() => {});
 });
+
+test('an empty feed because the Naver login expired says so and disconnects', async () => {
+  const store = new FeedEngagementHistoryStore(path.join(process.cwd(), '.data', 'test-feed-expired.json'));
+  const session = {
+    connected: true,
+    context: { async newPage() { return { async goto() {}, async waitForTimeout() {}, async evaluate() { return []; }, async close() {}, isClosed() { return false; } }; } },
+    async hasAuthenticatedSession() { return false; }
+  };
+  const manager = new FeedEngagementManager({ browserSession: session, embeddedLlama: null, historyStore: store });
+  await manager.start({ targetCount: 2, minDelaySec: 0, maxDelaySec: 0 });
+  for (let i = 0; i < 50 && manager.state === 'running'; i++) await new Promise((r) => setTimeout(r, 20));
+  assert.equal(session.connected, false);
+  assert.ok(manager.logs.some((l) => /로그인이 풀려/.test(l.message || l.text || String(l))));
+  await rm(path.join(process.cwd(), '.data', 'test-feed-expired.json'), { force: true });
+});
