@@ -1731,8 +1731,11 @@ export class NaverBrowserSession {
         const response = await fetch(`/api/blogs/${encodeURIComponent(blogId)}/post-list?categoryNo=0&itemCount=30&page=1`, { credentials: 'include' });
         if (!response.ok) return [];
         const items = (await response.json())?.result?.items || [];
-        return items.map((item) => item.logNo).filter(Boolean).map((logNo) => `https://m.blog.naver.com/${blogId}/${logNo}`);
+        return items.filter((item) => item.logNo).map((item) => ({ url: `https://m.blog.naver.com/${blogId}/${item.logNo}`, commentCount: Number(item.commentCnt ?? item.commentCount ?? -1) }));
       }, myBlogId).catch(() => []);
+      // Comment counts from the list: posts without comments are not opened at all.
+      const commentCounts = new Map(postUrls.map((post) => [post.url, post.commentCount]));
+      postUrls = postUrls.map((post) => post.url);
       if (!postUrls.length) {
         await page.goto(`https://blog.naver.com/PostList.naver?blogId=${encodeURIComponent(myBlogId)}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await page.waitForTimeout(1200);
@@ -1750,8 +1753,13 @@ export class NaverBrowserSession {
       for (const postUrl of postUrls.slice(0, Math.min(Math.max(Number(postLimit) || 10, 1), 30))) {
         await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await page.waitForTimeout(700);
+        const commentCount = commentCounts.get(postUrl);
+        if (commentCount === 0) continue;
         const opener = page.locator('button[class*="comment"], a[class*="comment"], [data-click-area="pst.re"]').first();
         if (await opener.isVisible().catch(() => false)) await opener.click({ force: true }).catch(() => {});
+        // A post with ~100 comments needs a few seconds before they are on the page; reading after 0.5 s found
+        // none on a customer's blog (2026-10-19, "최근 글 30개에서 새 댓글 0개" with 60~110 comments per post).
+        await page.waitForSelector('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]', { timeout: 10000 }).catch(() => {});
         await page.waitForTimeout(500);
         const postSnippet = (await page.locator('.se-main-container, #viewTypeSelector, .post_ct').first().innerText().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 400);
         const postTitle = ((await page.locator('meta[property="og:title"]').getAttribute('content').catch(() => '')) || (await page.locator('.se-title-text, .pcol1 .itemSubjectBoldfont, [class*="post_title"]').first().innerText().catch(() => ''))).replace(/\s+/g, ' ').trim();
