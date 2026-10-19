@@ -12,9 +12,9 @@ const SERVER = 'lmo0317@192.168.219.112';
 const REMOTE_DIR = '/var/www/neighbormate-site';
 const ssh = ['-o', 'StrictHostKeyChecking=no'];
 
-execFileSync('scp', [...ssh, '-r', ...['index.html', 'about.html', 'qna.html', 'contact.html', 'assets'].map((f) => path.join(root, f)), `${SERVER}:${REMOTE_DIR}/`], { stdio: 'inherit' });
+execFileSync('scp', [...ssh, '-r', ...['index.html', 'about.html', 'qna.html', 'assets'].map((f) => path.join(root, f)), `${SERVER}:${REMOTE_DIR}/`], { stdio: 'inherit' });
 
-for (const page of ['', 'about.html', 'qna.html', 'contact.html']) {
+for (const page of ['', 'about.html', 'qna.html']) {
   const res = await fetch(`https://minohlee.mooo.com/neighbormate-app/${page}`, { cache: 'no-store' });
   const html = await res.text();
   if (!res.ok || !html.includes('이웃메이트')) throw new Error(`${page || 'index.html'} 확인 실패 (HTTP ${res.status})`);
