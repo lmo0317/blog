@@ -3,9 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeCommentText, sensitivePostReason, validateBlogComment } from '../lib/comment-prompt.js';
-import { checkReply } from '../lib/comment-harness.js';
+import { checkReply, classifyComment, SOFT_CODES } from '../lib/comment-harness.js';
 import { cleanFeedAuthor } from '../lib/naver-feed-engage.js';
-import { isDeliberateCommentSkip } from '../lib/comment-style.js';
+import { DEFAULT_COMMENTS, DEFAULT_REPLIES, isDeliberateCommentSkip } from '../lib/comment-style.js';
 
 test('no AI comment on deaths, crimes and trials, accidents, illness or clinic procedure ads', () => {
   for (const title of ['징역 17년 확정 JMS 정명석, 여신도 성범죄', '🕊️🎭 연극계 거장 별세… ‘고도를 기다리며’', '지방분해주사 4일 후기', '암 투병 3년차 일상', '교통사고로 숨진 20대']) {
@@ -117,4 +117,35 @@ test('a visit request is answered by the autopilot; a request for the program go
   assert.equal(classifyComment('Storm1399@naver.com 카멜클라우드 pc용 배포 요청드립니다.'), 'request');
   assert.equal(classifyComment('프로그램 공유받고 싶어요. 메일로 보내 주세요'), 'request');
   assert.equal(classifyComment('이거 맥에서도 되나요?'), 'question');
+});
+
+// 2026-10-20 audit: a customer's 48 replies on their own review post (25 read as a parrot, a reader, or the shop),
+// and 40 comments/replies from the newest code on E2B.
+test('the review author has already been there, and is not the shop', () => {
+  const post = { postTitle: '검단신도시 포케 맛집 슬로우캘리 육회포케 후기', postSnippet: '육회포케와 메밀면을 먹어 봤어요. 양이 많고 매장도 쾌적했어요.' };
+  const bad = [
+    ['육회 메밀면 포케 넘 맛있어보여요🥹', '육회 메밀면 포케가 맛있어 보인다고 하니 저도 기대되네요.', 'reader_voice'],
+    ['육회포케라는것도 있네요 ㄷㄷ든든하고 맛있어보여요~~', '육회포케가 있다는 점이 흥미롭네요. 저도 그 메뉴 한번 먹어보고 싶어요.', 'reader_voice'],
+    ['위치 바로 지도에 켜서 저장해뒀어요', '저희 가게 위치를 지도에 저장해두시면 찾기 편하실 거예요.', 'wrong_role'],
+    ['양이 한가득이에요 ㅋㅋㅋㅋ진짜 맛있겠어요!!', '푸짐하게 담아 드렸는데 맛있게 드셨다니 다행이네요.', 'wrong_role'],
+    ['포케 좋아하시면 혼밥하러 자주 찾게 될 것 같아요', '혼밥하러 자주 찾으실 수 있도록 쾌적한 공간을 유지하려고 노력하고 있습니다.', 'wrong_role'],
+    ['양이 한가득이에요 ㅋㅋㅋㅋ진짜 맛있겠어요!!', '양이 한가득이라고 하니 더 맛있어 보이네요.', 'reader_voice'],
+    ['육회포케라는것도 있네요 ㄷㄷ든든하고 맛있어보여요~~', '육회포케가 든든하고 맛있어 보인다고 하니 다행이네요.', 'echo'],
+    ['좋은정보 잘보고 갑니다~^^', '정보 잘 보시고 방문해 주셔서요.', 'awkward'],
+    ['건강하고 맛있겠어요💕', '푸짐하고 맛있다니 정말 만족스러우셨다니 다행입니다.', 'awkward']
+  ];
+  for (const [comment, reply, code] of bad) {
+    assert.ok(checkReply(reply, { commentText: comment, ...post }).reasons.some((item) => item.code === code), `${code}: ${reply}`);
+  }
+  // A shop owner's own post may say 저희 가게.
+  assert.ok(!checkReply('저희 가게 위치는 역에서 5분 거리라 찾기 쉬워요.', { commentText: '위치가 어디예요?', postTitle: '저희 가게 오픈했어요', postSnippet: '드디어 저희 가게를 오픈했습니다.' }).reasons.some((item) => item.code === 'wrong_role'));
+  // Speaking from experience passes.
+  assert.deepEqual(checkReply('그 조합으로 입맛이 확 살아나더라고요.', { commentText: '육회에 메밀면, 매콤깻잎소이소스 조합이라니 입맛 확 살아날 것 같네요👍', ...post }).reasons.filter((item) => !SOFT_CODES.has(item.code)), []);
+});
+
+test('a remark about 답방 is not a visit request; a controversy gets no smiley; defaults assume nothing', () => {
+  assert.equal(classifyComment('‘잘 보고 갑니다’를 줄이고 읽은 티가 나는 댓글로 바꾼 뒤 답방 흐름이 생겼다는 대목이 흥미롭네요.'), 'remark');
+  assert.equal(classifyComment('답방요~'), 'greeting');
+  assert.ok(validateBlogComment('판매자 측이 과하게 대응했다고 해명한 점이 눈에 띄네요. 😊', { title: "게장 원산지 질문했더니 '채팅 차단'?…논란에 해명" }).reasons.includes('tone'));
+  for (const line of [...DEFAULT_COMMENTS, ...DEFAULT_REPLIES.remark]) assert.doesNotMatch(line, /새 글|오늘도 들러|자주 들르|오늘 글도|들러 주세요|좋게 봐/, line);
 });

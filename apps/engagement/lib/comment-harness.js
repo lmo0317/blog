@@ -116,6 +116,7 @@ export function checkComment(text, context = {}, recent = []) {
     unsupported_hearsay: '"~라고 들었는데" 같은 소문을 쓰지 마세요.',
     irrelevant: `글에 실제로 나온 대상(${keywords.join(', ') || '글의 핵심 단어'})을 하나 넣으세요.`,
     duplicate: '최근 댓글과 너무 비슷합니다. 문장 구조를 완전히 바꾸세요.',
+    tone: '논란·의혹을 다룬 글입니다. 이모지나 ㅎㅎ 없이 차분하게 쓰세요.',
     news_as_person: '글쓴이는 소식을 전한 사람입니다. 기사 속 인물에게 말하듯 "~하셨다니", "근황을 나눠 주셔서"라고 쓰지 말고 소식에 대한 생각을 쓰세요.'
   };
   const reasons = base.reasons.map((code) => reason(code, fixes[code] || code));
@@ -139,7 +140,8 @@ export function classifyComment(text) {
   const clean = normalizeCommentText(text);
   if (/\?|어떻게|어디서|어디에|언제|얼마|되나요|있나요|인가요|할까요|건가요/.test(clean)) return 'question';
   // "답방 왔어요! 제 블로그도 놀러 와 주세요" asks for a visit, which the autopilot answers itself; not a request for the owner.
-  if (/답방|놀러 ?(?:와|오|갈)|(?:와|들러|방문해) ?주(?:세요|시면|실)/.test(clean) && !/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|보내 ?주|알려 ?주|공유해 ?주|가능할까|가능한가|문의|요청/.test(clean)) return 'greeting';
+  // "답방" as a greeting or an ask, not a remark about 답방 ("답방 흐름이 생겼다는 대목이 흥미롭네요", 2026-10-20).
+  if (/답방(?: ?(?:왔|와|옵|갑|가요|갈게|드려|드립|부탁|환영|해 ?주|오세요|합니|해요|요(?![가-힣])|[!~.^]|$))|놀러 ?(?:와|오|갈)|(?:와|들러|방문해) ?주(?:세요|시면|실)/.test(clean) && !/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|보내 ?주|알려 ?주|공유해 ?주|가능할까|가능한가|문의|요청/.test(clean)) return 'greeting';
   if (/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|부탁|주세요|주실 수|가능할까|가능한가|문의|요청(?:드립|합니|해요|드려)/.test(clean)) return 'request';
   // Words glued without spaces ("해주셔서잘보고갑니다") still count as greeting when they carry a greeting phrase.
   const words = stems(clean).filter((word) => !COMMON_WORDS.has(word) && !GREETING_WORD.test(word) && !SMALL_TALK.test(word)
@@ -190,7 +192,13 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   const borrowed = mineGrams.size ? [...mineGrams].filter((gram) => theirGrams.has(gram)).length / mineGrams.size : 0;
   // Taking up their words as a reflection ("…맛있어 보였다니 다행이네요") is answering them, not copying.
   const reflects = /다니|다는 말|라는 말|다고 하|셨다|주셔서|주신|시는/.test(clean);
-  const copied = theirs.length >= 6 && ((borrowed >= 0.6 && !reflects)
+  // ...but only when I add something of my own. "양이 한가득이라고 하니 더 맛있어 보이네요" is their comment handed
+  // back with a feeling attached (a customer's replies, 2026-10-19 audit: 25 of 48 read as a parrot or a reader).
+  const novel = [...mineGrams].filter((gram) => !theirGrams.has(gram)).length;
+  const copied = theirs.length >= 6 && ((borrowed >= 0.6 && !(reflects && novel >= 12))
+    || (reflects && borrowed >= 0.45 && novel < 12 && /(?:다고|라고|다는|라는|다니|라니)/.test(clean))
+    // A long stretch of their words carried over verbatim, whatever is said around it.
+    || (borrowed >= 0.45 && theirs.length >= 14 && Array.from({ length: theirs.length - 13 }, (_, i) => theirs.slice(i, i + 14)).some((run) => mine.includes(run)))
     || (mine.startsWith(theirs.slice(0, 6)) && borrowed >= 0.4)
     // A sentence of theirs reused as mine ("답방 왔어요! 저도 자주 놀러 갈게요").
     || normalizeCommentText(commentText).split(/[.!?~^…]+/).map((part) => part.replace(/[^가-힣A-Za-z0-9]/g, '')).filter((part) => part.length >= 4)
@@ -202,6 +210,17 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   if (copied) reasons.push(reason('echo', '상대 댓글을 따라 쓰지 마세요. 글쓴이로서 고마움이나 대답을 내 말로 쓰세요.'));
   // What a reader says after reading ("기억해 두려고요", "시도해 봐야겠네요") is not what the author says.
   if (/(?:해|봐|써|가|먹어|시도해) ?봐야겠|기억해 ?(?:두려|둘게|둬야|두겠)|알아가|알아갑|저장해 ?(?:두려|둘게|둬야|두겠|두었|뒀)|찜해 ?(?:두|뒀|둘)|참고할게요|꼭 따라|배워 ?갑/.test(clean)) reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. "해 봐야겠네요", "기억해 둘게요" 같은 독자 말투 대신 글쓴이로서 답하세요.'));
+  // I wrote the post, so its food, place or product is something I already know. Hearing about it for the first time
+  // ("저도 기대되네요", "먹어 보고 싶어요", "육회포케가 있다는 게 신기하네요") is a reader talking.
+  if (/기대되(?:네요|요(?![가-힣])|는|더라)|(?:먹어|가|해|써|가서 먹어) ?보고 싶|신기하네요|궁금해지|(?:있다는|있다니|라는) (?:게|점이|것이)? ?(?:신기|흥미)|찾고 있었|맛있(?:을|겠) 것 같|든든할 것 같|맛있어 보이(?:네요|죠|더라)/.test(clean)) {
+    reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람이고 글에 나온 것은 이미 겪었습니다. "기대되네요", "먹어 보고 싶어요", "신기하네요"처럼 처음 듣는 사람의 말을 쓰지 마세요.'));
+  }
+  // A review blogger is not the shop: "저희 가게", "방문해 주세요" only when the post is about my own shop.
+  if (/저희 ?(?:가게|매장|식당|카페|업체|샵|가게를|매장을)|(?:담아|준비해|만들어|내어) ?드(?:렸|린|려요)|유지하려고|노력하고 있습니다|모시겠|손님(?:들|분)?(?:께|을|이)/.test(clean) && !/저희 ?(?:가게|매장|식당|카페|업체|샵)|사장|오픈했|운영하고 있/.test(`${postTitle} ${postSnippet}`)) {
+    reasons.push(reason('wrong_role', '나는 가게 주인이 아니라 이 글을 쓴 블로거입니다. "저희 가게"라고 쓰지 마세요.'));
+  }
+  // A sentence that stops in the middle ("방문해 주셔서요.").
+  if (/(?:셔서|해서|니까)요[.!~]*$/.test(clean) || /다니[^.!?]*다니/.test(clean)) reasons.push(reason('awkward', '문장을 끝까지 맺고, 같은 어미를 겹쳐 쓰지 마세요.'));
   // "잘 보고 다녀갑니다", "답방 다녀갑니다": they are leaving my blog, not going on a trip.
   // Repeating what they said back to them ("신기하다고 하셨네요") answers nothing.
   if (/(?:다고|라고|다는|라는) (?:하셨|말씀하셨)(?:네요|군요|어요|는데|으니|다니)/.test(clean)) reasons.push(reason('echo', '상대가 한 말을 "~다고 하셨네요"로 되풀이하지 말고 글쓴이로서 답하세요.'));

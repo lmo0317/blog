@@ -1299,8 +1299,15 @@ export class NaverBrowserSession {
         const title = (titleEl?.innerText || titleEl?.textContent || '').trim();
 
         // Content Snippet
-        const paragraphs = Array.from(document.querySelectorAll('.se-text-paragraph, .se-component-content, #postViewArea, .post_ct, .se_textarea'));
-        const fullText = paragraphs.map((p) => (p.innerText || p.textContent || '').trim()).filter(Boolean).join('\n');
+        // Body paragraphs only. '.se-component-content' also matched the post header (category, title, nickname, date,
+        // "이웃추가 본문 기타 기능"), which filled half the snippet and once made the AI take the nickname for the title.
+        const header = '.se-documentTitle, .se_documentTitle';
+        const inBody = (el) => !el.closest(header);
+        let paragraphs = Array.from(document.querySelectorAll('.se-text-paragraph')).filter(inBody);
+        if (!paragraphs.length) paragraphs = Array.from(document.querySelectorAll('.se-component-content, #postViewArea, .post_ct, .se_textarea')).filter(inBody);
+        const seen = new Set();
+        const fullText = paragraphs.map((p) => (p.innerText || p.textContent || '').replace(/[​\s]+/g, ' ').trim())
+          .filter((line) => line && !seen.has(line) && seen.add(line)).join('\n');
         const snippet = fullText.slice(0, 500);
 
         // Images
@@ -1826,16 +1833,23 @@ export class NaverBrowserSession {
         await page.waitForTimeout(800);
       }
 
-      // Wait briefly for comment list items to attach
-      await page.locator('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]').first().waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
-
+      // Same wait as scanMyBlogComments: a post with ~100 comments needs several seconds, and 5 s missed the
+      // comment on a customer's blog ("원본 댓글을 현재 페이지에서 찾지 못했습니다", 2026-10-19).
       const items = page.locator('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]');
+      await items.first().waitFor({ state: 'attached', timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(500);
+
       let target = null;
-      const count = await items.count().catch(() => 0);
       // Match by Naver's comment number. Text or nickname alone matched an earlier comment with the same
       // words (people who leave "잘 보고 갑니다" on every post) and stacked replies under that one.
       const wantedNo = /^\d{6,}$/.test(String(commentId)) ? String(commentId) : '';
       const wantedText = String(commentText || '').replace(/\s+/g, ' ').trim();
+      // The list can still be filling in: wait for this comment's number before reading the rows.
+      if (wantedNo) {
+        await page.waitForFunction((no) => [...document.querySelectorAll('.u_cbox_comment, li[class*="CommentItem"], [data-comment-no]')]
+          .some((el) => el.getAttribute('data-comment-no') === no || (el.getAttribute('data-info') || '').includes(no) || String(el.className || '').includes(`comment_${no}`)), wantedNo, { timeout: 8000 }).catch(() => {});
+      }
+      const count = await items.count().catch(() => 0);
       for (let index = 0; index < count; index += 1) {
         const item = items.nth(index);
         const info = await item.evaluate((element) => ({
@@ -1862,23 +1876,12 @@ export class NaverBrowserSession {
       await replyButton.click({ force: true });
       await page.waitForTimeout(600);
 
-      // Locate the reply input: check target container, target parent, and page-level active write areas
-      const inputCandidates = [
-        target.locator('..').locator('textarea, div[contenteditable="true"], .u_cbox_text_mention, textarea.u_cbox_text').filter({ visible: true }),
-        target.locator('.u_cbox_reply_area textarea, .u_cbox_reply_write textarea, div.u_cbox_text_mention').filter({ visible: true }),
-        page.locator('.u_cbox_reply_area textarea, .u_cbox_write_box textarea, .u_cbox_write_wrap textarea, div.u_cbox_text_mention[contenteditable="true"]').filter({ visible: true }),
-        page.locator('textarea[placeholder*="답글"], textarea[placeholder*="댓글"], textarea.u_cbox_text').filter({ visible: true })
-      ];
-
-      let input = null;
-      for (const candidate of inputCandidates) {
-        if (await candidate.count().catch(() => 0) > 0) {
-          input = candidate.last();
-          break;
-        }
-      }
-
-      if (!input || !await input.isVisible().catch(() => false)) {
+      // The reply editor opens inside this comment's own reply area. Never fall back to another editor on the page:
+      // on a busy post the reply area opened late and the reply went into the main box as a new top-level comment
+      // (a customer's post, 2026-10-19: "그렇게 매일 먹을 수 있겠다니…" posted twice, once as their own comment).
+      const replyArea = target.locator('.u_cbox_reply_area');
+      const input = replyArea.locator('.u_cbox_text_mention, textarea, div[contenteditable="true"]').filter({ visible: true }).first();
+      if (!await input.waitFor({ state: 'visible', timeout: 6000 }).then(() => true).catch(() => false)) {
         throw new Error('대댓글 입력창을 찾지 못했습니다.');
       }
 
@@ -1900,30 +1903,16 @@ export class NaverBrowserSession {
       if (!filled) throw new Error('대댓글 텍스트 입력에 실패했습니다.');
       await page.waitForTimeout(400);
 
-      // Locate submit button
-      const submitCandidates = [
-        target.locator('..').locator('.u_cbox_btn_upload, button[class*="upload"], button:has-text("등록"), button[class*="submit"]').filter({ visible: true }),
-        page.locator('.u_cbox_btn_upload, button.u_cbox_btn_upload, .u_cbox_write_wrap button[class*="upload"], button:has-text("등록")').filter({ visible: true })
-      ];
-
-      let submit = null;
-      for (const candidate of submitCandidates) {
-        if (await candidate.count().catch(() => 0) > 0) {
-          submit = candidate.last();
-          break;
-        }
-      }
-
-      if (!submit || !await submit.isVisible().catch(() => false)) {
-        throw new Error('대댓글 등록 버튼을 찾지 못했습니다.');
-      }
+      const submit = replyArea.locator('button.u_cbox_btn_upload').filter({ visible: true }).first()
+        .or(replyArea.locator('button[class*="upload"], button:has-text("등록")').filter({ visible: true }).first()).first();
+      if (!await submit.isVisible().catch(() => false)) throw new Error('대댓글 등록 버튼을 찾지 못했습니다.');
 
       await submit.evaluate((btn) => btn.removeAttribute('disabled')).catch(() => {});
       await submit.click({ force: true, timeout: 4000 }).catch(() => submit.dispatchEvent('click'));
       await page.waitForTimeout(2000);
 
-      // Confirmation: either comment appears on page or input area was submitted/cleared
-      const confirmed = await page.locator('.u_cbox_contents, .u_cbox_text_wrap, [class*="comment"]').filter({ hasText: cleanReply.slice(0, Math.min(20, cleanReply.length)) }).first().isVisible().catch(() => false);
+      // Confirmation: the reply shows up under this comment, or this comment's editor was cleared.
+      const confirmed = await replyArea.locator('.u_cbox_contents, .u_cbox_text_wrap').filter({ hasText: cleanReply.slice(0, Math.min(20, cleanReply.length)) }).first().isVisible().catch(() => false);
       if (!confirmed) {
         // Fallback: check if the input value was cleared
         const remainingText = (await input.inputValue().catch(() => '') || await input.innerText().catch(() => '')).trim();

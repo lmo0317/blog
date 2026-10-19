@@ -70,17 +70,19 @@ export function isDeliberateCommentSkip(reason = '') {
 // Default comments for when the AI cannot write one that passes the checks (or answers SKIP). They say nothing
 // about the post, so they cannot misread it, invent a life, or mistake the blogger for someone in the news; they
 // are only used for posts that passed the sensitive-topic gate and after the model actually answered.
+// Nothing that assumes I am a regular reader or that the post is new: search finds months-old posts on blogs I
+// have never visited (2026-10-20 audit: "새 글 반가운 마음으로" on a July post, "오늘도 들러서" on a first visit).
 export const DEFAULT_COMMENTS = Object.freeze([
   '글 차분하게 잘 읽었어요. 오늘도 편안한 하루 보내세요!',
   '정성이 느껴지는 글이라 끝까지 읽게 되네요. 좋은 하루 되세요 :)',
   '읽는 내내 편안했어요. 남은 하루도 즐겁게 보내세요.',
-  '오늘도 들러서 잘 읽고 갑니다. 기분 좋은 하루 보내세요 😊',
+  '시간 내서 쓰신 글 잘 읽었습니다. 기분 좋은 하루 보내세요 😊',
   '천천히 읽어 보니 좋네요. 따뜻한 하루 보내세요.',
-  '꾸준히 글 올려 주셔서 자주 들르게 되네요. 이번 주도 힘내세요!',
+  '정리된 글이라 읽기 편했어요. 이번 주도 힘내세요!',
   '쉬어 가는 마음으로 읽고 가요. 오늘도 수고 많으셨어요.',
-  '새 글 반가운 마음으로 읽었어요. 편안한 저녁 되세요.',
+  '글 잘 읽었습니다. 편안한 시간 보내세요.',
   '글에서 따뜻함이 느껴져요. 행복한 하루 보내세요!',
-  '오늘 글도 잘 보고 갑니다. 다음 글도 기다릴게요 :)'
+  '끝까지 재미있게 읽었어요. 다음 글도 기다릴게요 :)'
 ]);
 
 // Replies to comments on my own posts, by what the visitor wrote. Questions and requests never get one.
@@ -99,13 +101,14 @@ export const DEFAULT_REPLIES = Object.freeze({
     '댓글 고마워요. 블로그에도 꼭 들를게요, 행복한 하루 보내세요 :)'
   ],
   remark: [
-    '좋게 봐 주셔서 감사해요. 앞으로도 편하게 들러 주세요!',
+    // Any remark, praise or a complaint ("가격은 아쉽지만"): a thank-you that agrees with neither.
     '꼼꼼히 읽어 주셔서 고마워요. 남은 하루도 편안하게 보내세요.',
-    '이야기 남겨 주셔서 감사해요. 덕분에 힘이 나네요 :)'
+    '이야기 나눠 주셔서 감사해요. 편안한 하루 보내세요.',
+    '정성스러운 댓글 고마워요. 오늘도 좋은 하루 되세요 :)'
   ]
 });
 
-const VISIT_REQUEST = /답방|놀러 ?와|놀러 ?오|와 ?주시면|와 ?주실|방문(?:해)? ?주|들러 ?주/;
+const VISIT_REQUEST = /답방(?: ?(?:왔|와|옵|갑|가요|갈게|드려|드립|부탁|환영|해 ?주|오세요|합니|해요|요(?![가-힣])|[!~.^]|$))|놀러 ?와|놀러 ?오|와 ?주시면|와 ?주실|방문(?:해)? ?주|들러 ?주/;
 
 function pickFresh(pool, recent, random) {
   const fresh = pool.filter((line) => !recent.slice(0, 20).some((previous) => commentSimilarity(line, previous) >= 0.6));

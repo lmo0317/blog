@@ -62,6 +62,9 @@ export function validateBlogComment(comment, context = {}, recentComments = []) 
     || /(?:기업|회사|업체|법인)(?:은|는|이|가)\s/.test(postText)
     || (postText.match(/[가-힣](?:했|됐|었|았|였|받았|났)다[.\s]/g) || []).length >= 3;
   if (newsLike && /(?:셨|으셨|하셨)(?:다니|다는|던|군요|네요|어요|잖아요|을|겠)|(?:주셔서|주시니|주신 |해 ?주셔)|근황을|돌아오신|돌아오실|보여주신|받으시면서|계신 점|오신 모습|드신 /.test(text)) reasons.push('news_as_person');
+  // A controversy or an accusation is no place for a smiley ("…해명한 점이 눈에 띄네요. 😊", 2026-10-20 audit).
+  if (/논란|의혹|해명|비판|사과문|고발|갑질|폭로|피해자|사기|분쟁|소송/.test(`${context.title || ''} ${postText}`)
+    && /[\u{1F300}-\u{1FAFF}☀-➿]|:\)|\^\^|ㅎㅎ|ㅋㅋ/u.test(text)) reasons.push('tone');
   const keywords = contentKeywords(context);
   if (keywords.length && !keywords.slice(0, 30).some((word) => text.toLowerCase().includes(word.toLowerCase()))) reasons.push('irrelevant');
   if (recentComments.some((previous) => commentSimilarity(text, previous) >= COMMENT_DUPLICATE_THRESHOLD)) reasons.push('duplicate');
