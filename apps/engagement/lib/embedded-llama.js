@@ -4,7 +4,8 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { detectGpuSpecs } from './hardware.js';
 import { buildBlogCommentMessages, buildNeighborMessagePrompt, normalizeCommentText, sensitivePostReason, validateNeighborMessage } from './comment-prompt.js';
-import { checkComment, checkReply, replyGuidance, runHarness, styleGuidance } from './comment-harness.js';
+import { checkComment, checkReply, classifyComment, replyGuidance, runHarness, styleGuidance } from './comment-harness.js';
+import { pickDefaultComment, pickDefaultReply } from './comment-style.js';
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
 export class EmbeddedLlamaServer extends EventEmitter {
@@ -462,6 +463,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
   async generateCommentReply({ postTitle = '', postSnippet = '', commentText = '', commenterName = '', recentReplies = [] }) {
     const source = normalizeCommentText(commentText);
     if (!source) throw new Error('답글을 만들 댓글 내용이 없습니다.');
+    this.lastReplyKind = 'ai';
     const recent = this.recentOutputsOf('reply', recentReplies).slice(0, 15);
     const system = [
       '당신은 이 글을 직접 쓴 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 글쓴이로서 자연스러운 한국어 대댓글 1~2문장을 씁니다.',
@@ -489,6 +491,9 @@ export class EmbeddedLlamaServer extends EventEmitter {
       onReject: (text, reasons, attempt) => this.addLog(`Reply rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
     });
     if (result.text) { this.rememberOutput('reply', result.text); return result.text; }
+    // A greeting or a remark the model could not answer well gets a default reply; a question needs a real answer.
+    const fallback = !lastError && pickDefaultReply(classifyComment(source), source, recent);
+    if (fallback) { this.rememberOutput('reply', fallback); this.lastReplyKind = 'default'; return fallback; }
     const why = result.attempts.at(-1)?.reasons.map((item) => item.code).join(', ') || lastError || '응답 없음';
     throw new Error(`AI가 조건에 맞는 대댓글을 만들지 못했습니다 (${why}). 다음 차례에 다시 시도합니다.`);
   }
@@ -514,6 +519,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
   // experience, and not sounding like the last comments (same opening, ending, 정말, 😊 every time).
   // '' when no attempt passes, so the caller likes the post and skips the comment.
   async generateBlogComment({ title = '', contentSnippet = '', imageSummary = '', tone = 'friendly', recentComments = [] }) {
+    this.lastCommentKind = 'ai';
     const sensitive = sensitivePostReason({ title, contentSnippet });
     if (sensitive) { this.lastCommentFailure = sensitive; return ''; }
     const cpuMode = this.acceleration !== 'GPU';
@@ -537,11 +543,18 @@ export class EmbeddedLlamaServer extends EventEmitter {
       check: (text) => checkComment(text, { title, contentSnippet: commentContext, imageSummary }, recent),
       onReject: (text, reasons, attempt) => this.addLog(`Comment rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
     });
-    if (result.skipped) { this.lastCommentFailure = 'AI가 이 글에는 댓글을 달지 않는 게 낫다고 판단했습니다.'; return ''; }
     if (result.text) { this.rememberOutput('comment', result.text); return result.text; }
-    if (!this.lastCommentFailure) {
+    // The model answered but nothing it wrote was safe to post (or it said SKIP): a default comment that says
+    // nothing about the post. Not when the engine itself failed: that would put the same lines on every post.
+    if (!failed) {
       const last = result.attempts.at(-1);
-      this.lastCommentFailure = last?.reasons.length ? `AI 댓글이 검사를 3번 통과하지 못함 (${last.reasons.map((item) => item.code).join(', ')})` : 'AI가 빈 응답을 반환했습니다.';
+      this.lastCommentFailure = result.skipped ? 'AI가 맞춤 댓글을 쓰기 어려운 글이라고 판단해 기본 댓글을 달았습니다.'
+        : `AI 댓글이 검사를 3번 통과하지 못해 기본 댓글을 달았습니다 (${(last?.reasons || []).map((item) => item.code).join(', ') || '빈 응답'})`;
+      const text = pickDefaultComment(recent);
+      this.lastCommentKind = 'default';
+      this.addLog(this.lastCommentFailure, 'info');
+      this.rememberOutput('comment', text);
+      return text;
     }
     return '';
   }

@@ -37,7 +37,7 @@ test('a repeated comment from the same person on the same post is answered once'
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('comment replies avoid stock sentences and recent replies, and never fall back to a fixed one', async () => {
+test('comment replies avoid stock sentences and recent replies; a remark falls back to a default reply', async () => {
   const { EmbeddedLlamaServer } = await import('../lib/embedded-llama.js');
   const llama = new EmbeddedLlamaServer({ modelManager: null });
   const answers = ['도움이 되셨다니 다행이에요 😊 궁금한 점 있으시면 언제든 찾아주세요!', '들러 주셔서 고마워요. 편안한 저녁 보내세요.'];
@@ -49,7 +49,10 @@ test('comment replies avoid stock sentences and recent replies, and never fall b
   assert.match(prompts[0], /\[최근에 쓴 대댓글\]\n- 응원해주셔서 감사해요!/);
 
   llama.chatCompletion = async () => '응원해주셔서 정말 감사해요! 힘이 납니다.';
-  await assert.rejects(() => llama.generateCommentReply({ commentText: '응원합니다', recentReplies: ['응원해주셔서 정말 감사해요! 힘이 나네요.'] }), /조건에 맞는 대댓글을 만들지 못했습니다/);
+  const fallback = await llama.generateCommentReply({ commentText: '응원합니다', recentReplies: ['응원해주셔서 정말 감사해요! 힘이 나네요.'] });
+  assert.equal(llama.lastReplyKind, 'default');
+  assert.ok(fallback && !/응원해주셔서 정말/.test(fallback));
+  await assert.rejects(() => llama.generateCommentReply({ commentText: '이건 어디서 받을 수 있나요?', recentReplies: ['응원해주셔서 정말 감사해요! 힘이 나네요.'] }), /조건에 맞는 대댓글을 만들지 못했습니다/);
 });
 
 test('blog comments are skipped, not filled from a template, when the AI fails', async () => {

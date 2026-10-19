@@ -753,7 +753,7 @@ export class FeedEngagementManager {
             if (!generatedComment) {
               if (!isDeliberateCommentSkip(this.embeddedLlama?.lastCommentFailure)) this.log('⏩ 적합한 댓글을 생성하지 못해 댓글 작성을 건너뜁니다.', 'warn');
             } else {
-              this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : '검증된 찐이웃'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
+              this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : this.embeddedLlama?.lastCommentKind === 'default' ? '기본' : '검증된 찐이웃'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
             }
           }
 

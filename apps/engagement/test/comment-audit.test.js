@@ -88,3 +88,19 @@ test('found on the deployed E2B: restating the visitor and "보고 가세요"', 
   assert.ok(checkReply('네, 이웃님도 잘 보고 가세요. 😊', { ...post, commentText: '잘 보고 다녀갑니다😊' }).reasons.some((r) => r.code === 'misread'));
   assert.match(sensitivePostReason({ title: '“암 진행 가능성” 10kg 감량했던 개그우먼 갑상선 4분의 3 절제 후 전한 속사정' }), /투병/);
 });
+
+test('default comments: only after the model answered, never on sensitive posts, never the same line twice in a row', async () => {
+  const { EmbeddedLlamaServer } = await import('../lib/embedded-llama.js');
+  const { DEFAULT_COMMENTS } = await import('../lib/comment-style.js');
+  const llama = new EmbeddedLlamaServer({ modelManager: null });
+  llama.chatCompletion = async () => 'SKIP';
+  const first = await llama.generateBlogComment({ title: '사진 몇 장', contentSnippet: '' });
+  assert.ok(DEFAULT_COMMENTS.includes(first));
+  const second = await llama.generateBlogComment({ title: '사진 몇 장 2', contentSnippet: '' });
+  assert.notEqual(second, first);
+  assert.equal(await llama.generateBlogComment({ title: '배우 OOO 별세… 향년 78세', contentSnippet: '' }), '');
+  llama.chatCompletion = async () => { throw new Error('timeout'); };
+  assert.equal(await llama.generateBlogComment({ title: '오사카 맛집', contentSnippet: '규카츠' }), '');
+  // They say nothing about any post, so they cannot misread one.
+  for (const line of DEFAULT_COMMENTS) assert.doesNotMatch(line, /저도|저희|우리 |하셨다니|다녀오|맛있|예쁘|사진/);
+});

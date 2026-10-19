@@ -569,7 +569,7 @@ export class EngagementAutomationManager extends EventEmitter {
             generatedComment = composed.text;
             if (!generatedComment) {
               if (!isDeliberateCommentSkip(this.embeddedLlama?.lastCommentFailure)) this.log('⏩ 글 관련성·문자·중복 검증을 통과한 댓글을 만들지 못해 댓글 등록을 건너뜁니다.', 'warn');
-            } else this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : '검증된 AI'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
+            } else this.log(`💬 ${composed.source === 'phrase' ? '내 문구' : this.embeddedLlama?.lastCommentKind === 'default' ? '기본' : '검증된 AI'} 댓글${this.config.secretComment ? '(비밀)' : ''}: "${generatedComment}"`, 'info');
           }
 
           // 3. Like and Comment

@@ -1,3 +1,4 @@
+import { DEFAULT_COMMENTS, DEFAULT_REPLIES } from '../lib/comment-style.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkComment, checkReply, classifyComment, runHarness, styleGuidance, styleProfile } from '../lib/comment-harness.js';
@@ -94,11 +95,13 @@ test('runHarness feeds the reasons back and returns the first answer that passes
   assert.match(seen[1].at(-1).content, /거절됐습니다[\s\S]*아무 글에나 쓰는 말/);
 });
 
-test('generateBlogComment skips after three rejected answers and remembers what it wrote', async () => {
+test('generateBlogComment falls back to a default comment after three rejected answers and remembers what it wrote', async () => {
   const server = new EmbeddedLlamaServer({ appRoot: process.cwd() });
   let calls = 0;
   server.chatCompletion = async () => { calls += 1; return '좋은 정보 잘 보고 갑니다! 정말 유익해요.'; };
-  assert.equal(await server.generateBlogComment({ title: '캠핑 의자 수납 팁', contentSnippet: '캠핑 의자를 접어 수납하는 방법' }), '');
+  const fallback = await server.generateBlogComment({ title: '캠핑 의자 수납 팁', contentSnippet: '캠핑 의자를 접어 수납하는 방법' });
+  assert.ok(DEFAULT_COMMENTS.includes(fallback), fallback);
+  assert.equal(server.lastCommentKind, 'default');
   assert.equal(calls, 3);
   assert.match(server.lastCommentFailure, /stock/);
 
@@ -108,11 +111,11 @@ test('generateBlogComment skips after three rejected answers and remembers what 
   // The next post gets a different sentence: the same one is now a duplicate.
   calls = 0;
   server.chatCompletion = async () => { calls += 1; return text; };
-  assert.equal(await server.generateBlogComment({ title: '캠핑 의자 수납 팁 2', contentSnippet: '캠핑 의자를 접어 수납하는 방법' }), '');
+  assert.ok(DEFAULT_COMMENTS.includes(await server.generateBlogComment({ title: '캠핑 의자 수납 팁 2', contentSnippet: '캠핑 의자를 접어 수납하는 방법' })));
   assert.equal(calls, 3);
 });
 
-test('generateCommentReply retries with the reasons and throws when nothing passes', async () => {
+test('generateCommentReply retries with the reasons, then a greeting gets a default reply and a question gets none', async () => {
   const server = new EmbeddedLlamaServer({ appRoot: process.cwd() });
   const prompts = [];
   const replies = ['네, 이웃 관리하는 데 시간 많이 쓰신다는 말씀에 저도 크게 공감했어요.', '찾아와 주셔서 반가워요. 오늘도 좋은 하루 보내세요.'];
@@ -123,7 +126,8 @@ test('generateCommentReply retries with the reasons and throws when nothing pass
   assert.match(prompts[1].at(-1).content, /하지 않은 말/);
 
   server.chatCompletion = async () => '도움이 되셨다니 다행이에요. 궁금한 점 있으시면 언제든 물어봐 주세요!';
-  await assert.rejects(server.generateCommentReply({ ...myPost, commentText: '잘 보고 가요', commenterName: '이웃' }), /stock/);
+  assert.ok(DEFAULT_REPLIES.greeting.includes(await server.generateCommentReply({ ...myPost, commentText: '잘 보고 가요', commenterName: '이웃' })));
+  await assert.rejects(server.generateCommentReply({ ...myPost, commentText: '이 프로그램은 맥에서도 되나요?', commenterName: '이웃' }), /stock/);
 });
 
 test('reply harness rejects guesses about the commenter, explanations, and claims they never made', () => {
