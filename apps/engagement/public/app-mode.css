@@ -7226,6 +7226,8 @@ button.ap-step-text:disabled { cursor: default; }
 }
 .header-guide-btn:hover { background: #eef2ff; border-color: #a5b4fc; transform: translateY(-1px); }
 .header-guide-btn:focus-visible { outline: 3px solid rgba(99, 102, 241, .3); outline-offset: 2px; }
+/* Links to the promo site and its 문의 게시판; they open in the browser */
+.header-site-link { text-decoration: none; }
 
 /* Usage guide modal */
 .guide-card {
