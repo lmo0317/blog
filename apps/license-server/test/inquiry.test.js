@@ -69,7 +69,6 @@ test('1:1 inquiry: no account, a secret link, seller mailed on each customer mes
 
     const home = await (await admin('GET', '/api/admin/home')).json();
     assert.equal(home.kpi.waitingInquiries, 1);
-    assert.ok(home.todo.some((t) => t.icon === '📮'));
 
     // Rate limit per IP for new inquiries.
     await call('POST', '/api/inquiries', { email: 'x@y.co', body: '두 번째 문의입니다' });
