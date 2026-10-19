@@ -9,6 +9,11 @@ const __dirname = path.dirname(__filename);
 const DEFAULT_CACHE_PATH = dataPath('license-cache.json');
 const DEFAULT_SERVER_URL = process.env.LICENSE_SERVER_URL || 'https://minohlee.mooo.com/license';
 
+// The 이용약관·개인정보 처리방침 version this app asks customers to agree to (same as the license server's).
+export const CONSENT_VERSION = '2026-10-20';
+export const TERMS_URL = 'https://minohlee.mooo.com/neighbormate-app/terms.html';
+export const PRIVACY_URL = 'https://minohlee.mooo.com/neighbormate-app/privacy.html';
+
 export class LicenseClientManager {
   constructor(options = {}) {
     this.serverUrl = options.serverUrl || DEFAULT_SERVER_URL;
@@ -28,6 +33,7 @@ export class LicenseClientManager {
       status: 'unregistered', // 'valid', 'expired', 'unauthorized_device', 'offline_grace', 'unregistered'
       lastVerifiedAt: null,
       offlineGraceUntil: null,
+      consentVersion: null,
       message: '이용권 등록이 필요합니다.'
     };
 
@@ -124,6 +130,7 @@ export class LicenseClientManager {
         this.state.planType = data.license.planType;
         this.state.expiresAt = data.license.expiresAt;
         this.state.daysLeft = data.license.daysLeft;
+        if (data.user && 'consentVersion' in data.user) this.state.consentVersion = data.user.consentVersion;
         this.state.lastVerifiedAt = new Date().toISOString();
         // Grant 24 hours of offline grace from this point
         this.state.offlineGraceUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -178,6 +185,7 @@ export class LicenseClientManager {
       this.state.token = data.token;
       this.state.email = data.user.email;
       this.state.name = data.user.name;
+      this.state.consentVersion = data.user.consentVersion || null;
       this.state.planType = data.license?.planType || 'monthly';
       this.state.expiresAt = data.license?.expiresAt || null;
       this.state.daysLeft = data.license?.daysLeft || 0;
@@ -196,12 +204,13 @@ export class LicenseClientManager {
     }
   }
 
-  async register({ email, password, name = '', licenseKey = null }) {
+  async register({ email, password, name = '', licenseKey = null, consent = null }) {
+    if (consent !== CONSENT_VERSION) return { ok: false, error: 'CONSENT_REQUIRED', message: '이용약관과 개인정보 수집·이용에 동의해 주세요.' };
     try {
       const res = await this.fetchFn(`${this.serverUrl}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name, licenseKey, hwid: this.hwid })
+        body: JSON.stringify({ email, password, name, licenseKey, hwid: this.hwid, consent })
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -211,6 +220,7 @@ export class LicenseClientManager {
       this.state.token = data.token;
       this.state.email = data.user.email;
       this.state.name = data.user.name;
+      this.state.consentVersion = data.user.consentVersion || null;
       this.state.planType = data.license?.planType || 'free_trial';
       this.state.expiresAt = data.license?.expiresAt || null;
       this.state.daysLeft = data.license?.daysLeft || 0;
@@ -225,6 +235,31 @@ export class LicenseClientManager {
     } catch (err) {
       return { ok: false, error: 'NETWORK_ERROR', message: '라이선스 서버 연결 실패: ' + err.message };
     }
+  }
+
+  // A customer who signed up before the consent screen (or before a new version) agrees after login.
+  async agree(version) {
+    if (!this.state.token) return { ok: false, error: 'LOGIN_REQUIRED', message: '먼저 로그인해 주세요.' };
+    if (version !== CONSENT_VERSION) return { ok: false, error: 'CONSENT_REQUIRED', message: '이용약관과 개인정보 수집·이용에 동의해 주세요.' };
+    try {
+      const res = await this.fetchFn(`${this.serverUrl}/api/account/consent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.state.token}` },
+        body: JSON.stringify({ version })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) return { ok: false, error: data.error, message: data.message || '동의를 저장하지 못했습니다.' };
+      this.state.consentVersion = data.consentVersion;
+      this.saveCache();
+      return { ok: true, consentVersion: data.consentVersion };
+    } catch (err) {
+      return { ok: false, error: 'NETWORK_ERROR', message: '라이선스 서버 연결 실패: ' + err.message };
+    }
+  }
+
+  /** Logged in but has not agreed to the current terms: nothing is reported and actions wait for the agreement. */
+  needsConsent() {
+    return Boolean(this.state.token) && this.state.consentVersion !== CONSENT_VERSION;
   }
 
   async activateKey(licenseKey) {
@@ -313,6 +348,7 @@ export class LicenseClientManager {
       status: 'unregistered',
       lastVerifiedAt: null,
       offlineGraceUntil: null,
+      consentVersion: null,
       message: '로그인 또는 이용권 등록이 필요합니다.'
     };
     if (fs.existsSync(this.cachePath)) {
@@ -329,6 +365,10 @@ export class LicenseClientManager {
     this.evaluateLocalStatus();
     return {
       ...this.state,
+      needsConsent: this.needsConsent(),
+      consentRequiredVersion: CONSENT_VERSION,
+      termsUrl: TERMS_URL,
+      privacyUrl: PRIVACY_URL,
       hwidMasked: this.hwid ? this.hwid.slice(0, 10) + '...' : null
     };
   }
@@ -343,6 +383,9 @@ export function createLicenseGuard(licenseClient, isEnforced = () => true) {
     if (!isEnforced()) return next();
     if (!req.path.startsWith('/api/') || req.path.startsWith('/api/license/')) return next();
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    if (licenseClient.needsConsent?.()) {
+      return res.status(403).json({ error: '이용약관과 개인정보 수집·이용에 동의한 뒤 사용할 수 있습니다.', consentRequired: true });
+    }
     const status = licenseClient.getStatus();
     if (ACTIVE_LICENSE_STATUSES.has(status.status)) return next();
     res.status(402).json({

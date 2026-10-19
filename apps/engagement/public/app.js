@@ -502,6 +502,9 @@ async function api(url, options = {}) {
     if (response.status === 402 && body.licenseRequired) {
       openLicenseModal();
     }
+    if (response.status === 403 && body.consentRequired) {
+      openConsentModal();
+    }
     if (!response.ok) {
       throw new Error(body.error || body.message || `서버 오류 (${response.status} ${response.statusText})`);
     }
@@ -4236,10 +4239,21 @@ async function refreshLicenseStatus() {
     if (data) {
       licenseState = data;
       updateLicenseBadgeUI(data);
+      if (data.needsConsent) openConsentModal();
     }
   } catch (err) {
     console.warn('Failed to fetch license status:', err);
   }
+}
+
+// Accounts made before the consent screen agree once; until then the app sends nothing and starts no automation.
+function openConsentModal() {
+  const modal = $('#consentModal');
+  if (!modal || !modal.classList.contains('hidden')) return;
+  $('#consentModalCheck').checked = false;
+  $('#consentModalAgreeBtn').disabled = true;
+  $('#consentModalError').textContent = '';
+  modal.classList.remove('hidden');
 }
 
 function openLicenseModal() {
@@ -4255,6 +4269,25 @@ function initLicenseManagement() {
   $('#topLicenseBadge')?.addEventListener('click', openLicenseModal);
   $('#closeLicenseModal')?.addEventListener('click', closeLicenseModal);
   $('#closeLicenseModalBottom')?.addEventListener('click', closeLicenseModal);
+
+  $('#regConsentCheck')?.addEventListener('change', (e) => { $('#licenseRegisterSubmitBtn').disabled = !e.target.checked; });
+  $('#consentModalCheck')?.addEventListener('change', (e) => { $('#consentModalAgreeBtn').disabled = !e.target.checked; });
+  $('#consentModalAgreeBtn')?.addEventListener('click', async () => {
+    const btn = $('#consentModalAgreeBtn');
+    btn.disabled = true;
+    btn.textContent = '저장 중...';
+    try {
+      await api('api/license/consent', { method: 'POST', body: JSON.stringify({ version: (licenseState?.consentRequiredVersion || '2026-10-20') }) });
+      $('#consentModal').classList.add('hidden');
+      toast('✅ 동의해 주셔서 감사합니다. 이어서 사용하실 수 있어요.');
+      refreshLicenseStatus();
+    } catch (err) {
+      $('#consentModalError').textContent = err.message;
+      btn.disabled = false;
+    } finally {
+      btn.textContent = '동의하고 계속 쓰기';
+    }
+  });
 
   // Tab Switcher between Login & Register
   $('#tabLicenseLoginBtn')?.addEventListener('click', () => {
@@ -4329,7 +4362,7 @@ function initLicenseManagement() {
       }
       const res = await api('api/license/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password, licenseKey })
+        body: JSON.stringify({ email, password, licenseKey, consent: $('#regConsentCheck')?.checked ? (licenseState?.consentRequiredVersion || '2026-10-20') : null })
       });
       toast(res.state?.planType === 'free_trial'
         ? `🎉 회원가입 완료! ${res.state.daysLeft}일 무료체험이 시작되었습니다.`

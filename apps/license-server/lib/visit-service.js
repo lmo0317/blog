@@ -137,6 +137,11 @@ export class VisitService {
 
     // One IP cannot pad the numbers.
     const now = this.now();
+    // The privacy policy keeps visit records for one year; older rows are removed at most once an hour.
+    if (!this.prunedAt || now - this.prunedAt > HOUR_MS) {
+      this.prunedAt = now;
+      this.db.prepare('DELETE FROM site_visits WHERE created_at < ?').run(new Date(now - 365 * 24 * HOUR_MS).toISOString());
+    }
     const hit = this.hits.get(ip);
     const count = hit && now - hit.since < HOUR_MS ? hit.count + 1 : 1;
     this.hits.set(ip, { count, since: count === 1 ? now : hit.since });

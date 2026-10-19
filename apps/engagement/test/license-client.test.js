@@ -117,3 +117,39 @@ test('createLicenseGuard blocks actions without an active license but keeps read
   enforced = false;
   assert.strictEqual(run('POST', '/api/engagement/start').next, true);
 });
+
+test('consent: signup needs it, an older account is asked once, and nothing is reported or started before it', async () => {
+  const { LicenseClientManager, CONSENT_VERSION, createLicenseGuard } = await import('../lib/license-client.js');
+  const { TelemetryReporter } = await import('../lib/telemetry.js');
+  const os = await import('node:os');
+  const pathMod = await import('node:path');
+  const calls = [];
+  const fetchFn = async (url, init) => {
+    calls.push(url);
+    if (url.endsWith('/api/auth/register')) return { ok: true, json: async () => ({ ok: true, token: 't', user: { email: 'a@b.co', name: 'a', consentVersion: JSON.parse(init.body).consent }, license: { planType: 'free_trial', daysLeft: 3, expiresAt: new Date(Date.now() + 3 * 864e5).toISOString() } }) };
+    if (url.endsWith('/api/auth/login')) return { ok: true, json: async () => ({ ok: true, token: 't2', user: { email: 'old@b.co', name: 'o', consentVersion: null }, license: { planType: 'monthly_paid', daysLeft: 10, expiresAt: new Date(Date.now() + 10 * 864e5).toISOString() } }) };
+    if (url.endsWith('/api/account/consent')) return { ok: true, json: async () => ({ ok: true, consentVersion: JSON.parse(init.body).version }) };
+    return { ok: true, json: async () => ({ ok: true }) };
+  };
+  const client = new LicenseClientManager({ cachePath: pathMod.join(os.tmpdir(), `lc-${Date.now()}.json`), hwid: 'pc', fetchFn, serverUrl: 'http://x' });
+  assert.equal((await client.register({ email: 'a@b.co', password: 'secret12' })).error, 'CONSENT_REQUIRED');
+  assert.equal(calls.length, 0, 'nothing sent without consent');
+  assert.equal((await client.register({ email: 'a@b.co', password: 'secret12', consent: CONSENT_VERSION })).ok, true);
+  assert.equal(client.needsConsent(), false);
+
+  client.logout();
+  await client.login({ email: 'old@b.co', password: 'secret12' });
+  assert.equal(client.needsConsent(), true);
+  assert.equal(client.getStatus().needsConsent, true);
+  const reporter = new TelemetryReporter({ licenseClient: client, fetchFn });
+  reporter.track('app_start', {});
+  const sent = await reporter.flush();
+  assert.equal(sent.consent, false);
+  assert.equal(reporter.queue.length, 0);
+  let status = 0;
+  createLicenseGuard(client)({ path: '/api/feed/start', method: 'POST' }, { status(code) { status = code; return this; }, json() {} }, () => { status = 200; });
+  assert.equal(status, 403);
+  assert.equal((await client.agree(CONSENT_VERSION)).ok, true);
+  assert.equal(client.needsConsent(), false);
+  client.logout();
+});

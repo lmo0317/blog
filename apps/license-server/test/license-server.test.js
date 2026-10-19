@@ -780,3 +780,24 @@ test('Home page: visitors are followed to the account they made, and the seller 
     db.close();
   }
 });
+
+test('consent: signup with the current version stores it; an existing account agrees later; the version comes back on login', async () => {
+  const { CONSENT_VERSION } = await import('../lib/license-service.js');
+  const db = new LicenseDatabase(':memory:');
+  const { app } = createLicenseServer(db, { adminSecret: 's' });
+  const server = app.listen(0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (path, body, token) => fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) }).then((r) => r.json());
+  try {
+    const a = await post('/api/auth/register', { email: 'agree@example.com', password: 'secret12', hwid: 'pc-a', consent: CONSENT_VERSION });
+    assert.equal(a.user.consentVersion, CONSENT_VERSION);
+    const b = await post('/api/auth/register', { email: 'old@example.com', password: 'secret12', hwid: 'pc-b' });
+    assert.equal(b.user.consentVersion, null);
+    assert.equal((await post('/api/account/consent', { version: 'old' }, b.token)).error, 'OLD_CONSENT');
+    assert.equal((await post('/api/account/consent', { version: CONSENT_VERSION })).error, 'LOGIN_REQUIRED');
+    const agreed = await post('/api/account/consent', { version: CONSENT_VERSION }, b.token);
+    assert.equal(agreed.consentVersion, CONSENT_VERSION);
+    const login = await post('/api/auth/login', { email: 'old@example.com', password: 'secret12', hwid: 'pc-b' });
+    assert.equal(login.user.consentVersion, CONSENT_VERSION);
+  } finally { server.close(); }
+});

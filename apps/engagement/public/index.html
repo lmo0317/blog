@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css?v=2">
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=39">
-  <link rel="stylesheet" href="app-mode.css?v=67">
+  <link rel="stylesheet" href="app-mode.css?v=69">
 </head>
 <body>
   <main class="shell">
@@ -2816,6 +2816,27 @@
     </div>
 
     <!-- License & Subscription Auth Modal -->
+    <div class="modal-overlay hidden" id="consentModal" role="dialog" aria-modal="true" aria-labelledby="consentModalTitle">
+      <div class="modal-card consent-modal-card">
+        <div class="modal-header" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 14px;">
+          <div>
+            <h2 id="consentModalTitle" style="font-size: 19px; font-weight: 800; margin: 0; color: #0f172a;">📄 약관 동의가 필요합니다</h2>
+            <p class="modal-sub" style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">이웃메이트 이용약관과 개인정보 처리방침을 새로 마련했습니다. 한 번만 동의하시면 그대로 이어서 쓰실 수 있어요.</p>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px; padding-top: 16px;">
+          <label class="consent-check">
+              <input type="checkbox" id="consentModalCheck">
+              <span><span class="consent-line"><b>[필수]</b> <a href="https://minohlee.mooo.com/neighbormate-app/terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="https://minohlee.mooo.com/neighbormate-app/privacy.html" target="_blank" rel="noopener">개인정보 수집·이용</a>에 동의합니다.</span>
+                <small>고객 지원과 오류 수정을 위해 프로그램 사용 기록(버전, PC 사양, 블로그 아이디, 자동 작업 기록과 AI가 단 댓글, 오류)을 판매자 서버에 보내고 60일 뒤 지웁니다. 비밀번호와 네이버 로그인 정보는 보내지 않습니다.</small></span>
+            </label>
+          <div class="form-error-line" id="consentModalError" role="alert"></div>
+          <button type="button" class="button primary" id="consentModalAgreeBtn" disabled style="padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700;">동의하고 계속 쓰기</button>
+          <p style="margin: 0; font-size: 12px; color: #94a3b8; text-align: center;">동의하지 않으면 자동 작업을 시작할 수 없고, 사용 기록도 보내지 않습니다.</p>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-overlay hidden" id="licenseModal" role="dialog" aria-modal="true" aria-labelledby="licenseModalTitle">
       <div class="modal-card license-modal-card">
         <div class="modal-header" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 16px;">
@@ -2886,7 +2907,12 @@
               구매 라이선스 키 (선택 사항, 없으면 3일 무료체험 자동 적용)
               <input type="text" id="regLicenseKeyInput" placeholder="MATE-XXXX-XXXX-XXXX (선택)" style="padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 14px; font-family: monospace; text-transform: uppercase;">
             </label>
-            <button type="submit" class="button primary" id="licenseRegisterSubmitBtn" style="padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; margin-top: 4px;">
+            <label class="consent-check">
+              <input type="checkbox" id="regConsentCheck">
+              <span><span class="consent-line"><b>[필수]</b> <a href="https://minohlee.mooo.com/neighbormate-app/terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="https://minohlee.mooo.com/neighbormate-app/privacy.html" target="_blank" rel="noopener">개인정보 수집·이용</a>에 동의합니다.</span>
+                <small>고객 지원과 오류 수정을 위해 프로그램 사용 기록(버전, PC 사양, 블로그 아이디, 자동 작업 기록과 AI가 단 댓글, 오류)을 판매자 서버에 보내고 60일 뒤 지웁니다. 비밀번호와 네이버 로그인 정보는 보내지 않습니다.</small></span>
+            </label>
+            <button type="submit" class="button primary" id="licenseRegisterSubmitBtn" disabled style="padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; margin-top: 4px;">
               신규 등록하고 3일 무료체험 시작
             </button>
           </form>
@@ -2895,7 +2921,7 @@
             이용권은 현재 PC에 연결됩니다.<span class="hidden" id="licenseHwidText">-</span>
           </div>
           <div class="license-device-note">
-            로그인하면 고객 지원과 오류 수정을 위해 프로그램 사용 기록(버전, PC 사양, 네이버 블로그 아이디, 기능 사용 내역, 자동 작업 기록과 AI가 단 댓글, 오류)이 판매자에게 전송됩니다. 비밀번호와 네이버 로그인 정보는 보내지 않습니다.
+            <a href="https://minohlee.mooo.com/neighbormate-app/terms.html" target="_blank" rel="noopener">이용약관</a> · <a href="https://minohlee.mooo.com/neighbormate-app/privacy.html" target="_blank" rel="noopener">개인정보 처리방침</a>
           </div>
         </div>
 
@@ -2930,6 +2956,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=70"></script>
+  <script type="module" src="app.js?v=71"></script>
 </body>
 </html>

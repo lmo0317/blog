@@ -1251,8 +1251,18 @@ app.post('/api/license/login', async (req, res, next) => {
 
 app.post('/api/license/register', async (req, res, next) => {
   try {
-    const { email, password, name, licenseKey } = req.body || {};
-    const result = await licenseClient.register({ email, password, name, licenseKey });
+    const { email, password, name, licenseKey, consent } = req.body || {};
+    const result = await licenseClient.register({ email, password, name, licenseKey, consent });
+    sendLicenseResult(res, result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/license/consent', async (req, res, next) => {
+  try {
+    const result = await licenseClient.agree(req.body?.version);
+    if (result.ok) telemetry.track('consent', { version: result.consentVersion });
     sendLicenseResult(res, result);
   } catch (err) {
     next(err);

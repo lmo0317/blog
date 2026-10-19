@@ -50,9 +50,9 @@ export function createLicenseServer(db = null, options = {}) {
 
   // Auth: Register
   app.post('/api/auth/register', (req, res) => {
-    const { email, password, name, licenseKey, hwid } = req.body || {};
+    const { email, password, name, licenseKey, hwid, consent } = req.body || {};
     const ip = getClientIp(req);
-    const result = service.register({ email, password, name, licenseKey, hwid, ip });
+    const result = service.register({ email, password, name, licenseKey, hwid, consent, ip });
     res.status(result.ok ? 200 : 400).json(result);
   });
 
@@ -62,6 +62,12 @@ export function createLicenseServer(db = null, options = {}) {
     const ip = getClientIp(req);
     const result = service.login({ email, password, hwid, ip });
     res.status(result.ok ? 200 : (result.error === 'UNAUTHORIZED_DEVICE' ? 403 : 401)).json(result);
+  });
+
+  // Account: agree to the current 이용약관·개인정보 처리방침
+  app.post('/api/account/consent', (req, res) => {
+    const result = service.recordConsent({ token: getBearerToken(req), version: req.body?.version, ip: getClientIp(req) });
+    res.status(result.ok ? 200 : (result.error === 'LOGIN_REQUIRED' ? 401 : 400)).json(result);
   });
 
   // License: Verify

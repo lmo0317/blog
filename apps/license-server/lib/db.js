@@ -20,6 +20,7 @@ export class LicenseDatabase {
     }
 
     this.initSchema();
+    this.addConsentColumns();
     this.backfillTrialClaims();
   }
 
@@ -150,6 +151,19 @@ export class LicenseDatabase {
       CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(license_key);
       CREATE INDEX IF NOT EXISTS idx_licenses_order_id ON licenses(order_id);
     `);
+  }
+
+  // Which version of the 이용약관·개인정보 처리방침 the customer agreed to, and when (accounts made before
+  // 2026-10-20 have none until they agree in the app).
+  addConsentColumns() {
+    const columns = this.db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+    if (!columns.includes('consent_version')) this.db.exec('ALTER TABLE users ADD COLUMN consent_version TEXT');
+    if (!columns.includes('consent_at')) this.db.exec('ALTER TABLE users ADD COLUMN consent_at TEXT');
+  }
+
+  setConsent(userId, version) {
+    this.db.prepare('UPDATE users SET consent_version = ?, consent_at = ? WHERE id = ?').run(version, new Date().toISOString(), userId);
+    return this.getUserById(userId);
   }
 
   // Trials handed out before trial_claims existed still count.

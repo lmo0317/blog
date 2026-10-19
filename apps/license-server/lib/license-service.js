@@ -9,6 +9,9 @@ import {
 import crypto from 'node:crypto';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// The 이용약관·개인정보 처리방침 version customers agree to (pages: /neighbormate-app/terms.html, privacy.html).
+// Raising it asks every customer to agree again.
+export const CONSENT_VERSION = '2026-10-20';
 const TOSS_API_BASE = 'https://api.tosspayments.com/v1';
 
 // Asks Toss for the real payment record so a forged webhook body cannot grant days.
@@ -96,7 +99,7 @@ export class LicenseService {
     return null;
   }
 
-  register({ email, password, name = '', licenseKey = null, hwid = null, ip = '' }) {
+  register({ email, password, name = '', licenseKey = null, hwid = null, consent = null, ip = '' }) {
     if (!email || !email.includes('@')) {
       return { ok: false, error: 'INVALID_EMAIL', message: '올바른 이메일 주소를 입력해주세요.' };
     }
@@ -123,13 +126,15 @@ export class LicenseService {
     }
 
     const { hash, salt } = hashPassword(password);
-    const user = this.db.createUser({
+    let user = this.db.createUser({
       email,
       password_hash: hash,
       password_salt: salt,
       name: name || email.split('@')[0],
       hwid: hwid || null
     });
+    // Apps from 1.0.32 send the consent ticked on the signup screen; older apps ask after login.
+    if (consent === CONSENT_VERSION) user = this.db.setConsent(user.id, CONSENT_VERSION);
 
     let license;
     if (voucher && this.db.redeemVoucher(voucher.id, user.id)) {
@@ -159,7 +164,7 @@ export class LicenseService {
     return {
       ok: true,
       message: '회원가입이 완료되었습니다.',
-      user: { id: user.id, email: user.email, name: user.name, hwid: user.hwid },
+      user: { id: user.id, email: user.email, name: user.name, hwid: user.hwid, consentVersion: user.consent_version || null },
       license: {
         licenseKey: license.license_key,
         planType: license.plan_type,
@@ -224,7 +229,7 @@ export class LicenseService {
     return {
       ok: true,
       message: '로그인되었습니다.',
-      user: { id: user.id, email: user.email, name: user.name, hwid: user.hwid },
+      user: { id: user.id, email: user.email, name: user.name, hwid: user.hwid, consentVersion: user.consent_version || null },
       license: license ? {
         licenseKey: license.license_key,
         planType: license.plan_type,
@@ -284,7 +289,7 @@ export class LicenseService {
       ok: true,
       valid: isValid,
       reason: isValid ? 'ACTIVE' : (daysLeft <= 0 ? 'EXPIRED' : 'SUSPENDED'),
-      user: { id: user.id, email: user.email, name: user.name, hwid: user.hwid },
+      user: { id: user.id, email: user.email, name: user.name, hwid: user.hwid, consentVersion: user.consent_version || null },
       license: {
         licenseKey: license.license_key,
         planType: license.plan_type,
@@ -312,6 +317,17 @@ export class LicenseService {
       daysLeft: verifyResult.license.daysLeft,
       expiresAt: verifyResult.license.expiresAt
     };
+  }
+
+  /** The logged-in customer agrees to the current 이용약관·개인정보 처리방침. */
+  recordConsent({ token, version, ip = '' }) {
+    const jwtResult = verifyJwt(token, this.jwtSecret);
+    const user = jwtResult.valid ? this.db.getUserById(jwtResult.payload.userId) : null;
+    if (!user) return { ok: false, error: 'LOGIN_REQUIRED', message: '먼저 로그인해 주세요.' };
+    if (version !== CONSENT_VERSION) return { ok: false, error: 'OLD_CONSENT', message: '약관이 바뀌었습니다. 프로그램을 업데이트한 뒤 다시 동의해 주세요.' };
+    const updated = this.db.setConsent(user.id, CONSENT_VERSION);
+    this.db.logAudit({ userId: user.id, action: 'CONSENT', details: `terms+privacy ${CONSENT_VERSION}`, ip });
+    return { ok: true, consentVersion: updated.consent_version, consentAt: updated.consent_at };
   }
 
   activateLicenseKey({ token, licenseKey, hwid = null, ip = '' }) {
@@ -541,7 +557,7 @@ export class LicenseService {
     const vouchers = this.db.db.prepare('SELECT code, days, channel, order_id, redeemed_at FROM vouchers WHERE redeemed_by = ? ORDER BY redeemed_at DESC').all(user.id);
     return {
       ok: true,
-      user: { id: user.id, email: user.email, name: user.name, createdAt: user.created_at, hasDevice: Boolean(user.hwid), deviceChangedAt: user.hwid_changed_at || null },
+      user: { id: user.id, email: user.email, name: user.name, createdAt: user.created_at, hasDevice: Boolean(user.hwid), deviceChangedAt: user.hwid_changed_at || null, consentVersion: user.consent_version || null, consentAt: user.consent_at || null },
       licenses,
       audit,
       vouchers

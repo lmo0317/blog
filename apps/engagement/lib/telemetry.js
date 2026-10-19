@@ -171,6 +171,14 @@ export class TelemetryReporter {
   async flush() {
     const token = this.licenseClient?.state?.token;
     if (!token || this.sending) return { ok: false, skipped: true };
+    // Nothing leaves the PC before the customer agreed to the 개인정보 수집·이용; what piled up meanwhile is dropped.
+    if (this.licenseClient?.needsConsent?.()) {
+      this.queue = [];
+      this.collectLogs();
+      this.queue = [];
+      this.save();
+      return { ok: false, skipped: true, consent: false };
+    }
     this.sending = true;
     try {
       this.collectLogs();
