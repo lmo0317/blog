@@ -407,9 +407,7 @@ async function processManagedComments(items = null) {
           method: 'POST',
           body: JSON.stringify({
             comments: [item],
-            requestNeighbor,
-            returnVisit: $('#commentReturnVisit')?.checked === true,
-            secretComment: $('#commentReturnVisitSecret')?.checked === true
+            requestNeighbor
           })
         });
 
@@ -5414,17 +5412,12 @@ function initGrowthOptions() {
     }
   });
 
-  ['engTargetSource', 'engSeedBlogs', 'engTargetIds', 'engAiNeighborMessage', 'engNeighborActiveOnly', 'commentReturnVisit', 'commentReturnVisitSecret'].forEach(rememberField);
+  ['engTargetSource', 'engSeedBlogs', 'engTargetIds', 'engAiNeighborMessage', 'engNeighborActiveOnly'].forEach(rememberField);
   const savedSource = $('#engTargetSource')?.value;
   if (savedSource) setOptionChipValue('engTargetSourceChips', savedSource);
   syncTargetSource();
   updateIdCount();
 
-  const syncReturnVisit = () => {
-    $('#commentReturnVisitSecretCard')?.classList.toggle('hidden', !$('#commentReturnVisit')?.checked);
-  };
-  $('#commentReturnVisit')?.addEventListener('change', syncReturnVisit);
-  syncReturnVisit();
 }
 
 initGrowthOptions();
