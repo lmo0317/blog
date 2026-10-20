@@ -1903,8 +1903,9 @@ export class NaverBrowserSession {
       if (!filled) throw new Error('대댓글 텍스트 입력에 실패했습니다.');
       await page.waitForTimeout(400);
 
-      const submit = replyArea.locator('button.u_cbox_btn_upload').filter({ visible: true }).first()
-        .or(replyArea.locator('button[class*="upload"], button:has-text("등록")').filter({ visible: true }).first()).first();
+      // This comment's own 등록 button. Not `[class*="upload"]`: the sticker button (u_cbox_btn_upload_sticker) comes
+      // first in the reply editor, so every reply clicked 스티커 and was never posted (1.0.36~1.0.42, 2026-10-20).
+      const submit = replyArea.locator('button.u_cbox_btn_upload, button[class*="naverComment_replyButton"]').filter({ visible: true }).first();
       if (!await submit.isVisible().catch(() => false)) throw new Error('대댓글 등록 버튼을 찾지 못했습니다.');
 
       await submit.evaluate((btn) => btn.removeAttribute('disabled')).catch(() => {});
