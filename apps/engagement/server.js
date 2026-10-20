@@ -24,6 +24,7 @@ import { generateAiDrawingsForPost, generateAiDrawing, AI_IMAGE_STYLES } from '.
 import { CommentReplyStore } from './lib/comment-replies.js';
 import { NeighborActionStore } from './lib/neighbor-actions.js';
 import { buildActivityReport, REPORT_RANGES } from './lib/activity-report.js';
+import { buildDailySummary } from './lib/daily-summary.js';
 import { buildXlsx } from './lib/xlsx.js';
 import { returnVisitCommenter } from './lib/return-visit.js';
 import { AutopilotManager } from './lib/autopilot.js';
@@ -1531,6 +1532,22 @@ app.get('/api/activity-report', async (req, res, next) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="activity-report-${today}.xlsx"; filename*=UTF-8''${encodeURIComponent(filename)}`);
     res.send(buildXlsx(sheets));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Summary tab: neighbors added, replies under my posts and comments on other blogs, per Korean day.
+app.get('/api/summary', async (req, res, next) => {
+  try {
+    await Promise.all([engagementHistoryStore.load(), feedHistoryStore.load(), historyStore.load()]);
+    res.json(buildDailySummary({
+      engagement: engagementHistoryStore.data.records,
+      feed: feedHistoryStore.data.records,
+      replies: await commentReplyStore.list(),
+      neighborActions: await neighborActionStore.list(),
+      neighborHistory: historyStore.data.records
+    }, { date: String(req.query.date || '') }));
   } catch (error) {
     next(error);
   }

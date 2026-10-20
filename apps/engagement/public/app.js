@@ -236,6 +236,7 @@ function setActiveTab(tabName, moveFocus = false) {
     panel.classList.toggle('hidden', panel.dataset.tabPanel !== tabName);
   });
   reportScreen('tab', tabName);
+  if (tabName === 'summary') loadSummary();
   if (tabName === 'comments') {
     const feedModeActive = $('.category-mode-tab[data-comment-mode="neighbor-feed"]')?.classList.contains('active');
     if (feedModeActive) {
@@ -259,9 +260,175 @@ workspaceTabs.forEach((tab, index) => {
   });
 });
 
-// This desktop app exposes engagement only; settings remains available as its
-// independent configuration surface.
-setActiveTab('engagement');
+// ---------------------------------------------------------------------------
+// Summary tab: today's (or any day's) neighbors added, replies and comments at a glance.
+// State lives on the function so the default-tab call at load time can run before later consts.
+// ---------------------------------------------------------------------------
+function summaryDayLabel(day, withYear = false) {
+  const [y, m, d] = String(day).split('-').map(Number);
+  if (!y) return '';
+  const weekday = '일월화수목금토'[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${withYear ? `${y}년 ` : ''}${m}월 ${d}일 (${weekday})`;
+}
+function summaryShiftDay(day, delta) {
+  const [y, m, d] = String(day).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+function summaryLink(url, label) {
+  const safe = /^https?:\/\//i.test(String(url || '')) ? url : '';
+  const text = escapeHtml(label || '제목 없음');
+  return safe ? `<a class="sum-post-link" href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer" title="${text}">${text} ↗</a>` : `<span class="sum-post-link">${text}</span>`;
+}
+function summaryAvatar(row) {
+  return `<span class="sum-avatar" aria-hidden="true">${escapeHtml((row.name || row.blogId || '?').slice(0, 1))}</span>`;
+}
+function summaryWho(row) {
+  const name = escapeHtml(row.name || row.blogId || '알 수 없음');
+  const blog = row.blogId ? `https://blog.naver.com/${encodeURIComponent(row.blogId)}` : '';
+  const nameHtml = blog ? `<a class="sum-name" href="${blog}" target="_blank" rel="noopener noreferrer" title="블로그 열기">${name}</a>` : `<strong class="sum-name">${name}</strong>`;
+  const id = row.blogId && row.blogId !== row.name ? `<small class="sum-id">@${escapeHtml(row.blogId)}</small>` : '';
+  return `<div class="sum-who">${nameHtml}${id}</div>`;
+}
+function summaryNeighborKind(kind) {
+  if (kind === 'accepted') return ['받은 신청 수락', 'sum-badge-success'];
+  if (kind === 'added') return ['이웃 추가', 'sum-badge-success'];
+  return ['신청 완료', 'sum-badge-info'];
+}
+function summaryItem(kind, row) {
+  const head = (extra = '') => `<div class="sum-item-head">${summaryAvatar(row)}${summaryWho(row)}${extra}<span class="sum-time">${escapeHtml(row.time)}</span></div>`;
+  if (kind === 'neighbors') {
+    const [label, tone] = summaryNeighborKind(row.kind);
+    return `<div class="sum-item">${head(`<span class="sum-badge ${tone}">${label}</span>`)}
+      <div class="sum-item-meta"><span class="sum-chip">${escapeHtml(row.source)}</span>${row.postTitle ? summaryLink(row.postUrl, row.postTitle) : ''}</div>
+    </div>`;
+  }
+  if (kind === 'replies') {
+    return `<div class="sum-item">${head()}
+      <div class="sum-item-meta"><span class="sum-chip">내 글</span>${summaryLink(row.postUrl, row.postTitle)}</div>
+      ${row.received ? `<div class="sum-bubble sum-bubble-received"><span class="sum-bubble-tag">받은 댓글</span>${escapeHtml(row.received)}</div>` : ''}
+      <div class="sum-bubble sum-bubble-mine"><span class="sum-bubble-tag">↩️ 내 대댓글</span>${escapeHtml(row.text)}</div>
+    </div>`;
+  }
+  return `<div class="sum-item">${head(row.liked ? '<span class="sum-badge sum-badge-like" title="공감도 눌렀어요">❤️ 공감</span>' : '')}
+      <div class="sum-item-meta"><span class="sum-chip">${escapeHtml(row.source)}</span>${summaryLink(row.postUrl, row.postTitle)}</div>
+      <div class="sum-bubble sum-bubble-mine"><span class="sum-bubble-tag">💬 내 댓글</span>${escapeHtml(row.text)}</div>
+    </div>`;
+}
+function summaryEmpty(kind) {
+  if (kind === 'neighbors') return ['🤝', '추가한 이웃이 없어요', '소통·자율 주행으로 서로이웃을 신청하면 여기에 쌓입니다.'];
+  if (kind === 'replies') return ['↩️', '단 대댓글이 없어요', '내 글에 받은 댓글에 답글을 달면 여기에 쌓입니다.'];
+  return ['💬', '이웃 글에 단 댓글이 없어요', '이웃 새글·소통에서 댓글을 남기면 여기에 쌓입니다.'];
+}
+
+function renderSummaryList(kind, listId, pillId, unit) {
+  const box = $(`#${listId}`);
+  const state = loadSummary.state;
+  const rows = state.data?.detail?.[kind] || [];
+  $(`#${pillId}`).textContent = `${rows.length}${unit}`;
+  if (!rows.length) {
+    const [icon, title, hint] = summaryEmpty(kind);
+    box.innerHTML = `<div class="sum-empty"><span class="sum-empty-icon" aria-hidden="true">${icon}</span><strong>이 날은 ${title}</strong><small>${hint}</small></div>`;
+    return;
+  }
+  const shown = state.shown[kind] || 10;
+  const more = rows.length - shown;
+  box.innerHTML = rows.slice(0, shown).map((row) => summaryItem(kind, row)).join('')
+    + (more > 0 ? `<button type="button" class="sum-more-btn" data-sum-more="${kind}">더 보기 · ${more}${unit} 더 있어요</button>` : '');
+}
+
+function summaryMiniCounts(day) {
+  return `<span class="sum-mini sum-mini-neighbor" title="추가한 이웃">🤝 ${day.neighbors}</span>
+    <span class="sum-mini sum-mini-reply" title="대댓글">↩️ ${day.replies}</span>
+    <span class="sum-mini sum-mini-comment" title="이웃 글 댓글">💬 ${day.comments}</span>`;
+}
+
+function renderSummary() {
+  const { data, daysShown } = loadSummary.state;
+  if (!data) return;
+  const { detail, today, days, totals } = data;
+  const isToday = detail.date === today;
+  const counts = { neighbors: detail.neighbors.length, replies: detail.replies.length, comments: detail.comments.length };
+
+  $('#sumEyebrow').textContent = isToday ? `📊 오늘의 활동 · ${summaryDayLabel(today)}` : `📅 ${summaryDayLabel(detail.date, true)}의 활동`;
+  $('#sumHeroTitle').textContent = counts.neighbors + counts.replies + counts.comments
+    ? `이웃 ${counts.neighbors}명 추가 · 대댓글 ${counts.replies}개 · 댓글 ${counts.comments}개`
+    : (isToday ? '오늘은 아직 활동 기록이 없어요' : '이 날은 활동 기록이 없어요');
+  $('#sumCountNeighbors').textContent = counts.neighbors;
+  $('#sumCountReplies').textContent = counts.replies;
+  $('#sumCountComments').textContent = counts.comments;
+
+  const input = $('#sumDateInput');
+  input.max = today;
+  input.value = detail.date;
+  $('#sumNextDay').disabled = detail.date >= today;
+  $('#sumTodayBtn').disabled = isToday;
+
+  renderSummaryList('neighbors', 'sumNeighborList', 'sumNeighborPill', '명');
+  renderSummaryList('replies', 'sumReplyList', 'sumReplyPill', '개');
+  renderSummaryList('comments', 'sumCommentList', 'sumCommentPill', '개');
+
+  $('#sumTotals').innerHTML = `<span class="sum-totals-label">전체 기간</span>${summaryMiniCounts(totals)}`;
+
+  const list = days[0]?.date === today ? days : [{ date: today, neighbors: 0, replies: 0, comments: 0 }, ...days];
+  const visible = list.slice(0, daysShown);
+  if (!visible.some((day) => day.date === detail.date)) {
+    visible.push({ date: detail.date, ...counts });
+    visible.sort((a, b) => b.date.localeCompare(a.date));
+  }
+  $('#sumDaysList').innerHTML = visible.map((day) => {
+    const empty = !(day.neighbors + day.replies + day.comments);
+    return `<button type="button" role="listitem" class="sum-day${day.date === detail.date ? ' active' : ''}${empty ? ' empty' : ''}" data-sum-day="${day.date}">
+      <span class="sum-day-date">${summaryDayLabel(day.date)}${day.date === today ? '<i class="sum-today-tag">오늘</i>' : ''}</span>
+      <span class="sum-day-counts">${empty ? '<span class="sum-day-none">기록 없음</span>' : summaryMiniCounts(day)}</span>
+    </button>`;
+  }).join('') + (list.length > daysShown ? '<button type="button" class="sum-more-btn" data-sum-more-days>이전 날짜 더 보기</button>' : '');
+}
+
+async function loadSummary(date) {
+  const state = loadSummary.state;
+  if (date !== undefined) state.date = date;
+  state.shown = {};
+  const requestId = ++state.requestId;
+  try {
+    const data = await api(`api/summary${state.date ? `?date=${encodeURIComponent(state.date)}` : ''}`);
+    if (requestId !== state.requestId) return;
+    state.data = data;
+    renderSummary();
+  } catch (error) {
+    if (requestId !== state.requestId) return;
+    $('#sumHeroTitle').textContent = '활동 기록을 불러오지 못했어요';
+    toast(error.message || '활동 기록을 불러오지 못했습니다.', true);
+  }
+}
+loadSummary.state = { date: '', data: null, shown: {}, daysShown: 14, requestId: 0 };
+
+function setupSummaryTab() {
+  const panel = $('#summaryWorkspace');
+  if (!panel) return;
+  const current = () => loadSummary.state.data?.detail?.date || loadSummary.state.data?.today;
+  $('#sumPrevDay').addEventListener('click', () => current() && loadSummary(summaryShiftDay(current(), -1)));
+  $('#sumNextDay').addEventListener('click', () => current() && loadSummary(summaryShiftDay(current(), 1)));
+  $('#sumTodayBtn').addEventListener('click', () => loadSummary(''));
+  $('#sumDateInput').addEventListener('change', (event) => { if (event.target.value) loadSummary(event.target.value); });
+  panel.addEventListener('click', (event) => {
+    const day = event.target.closest('[data-sum-day]');
+    if (day) { loadSummary(day.dataset.sumDay === loadSummary.state.data?.today ? '' : day.dataset.sumDay); return; }
+    const more = event.target.closest('[data-sum-more]');
+    if (more) {
+      const kind = more.dataset.sumMore;
+      loadSummary.state.shown[kind] = (loadSummary.state.shown[kind] || 10) + 20;
+      renderSummary();
+      return;
+    }
+    if (event.target.closest('[data-sum-more-days]')) { loadSummary.state.daysShown += 30; renderSummary(); return; }
+    const jump = event.target.closest('[data-sum-jump]');
+    if (jump) $(`#${jump.dataset.sumJump}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+setupSummaryTab();
+
+// The app opens on the Summary tab: what was done today, at a glance.
+setActiveTab('summary');
 
 function renderManagedComments() {
   const body = $('#commentManagementBody');

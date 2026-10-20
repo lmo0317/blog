@@ -1,0 +1,531 @@
+/* --------------------------------------------------------------------------
+   Summary tab (오늘 · 날짜별 활동 요약)
+   -------------------------------------------------------------------------- */
+.sum-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.sum-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Hero: what day and one-line result + date navigation */
+.sum-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 60%) !important;
+  border-color: #a7f3d0 !important;
+}
+
+.sum-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sum-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: #15803d;
+}
+
+.sum-hero-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.sum-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sum-nav-btn,
+.sum-today-btn {
+  height: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sum-nav-btn {
+  width: 40px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.sum-today-btn {
+  padding: 0 14px;
+  font-size: 13px;
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #03c75a 0%, #00a94f 100%);
+}
+
+.sum-nav-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.sum-today-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(3, 199, 90, 0.25);
+}
+
+.sum-nav-btn:disabled,
+.sum-today-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sum-today-btn:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+
+.sum-date-input {
+  width: 150px !important;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sum-date-input:focus {
+  outline: none;
+  border-color: #03c75a;
+  box-shadow: 0 0 0 3px rgba(3, 199, 90, 0.15);
+}
+
+/* Stat cards */
+.sum-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sum-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 12px;
+  border-radius: 14px;
+  border: 1px solid;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sum-stat:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.sum-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sum-stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.sum-stat-neighbor { background: #f0fdf4; border-color: #bbf7d0; }
+.sum-stat-neighbor .sum-stat-label { color: #166534; }
+.sum-stat-neighbor .sum-stat-value { color: #15803d; }
+.sum-stat-reply { background: #e0e7ff; border-color: #c7d2fe; }
+.sum-stat-reply .sum-stat-label { color: #3730a3; }
+.sum-stat-reply .sum-stat-value { color: #4338ca; }
+.sum-stat-comment { background: #eff6ff; border-color: #bfdbfe; }
+.sum-stat-comment .sum-stat-label { color: #1e40af; }
+.sum-stat-comment .sum-stat-value { color: #2563eb; }
+
+/* Section cards */
+.sum-section { scroll-margin-top: 8px; }
+
+.sum-count-pill {
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sum-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px !important;
+}
+
+.sum-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.sum-item:hover {
+  border-color: #cbd5e1;
+  background: #fbfdff;
+}
+
+.sum-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sum-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #15803d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sum-who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sum-name {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.sum-name:hover { color: #00a94f; text-decoration: underline; }
+
+.sum-id {
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sum-time {
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sum-badge {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sum-badge-info { background: #dbeafe; border-color: #bfdbfe; color: #2563eb; }
+.sum-badge-success { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
+.sum-badge-like { background: #fee2e2; border-color: #fecaca; color: #dc2626; }
+
+.sum-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 42px;
+}
+
+.sum-chip {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sum-post-link {
+  min-width: 0;
+  overflow: hidden;
+  color: #4f46e5;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.sum-post-link:hover { color: #3730a3; text-decoration: underline; }
+span.sum-post-link { color: #64748b; }
+
+.sum-bubble {
+  margin-left: 42px;
+  padding: 9px 12px;
+  border-radius: 4px 12px 12px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #334155;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sum-bubble-tag {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sum-bubble-received { background: #f8fafc; border: 1px solid #e2e8f0; }
+.sum-bubble-received .sum-bubble-tag { color: #64748b; }
+.sum-bubble-mine { background: #ecfdf5; border: 1px solid #a7f3d0; }
+.sum-bubble-mine .sum-bubble-tag { color: #15803d; }
+
+.sum-more-btn {
+  flex-shrink: 0;
+  height: 40px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sum-more-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.sum-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 12px;
+  text-align: center;
+}
+
+.sum-empty-icon {
+  font-size: 22px;
+  opacity: 0.8;
+}
+
+.sum-empty strong {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sum-empty small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+/* By-date list */
+.sum-days {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 170px);
+}
+
+.sum-days-hint {
+  color: #94a3b8;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.sum-days-totals {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.sum-totals-label {
+  margin-right: 2px;
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.sum-days-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sum-day {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sum-day:hover { background: #f1f5f9; }
+
+.sum-day.active {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.sum-day-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sum-day.empty .sum-day-date { color: #64748b; font-weight: 600; }
+
+.sum-today-tag {
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: #03c75a;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.sum-day-counts {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.sum-day-none {
+  color: #94a3b8;
+  font-size: 11.5px;
+}
+
+.sum-mini {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sum-mini-neighbor { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+.sum-mini-reply { background: #e0e7ff; border-color: #c7d2fe; color: #4338ca; }
+.sum-mini-comment { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+
+.sum-days-list .sum-more-btn { margin-top: 4px; }
+
+/* Narrow widths: the date list moves above the details and scrolls on its own */
+@media (max-width: 1024px) {
+  /* Hero and counts first, then the date list, then the day's lists */
+  .sum-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .sum-main { display: contents; }
+  .sum-hero { order: 1; }
+  .sum-stats { order: 2; }
+  .sum-days { order: 3; position: static; max-height: none; }
+  .sum-section { order: 4; }
+  .sum-days-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    max-height: 232px;
+  }
+  .sum-days-list .sum-more-btn { margin-top: 0; }
+}
+
+@media (max-width: 640px) {
+  .sum-hero { padding: 14px; }
+  .sum-hero-title { font-size: 16px; }
+  .sum-date-nav { width: 100%; }
+  .sum-date-input { flex: 1; width: auto !important; min-width: 0; }
+  .sum-stats { gap: 8px; }
+  .sum-stat { padding: 12px 6px; }
+  .sum-stat-label { font-size: 11px; }
+  .sum-stat-value { font-size: 20px; }
+  .sum-item-meta,
+  .sum-bubble { padding-left: 0; margin-left: 0; }
+  .sum-item-meta { flex-wrap: wrap; }
+  .sum-chip { max-width: 100%; }
+  .sum-post-link { flex: 1 1 100%; }
+}

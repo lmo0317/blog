@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=39">
   <link rel="stylesheet" href="app-mode.css?v=69">
+  <link rel="stylesheet" href="summary.css?v=1">
 </head>
 <body>
   <main class="shell">
@@ -45,10 +46,13 @@
     </header>
 
     <nav class="workspace-tabs" role="tablist" aria-label="블로그 관리 메뉴">
+      <button class="workspace-tab active" id="summaryTab" type="button" role="tab" aria-selected="true" aria-controls="summaryWorkspace" data-tab="summary">
+        <span class="tab-copy"><strong>Summary</strong><small>오늘 · 날짜별 활동 요약</small></span>
+      </button>
       <button class="workspace-tab" id="autopilotTab" type="button" role="tab" aria-selected="false" aria-controls="autopilotWorkspace" data-tab="autopilot" tabindex="-1">
         <span class="tab-copy"><strong>자율 주행 <span class="ap-tab-dot hidden" id="apTabDot" aria-label="켜짐"></span></strong><small>켜두면 알아서 관리</small></span>
       </button>
-      <button class="workspace-tab active" id="engagementTab" type="button" role="tab" aria-selected="true" aria-controls="engagementWorkspace" data-tab="engagement">
+      <button class="workspace-tab" id="engagementTab" type="button" role="tab" aria-selected="false" aria-controls="engagementWorkspace" data-tab="engagement" tabindex="-1">
         <span class="tab-copy"><strong>소통</strong><small>주제 기반 댓글 · 서로이웃</small></span>
       </button>
       <button class="workspace-tab" id="keywordTab" type="button" role="tab" aria-selected="false" aria-controls="keywordWorkspace" data-tab="keyword" tabindex="-1">
@@ -72,6 +76,74 @@
         <span><strong>AI 자동 포스팅</strong></span>
       </button>
     </nav>
+
+    <!-- Workspace: Summary (오늘 · 날짜별 활동 요약) -->
+    <section class="workspace-panel" id="summaryWorkspace" role="tabpanel" aria-labelledby="summaryTab" data-tab-panel="summary">
+      <div class="sum-layout">
+        <div class="sum-main">
+          <div class="desktop-card sum-hero">
+            <div class="sum-hero-text">
+              <span class="sum-eyebrow" id="sumEyebrow">📊 오늘의 활동</span>
+              <strong class="sum-hero-title" id="sumHeroTitle">오늘 한 일을 불러오는 중…</strong>
+            </div>
+            <div class="sum-date-nav" role="group" aria-label="날짜 이동">
+              <button type="button" class="sum-nav-btn" id="sumPrevDay" title="하루 전" aria-label="하루 전">‹</button>
+              <input type="date" class="sum-date-input" id="sumDateInput" aria-label="날짜 고르기">
+              <button type="button" class="sum-nav-btn" id="sumNextDay" title="하루 뒤" aria-label="하루 뒤">›</button>
+              <button type="button" class="sum-today-btn" id="sumTodayBtn">오늘</button>
+            </div>
+          </div>
+
+          <div class="sum-stats">
+            <button type="button" class="sum-stat sum-stat-neighbor" data-sum-jump="sumNeighborCard">
+              <span class="sum-stat-label"><span aria-hidden="true">🤝</span> 추가한 이웃</span>
+              <strong class="sum-stat-value" id="sumCountNeighbors">-</strong>
+            </button>
+            <button type="button" class="sum-stat sum-stat-reply" data-sum-jump="sumReplyCard">
+              <span class="sum-stat-label"><span aria-hidden="true">↩️</span> 내 글 대댓글</span>
+              <strong class="sum-stat-value" id="sumCountReplies">-</strong>
+            </button>
+            <button type="button" class="sum-stat sum-stat-comment" data-sum-jump="sumCommentCard">
+              <span class="sum-stat-label"><span aria-hidden="true">💬</span> 이웃 글 댓글</span>
+              <strong class="sum-stat-value" id="sumCountComments">-</strong>
+            </button>
+          </div>
+
+          <div class="desktop-card sum-section" id="sumNeighborCard">
+            <div class="desktop-card-header">
+              <div class="card-title-group"><span aria-hidden="true">🤝</span><h3>추가한 이웃</h3></div>
+              <span class="sum-count-pill" id="sumNeighborPill">0명</span>
+            </div>
+            <div class="desktop-card-body sum-list" id="sumNeighborList"></div>
+          </div>
+
+          <div class="desktop-card sum-section" id="sumReplyCard">
+            <div class="desktop-card-header">
+              <div class="card-title-group"><span aria-hidden="true">↩️</span><h3>내 글에 단 대댓글</h3></div>
+              <span class="sum-count-pill" id="sumReplyPill">0개</span>
+            </div>
+            <div class="desktop-card-body sum-list" id="sumReplyList"></div>
+          </div>
+
+          <div class="desktop-card sum-section" id="sumCommentCard">
+            <div class="desktop-card-header">
+              <div class="card-title-group"><span aria-hidden="true">💬</span><h3>이웃 글에 단 댓글</h3></div>
+              <span class="sum-count-pill" id="sumCommentPill">0개</span>
+            </div>
+            <div class="desktop-card-body sum-list" id="sumCommentList"></div>
+          </div>
+        </div>
+
+        <aside class="desktop-card sum-days">
+          <div class="desktop-card-header">
+            <div class="card-title-group"><span aria-hidden="true">📅</span><h3>날짜별 기록</h3></div>
+            <span class="sum-days-hint">눌러서 그날 보기</span>
+          </div>
+          <div class="sum-days-totals" id="sumTotals"></div>
+          <div class="sum-days-list" id="sumDaysList" role="list"></div>
+        </aside>
+      </div>
+    </section>
 
     <!-- Workspace: Autopilot (자율 주행) -->
     <section class="workspace-panel hidden" id="autopilotWorkspace" role="tabpanel" aria-labelledby="autopilotTab" data-tab-panel="autopilot">
@@ -2908,6 +2980,6 @@
     </footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=74"></script>
+  <script type="module" src="app.js?v=75"></script>
 </body>
 </html>
