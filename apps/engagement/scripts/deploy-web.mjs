@@ -5,6 +5,9 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireQaPass } from './qa-gate.mjs';
+
+requireQaPass('웹 배포');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SERVER = 'lmo0317@192.168.219.112';

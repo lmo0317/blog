@@ -160,7 +160,7 @@ export function pickDefaultReply(type, commentText = '', recentReplies = [], { r
   // A compliment without a word from my title ("너무 맛있을 것 같아요!", "깔끔하네요"): thank them for it.
   if (type === 'remark' && PRAISE.test(commentText)) {
     const lines = /맛있|맛나|맛있겠|든든|푸짐/.test(commentText)
-      ? ['맛있게 봐 주셔서 고마워요. 편안한 하루 보내세요!', '맛있어 보인다니 저도 기분 좋네요. 좋은 하루 되세요 :)', '맛있게 봐 주셔서 감사해요. 남은 하루도 즐겁게 보내세요.']
+      ? ['맛있게 봐 주셔서 고마워요. 편안한 하루 보내세요!', '맛있게 봐 주셔서 저도 기분 좋네요. 좋은 하루 되세요 :)', '맛있게 봐 주셔서 감사해요. 남은 하루도 즐겁게 보내세요.']
       : ['좋게 봐 주셔서 고마워요. 편안한 하루 보내세요!', '예쁘게 봐 주셔서 감사해요. 남은 하루도 즐겁게 보내세요.', '좋은 말씀 남겨 주셔서 고마워요. 좋은 하루 되세요 :)'];
     return pickFresh(lines, recentReplies, random);
   }

@@ -42,3 +42,9 @@
 
 ## 🛠️ 4. 고객 대응 (Operator 스킬)
 * 고객 버그 신고·질문(블로그 댓글/답글, 메일, Q&A), 이용권 연장, 고객에게 답글·메일 보내기는 **[operator 스킬](file:///D:/work/dev/blog/.agents/skills/operator/SKILL.md)** 절차와 스크립트(`.agents/skills/operator/scripts/`)를 따른다.
+
+---
+
+## 🧪 5. 배포 전 QA (QA 스킬 — 필수)
+* 이웃메이트 웹 배포(`npm run deploy:web`)와 앱 릴리스(`npm run release`) 전에는 **항상 [qa 스킬](file:///D:/work/dev/blog/.agents/skills/qa/SKILL.md)대로 `npm run qa`를 돌리고, 모든 항목이 통과했을 때만 배포**한다. 두 배포 명령은 QA 통과 기록이 없거나 코드가 바뀌었으면 스스로 멈춘다.
+* QA는 실제 네이버에 비밀댓글·대댓글을 달고 공개 페이지에서 확인한 뒤 지운다. 단위 테스트 통과만으로 배포하지 않는다.
