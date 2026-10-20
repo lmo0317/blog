@@ -16,6 +16,11 @@ const newer = (a, b) => {
 };
 
 // The top-level fields of electron-builder's latest.yml: version, path, sha512.
+// The feed is a folder (latest.yml and the installer sit in it) or, on a file host such as Google Drive, the
+// direct link to latest.yml itself, whose path is then the installer's own direct link.
+const feedFile = (feedUrl) => (/\.ya?ml$|[?&]id=/.test(feedUrl) ? new URL(feedUrl) : new URL('latest.yml', feedUrl));
+const installerUrl = (feedPath, feedUrl) => (/^https?:\/\//.test(feedPath) ? new URL(feedPath) : new URL(encodeURIComponent(feedPath), feedFile(feedUrl)));
+
 const parseFeed = (text) => Object.fromEntries(text.split(/\r?\n/).map((line) => line.match(/^(version|path|sha512):\s*'?([^']*)'?\s*$/)).filter(Boolean).map((m) => [m[1], m[2]]));
 
 export function createSlimUpdater({ currentVersion, feedUrl, dataDir, beforeInstall = async () => {} }) {
@@ -29,18 +34,18 @@ export function createSlimUpdater({ currentVersion, feedUrl, dataDir, beforeInst
     busy = true;
     try {
       if (state.status !== 'downloading') state.status = 'checking';
-      const feed = parseFeed(await (await fetch(new URL('latest.yml', feedUrl), { cache: 'no-store' })).text());
+      const feed = parseFeed(await (await fetch(feedFile(feedUrl), { cache: 'no-store' })).text());
       if (!feed.version || !feed.path || !newer(feed.version, currentVersion)) {
         state.status = 'latest';
         return;
       }
       Object.assign(state, { status: 'downloading', version: feed.version, percent: 0, error: '' });
-      const res = await fetch(new URL(encodeURIComponent(feed.path), feedUrl));
+      const res = await fetch(installerUrl(feed.path, feedUrl));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const total = Number(res.headers.get('content-length')) || 0;
       const dir = path.join(dataDir, 'updates');
       fs.mkdirSync(dir, { recursive: true });
-      const file = path.join(dir, path.basename(feed.path));
+      const file = path.join(dir, `NeighborMate-Setup-${feed.version}.exe`);
       const out = fs.createWriteStream(`${file}.download`);
       const hash = crypto.createHash('sha512');
       let got = 0;
