@@ -138,7 +138,16 @@ export function checkComment(text, context = {}, recent = []) {
 /** What kind of comment I received, so the reply answers the right thing. */
 export function classifyComment(text) {
   const clean = normalizeCommentText(text);
-  if (/\?|어떻게|어디서|어디에|언제|얼마|되나요|있나요|인가요|할까요|건가요/.test(clean)) return 'question';
+  // "답방 와주실거죠?" is a visit request with a question mark, not a question for the owner (2026-10-20 eval).
+  const visitAsk = /답방|놀러 ?(?:와|오|갈)|(?:와|들러|방문해) ?주(?:세요|시면|실)/.test(clean) && !/어떻게|어디서|어디에|언제|얼마|무엇|뭐|되나요|있나요|인가요/.test(clean);
+  // "공감하는 곳이 없네요": they could not find the like button. A report for me, not something to thank.
+  if (/공감(?:하는 ?곳|버튼|누르는)[^.!?]{0,8}(?:없|안 보|못 찾)/.test(clean)) return 'request';
+  // A real question ends a sentence like one ("되나요?", "할까요?"); "독서??", "그런 느낌이랄까..?" are a chatty tone
+  // (2026-10-20 eval: such greetings were handed to the owner and never answered).
+  const asks = /어떻게|어디서|어디에|언제|얼마|되나요|있나요|인가요|할까요|건가요/.test(clean) || /(?:요|까|나|죠|니|가|래|지|요\?)\s*\?/.test(clean);
+  if (!visitAsk && asks) return 'question';
+  // "앞으로도 자주 올려주세요", "이번 주도 화이팅해요": encouragement, not a request.
+  if (/(?:자주|앞으로도|계속|꾸준히)[^.!?]{0,12}(?:올려|써|들려|와|해) ?주세요|화이팅|파이팅/.test(clean) && !/(?:받고|쓰고|공유받고|알고) 싶|보내 ?주|알려 ?주|문의|요청/.test(clean)) return 'greeting';
   // "답방 왔어요! 제 블로그도 놀러 와 주세요" asks for a visit, which the autopilot answers itself; not a request for the owner.
   // "답방" as a greeting or an ask, not a remark about 답방 ("답방 흐름이 생겼다는 대목이 흥미롭네요", 2026-10-20).
   if (/답방(?: ?(?:왔|와|옵|갑|가요|갈게|드려|드립|부탁|환영|해 ?주|오세요|합니|해요|요(?![가-힣])|[!~.^]|$))|놀러 ?(?:와|오|갈)|(?:와|들러|방문해) ?주(?:세요|시면|실)/.test(clean) && !/(?:받고|쓰고|써보고|사용하고|공유받고|알고) 싶|보내 ?주|알려 ?주|공유해 ?주|가능할까|가능한가|문의|요청/.test(clean)) return 'greeting';
@@ -220,7 +229,27 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
     reasons.push(reason('wrong_role', '나는 가게 주인이 아니라 이 글을 쓴 블로거입니다. "저희 가게"라고 쓰지 마세요.'));
   }
   // A sentence that stops in the middle ("방문해 주셔서요.").
-  if (/(?:셔서|해서|니까)요[.!~]*$/.test(clean) || /다니[^.!?]*다니/.test(clean)) reasons.push(reason('awkward', '문장을 끝까지 맺고, 같은 어미를 겹쳐 쓰지 마세요.'));
+  if (/(?:셔서|해서|니까)요?[.!~]*$/.test(clean) || /다니[^.!?]*다니/.test(clean)) reasons.push(reason('awkward', '문장을 끝까지 맺고, 같은 어미를 겹쳐 쓰지 마세요.'));
+  // E2B's habit on every compliment: "깔끔하다니 다행이네요", "좋은 정보라고 말씀해주시니 다행입니다" (2026-10-20 eval:
+  // the most common reason a reply read as a bot). Being glad that someone liked it is said with a thank-you.
+  if (/(?:다니|라니|다고 하(?:니|시니)|라고 하(?:니|시니)|하시니|주시니|셨다니|다는 말씀|라는 말씀)[^.!?]{0,12}다행/.test(clean) && classifyComment(commentText) !== 'question') {
+    reasons.push(reason('echo', '상대 말을 받아 "~다니 다행이네요"로 끝내지 마세요. 고맙다는 말과 글쓴이로서 한마디를 내 말로 쓰세요.'));
+  }
+  // More of the reader's voice E2B found once the first ones were blocked (2026-10-20 eval v2): "저도 한번 먹어보려고요",
+  // "저도 그 맛에 끌리더라고요", "저도 맛있게 먹었겠네요", "~다는 말씀에 저도 그래요".
+  if (/(?:먹어|가|해|써) ?보려(?:고|구)|끌리(?:더라|게 됐|네요)|빠질 것 같|먹었겠|(?:다는|라는) (?:말씀|말|평|의견)에 저도|맛있게 드셨으면|방문(?:할|해 ?볼) 생각|점에 공감했|점이 마음에 듭|참고 ?(?:많이 )?됐으면|(?:보고|읽고) 가시길|가 ?볼 (?:만한|생각)|다음에 (?:가|방문|들러) ?(?:볼|봐야|보려|하려)|사진 보니까/.test(clean)) {
+    reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. 처음 듣는 사람처럼 반응하지 말고, 고맙다는 말과 글쓴이로서 한마디를 쓰세요.'));
+  }
+  // Their own story handed back as mine: "다이어트 중이라 저도 포케 자주 찾게 되던데" → "저도 다이어트 때문에 포케 자주 찾게 되거든요".
+  if (/^저도/.test(clean) && Array.from({ length: Math.max(0, theirs.length - 5) }, (_, i) => theirs.slice(i, i + 6)).some((run) => mine.includes(run))) {
+    reasons.push(reason('echo', '상대가 한 이야기를 "저도 ~"로 내 이야기처럼 되풀이하지 마세요.'));
+  }
+  // A chatbot, not a blogger: "어떤 메뉴를 좋아하시는지 알려주시면 추천해 드릴게요".
+  if (/(?:알려|말씀해) ?주시면|추천해 ?드릴게요|도와 ?드릴게요|안내해 ?드릴게요/.test(clean)) reasons.push(reason('chatbot', '상담원처럼 "알려주시면 추천해 드릴게요"라고 하지 마세요. 블로거로서 답하세요.'));
+  // "네," opens an answer; to a greeting or a compliment it is a bot's tic.
+  if (/^네[,.!\s]/.test(clean) && classifyComment(commentText) !== 'question') reasons.push(reason('awkward', '"네,"로 시작하지 마세요.'));
+  // Their story told as mine: "저도 구미에서 식당 준비하시면서…".
+  if (/저도 [^.!?]{0,30}(?:하시|셨|으시|시면서|시다가)/.test(clean)) reasons.push(reason('misattribution', '상대의 경험을 "저도"로 내 이야기처럼 쓰지 마세요.'));
   // "잘 보고 다녀갑니다", "답방 다녀갑니다": they are leaving my blog, not going on a trip.
   // Repeating what they said back to them ("신기하다고 하셨네요") answers nothing.
   if (/(?:다고|라고|다는|라는) (?:하셨|말씀하셨)(?:네요|군요|어요|는데|으니|다니)/.test(clean)) reasons.push(reason('echo', '상대가 한 말을 "~다고 하셨네요"로 되풀이하지 말고 글쓴이로서 답하세요.'));
@@ -241,6 +270,14 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
 
   // "…하신다는 말씀", "…셨다니": the commenter must really have said it.
   const comment = normalizeCommentText(commentText).replace(/\s/g, '');
+  // E2B's typo for 더: "정리가 도움이 되었다니 다 기쁘네요".
+  if (/다 (?:기쁘|좋네|좋아|뿌듯)/.test(clean)) reasons.push(reason('awkward', '"다 기쁘네요"처럼 어색한 말을 쓰지 마세요.'));
+  // What I say they did must be what they said: "구미에서 식당 준비하면서" → "프로젝트 준비하시느라" (a word from my post).
+  for (const sentence of clean.split(/[.!?]+/)) {
+    if (!/(?:하시느라|하셨|하시는|하시면서|셨네요|셨군요|시느라)/.test(sentence)) continue;
+    const foreign = (sentence.match(/[가-힣]{2,}(?= ?(?:준비|하시|하셨))/g) || []).filter((word) => !comment.includes(word.slice(0, 2)) && !COMMON_WORDS.has(word));
+    if (foreign.length) { reasons.push(reason('misattribution', `상대가 말하지 않은 "${foreign[0]}"을(를) 상대가 한 일처럼 쓰지 마세요.`)); break; }
+  }
   for (const match of clean.matchAll(ATTRIBUTION)) {
     const claim = stems(match[1] || match[2] || '').filter((word) => !CLAIM_STOP.has(word));
     if (claim.length && !claim.some((word) => comment.includes(word) || comment.includes(word.slice(0, 2)))) {

@@ -149,3 +149,31 @@ test('a remark about 답방 is not a visit request; a controversy gets no smiley
   assert.ok(validateBlogComment('판매자 측이 과하게 대응했다고 해명한 점이 눈에 띄네요. 😊', { title: "게장 원산지 질문했더니 '채팅 차단'?…논란에 해명" }).reasons.includes('tone'));
   for (const line of [...DEFAULT_COMMENTS, ...DEFAULT_REPLIES.remark]) assert.doesNotMatch(line, /새 글|오늘도 들러|자주 들르|오늘 글도|들러 주세요|좋게 봐/, line);
 });
+
+// 2026-10-20 reply eval (171 real comments, E2B, judged blind): what the set replies and routing must keep doing.
+test('greetings, visit asks and one-line compliments get a set reply; chatty "??" is not a question', async () => {
+  const { pickDefaultReply, commentTopic } = await import('../lib/comment-style.js');
+  const title = "[검단 포케 맛집] 검단 다양하고 맛있는 포케집 '슬로우캘리 검단신도시점'";
+  assert.equal(commentTopic('육회포케라는것도 있네요 ㄷㄷ든든하고 맛있어보여요~~', title), '포케');
+  assert.equal(commentTopic('너무 맛있을 것 같아요!', title), '');
+  assert.match(pickDefaultReply('remark', '포케 양 푸짐하고 넘 맛나보여용', [], { postTitle: title }), /^포케 /);
+  assert.match(pickDefaultReply('remark', '슬로우캘리 자주갔는데 금액적인 부분이 아쉽지만 먹을만 했어요', [], { postTitle: title }), /솔직/);
+  assert.doesNotMatch(pickDefaultReply('remark', '샴푸 한번 사용해보면 좋을 것 같아요!', [], { postTitle: '뚫어뻥 없을 때 변기 뚫는 법' }), /마음에 들어|좋게 봐/);
+  assert.equal(classifyComment('답방 와주실거죠?💚'), 'greeting');
+  assert.equal(classifyComment('독서??말고 블로그쓰는 우리!!이번주도 화이팅해요!!'), 'greeting');
+  assert.equal(classifyComment('앞으로도 자주 올려주세요!'), 'greeting');
+  assert.equal(classifyComment('글 잘 보고 갑니다 공감하는 곳이 없네요'), 'request');
+  assert.equal(classifyComment('이거 무료예요?'), 'question');
+});
+
+test('E2B habits on replies found by the eval are rejected', () => {
+  const c = '구미에서 식당 준비하면서 이것저것 찾아보다가 들어왔는데, 유익한 글에 도움 많이 받고 갑니다.';
+  const post = { postTitle: '프로젝트 회고', postSnippet: '이번 프로젝트 준비 과정' };
+  const codes = (reply, commentText = c) => checkReply(reply, { commentText, ...post }).reasons.map((item) => item.code);
+  assert.ok(codes('프로젝트 준비하시느라 고생 많으셨네요.').includes('misattribution'));
+  assert.ok(codes('정리가 도움이 되었다니 다 기쁘네요.').includes('awkward'));
+  assert.ok(codes('깔끔하다니 다행이네요.', '너무 깔끔하네요!').includes('echo'));
+  assert.ok(codes('어떤 메뉴를 좋아하시는지 알려주시면 추천해 드릴게요.', '메뉴 고르기 힘들 때 가야겠어요').includes('chatbot'));
+  assert.ok(codes('저도 다음에 방문할 생각이에요.', '사진도 깔끔하고 분위기까지 잘 보여서 좋았어요').includes('reader_voice'));
+  assert.ok(codes('저도 다이어트 때문에 포케 자주 찾게 되거든요.', '다이어트 중이라 저도 포케 자주찾게 되던데').includes('echo'));
+});

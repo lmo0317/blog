@@ -115,18 +115,19 @@ test('generateBlogComment falls back to a default comment after three rejected a
   assert.equal(calls, 3);
 });
 
-test('generateCommentReply retries with the reasons, then a greeting gets a default reply and a question gets none', async () => {
+test('generateCommentReply retries with the reasons; a greeting gets a set reply without the model; a question gets none', async () => {
   const server = new EmbeddedLlamaServer({ appRoot: process.cwd() });
   const prompts = [];
-  const replies = ['네, 이웃 관리하는 데 시간 많이 쓰신다는 말씀에 저도 크게 공감했어요.', '찾아와 주셔서 반가워요. 오늘도 좋은 하루 보내세요.'];
+  const replies = ['네, 이웃 관리에 시간이 많이 드신다는 말씀에 저도 크게 공감했어요.', '매일 이웃 관리에 시간이 너무 들어서 직접 만들게 됐어요. 관심 가져 주셔서 고마워요.'];
   server.chatCompletion = async (messages) => { prompts.push(messages); return replies[prompts.length - 1]; };
-  const reply = await server.generateCommentReply({ ...myPost, commentText: '포스팅 잘봤습니다.', commenterName: '이웃' });
+  const reply = await server.generateCommentReply({ ...myPost, commentText: '이웃 관리에 매일 시간이 정말 많이 드는데 이런 걸 직접 만드셨다니 대단하세요', commenterName: '이웃' });
   assert.equal(reply, replies[1]);
-  assert.match(prompts[0][1].content, /인사만 남겼습니다/);
-  assert.match(prompts[1].at(-1).content, /하지 않은 말/);
+  assert.match(prompts[0][1].content, /자기 생각이나 경험/);
+  assert.match(prompts[1].at(-1).content, /"네,"로 시작하지/);
 
-  server.chatCompletion = async () => '도움이 되셨다니 다행이에요. 궁금한 점 있으시면 언제든 물어봐 주세요!';
+  server.chatCompletion = async () => { throw new Error('a greeting must not reach the model'); };
   assert.ok(DEFAULT_REPLIES.greeting.includes(await server.generateCommentReply({ ...myPost, commentText: '잘 보고 가요', commenterName: '이웃' })));
+  server.chatCompletion = async () => '도움이 되셨다니 다행이에요. 궁금한 점 있으시면 언제든 물어봐 주세요!';
   await assert.rejects(server.generateCommentReply({ ...myPost, commentText: '이 프로그램은 맥에서도 되나요?', commenterName: '이웃' }), /stock/);
 });
 

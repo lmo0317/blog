@@ -122,8 +122,44 @@ export function pickDefaultComment(recentComments = [], { random = Math.random }
 }
 
 /** A default reply for this visitor comment, or '' when it needs a real answer (a question or a request). */
-export function pickDefaultReply(type, commentText = '', recentReplies = [], { random = Math.random } = {}) {
+// The thing the visitor talked about, when my title names it too ("육회포케", "블로그 댓글"): a default reply that
+// names it reads as an answer, a bare "댓글 고마워요" under "육회에 메밀면 조합이 색다르네요" does not (2026-10-20 eval).
+const TOPIC_STOP = /^(?:정말|너무|진짜|완전|포스팅|정보|오늘|하루|감사|좋은|글|블로그|이웃|맛집|후기|추천|정리|내용|덕분|우와|와우|요즘|댓글|공감|구독)$/;
+export function commentTopic(commentText = '', postTitle = '') {
+  const comment = String(commentText || '').replace(/\s/g, '').toLowerCase();
+  // Nouns of my title ("포케", "슬로우캘리", "꽃게"), not its describing words ("맛있는", "다양하고"), that the visitor
+  // also wrote, even inside a longer word ("육회포케에" has 포케).
+  const nouns = (String(postTitle || '').match(/[가-힣A-Za-z0-9]{2,}/g) || [])
+    .filter((word) => !/(?:하고|하는|있는|없는|한|운|는|은|히|고|던|된|할|러|서)$/.test(word))
+    .map((word) => word.replace(/(?:에서|으로|에는|까지|이랑|은|는|이|가|을|를|에|의|로|와|과|도|만|랑|집|점)$/, (josa, i) => (josa === '집' || josa === '점') && word.length <= 3 ? josa : ''))
+    .filter((word) => word.length >= 2 && !TOPIC_STOP.test(word) && comment.includes(word.toLowerCase()));
+  return nouns.sort((a, b) => b.length - a.length)[0] || '';
+}
+
+const COMPLAINT = /아쉽|아쉬웠|별로|비싸|실망|불친절|불편|짜더|싱겁/;
+// Praise of my post, not advice in it ("샴푸 한번 사용해보면 좋을 것 같아요" is a tip: 2026-10-20 eval).
+const PRAISE_WORDS = /맛있|맛나|좋네|좋아요|좋다|좋았|좋은|예쁘|이쁘|깔끔|멋지|멋있|대박|최고|훌륭|유용|유익|든든|푸짐|신기|색다르/;
+const PRAISE = { test: (text) => PRAISE_WORDS.test(text) && !/좋을 ?것 ?같|좋겠|(?:해|써|사용해) ?보면|하면 좋/.test(text) };
+
+export function pickDefaultReply(type, commentText = '', recentReplies = [], { random = Math.random, postTitle = '' } = {}) {
   if (type === 'question' || type === 'request') return '';
+  if (type === 'remark' && COMPLAINT.test(commentText)) {
+    return pickFresh(['솔직한 이야기 남겨 주셔서 고마워요. 편안한 하루 보내세요.', '솔직하게 말씀해 주셔서 감사해요. 좋은 하루 되세요.'], recentReplies, random);
+  }
+  const topic = type === 'remark' && !VISIT_REQUEST.test(commentText) ? commentTopic(commentText, postTitle) : '';
+  if (topic) {
+    const lines = PRAISE.test(commentText)
+      ? [`${topic} 좋게 봐 주셔서 고마워요. 편안한 하루 보내세요!`, `${topic} 예쁘게 봐 주셔서 감사해요. 남은 하루도 즐겁게 보내세요.`, `${topic} 마음에 들어 하셔서 저도 기뻐요. 좋은 하루 되세요 :)`]
+      : [`${topic} 이야기 나눠 주셔서 고마워요. 좋은 하루 보내세요!`, `${topic} 이야기에 댓글 남겨 주셔서 감사해요. 편안한 하루 되세요.`];
+    return pickFresh(lines, recentReplies, random);
+  }
+  // A compliment without a word from my title ("너무 맛있을 것 같아요!", "깔끔하네요"): thank them for it.
+  if (type === 'remark' && PRAISE.test(commentText)) {
+    const lines = /맛있|맛나|맛있겠|든든|푸짐/.test(commentText)
+      ? ['맛있게 봐 주셔서 고마워요. 편안한 하루 보내세요!', '맛있어 보인다니 저도 기분 좋네요. 좋은 하루 되세요 :)', '맛있게 봐 주셔서 감사해요. 남은 하루도 즐겁게 보내세요.']
+      : ['좋게 봐 주셔서 고마워요. 편안한 하루 보내세요!', '예쁘게 봐 주셔서 감사해요. 남은 하루도 즐겁게 보내세요.', '좋은 말씀 남겨 주셔서 고마워요. 좋은 하루 되세요 :)'];
+    return pickFresh(lines, recentReplies, random);
+  }
   const pool = VISIT_REQUEST.test(commentText) ? DEFAULT_REPLIES.visit : DEFAULT_REPLIES[type] || DEFAULT_REPLIES.remark;
   return pickFresh(pool, recentReplies, random);
 }

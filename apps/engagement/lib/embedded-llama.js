@@ -8,6 +8,16 @@ import { checkComment, checkReply, classifyComment, replyGuidance, runHarness, s
 import { pickDefaultComment, pickDefaultReply } from './comment-style.js';
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
+const COMPLAINT_COMMENT = /아쉽|아쉬웠|별로|비싸|실망|불친절|불편|짜더|싱겁/;
+// Does my post talk about what they asked? Their content words (조사 removed), any one found in my title or snippet.
+function questionInPost(question, postText) {
+  const post = String(postText || '').replace(/\s/g, '');
+  const words = (String(question).match(/[가-힣A-Za-z0-9]{2,}/g) || [])
+    .map((word) => word.replace(/(?:은|는|이|가|을|를|에|도|만|으로|로|에서|있나요|되나요|인가요|나요|까요|어요|에요|예요)$/, ''))
+    .filter((word) => word.length >= 2 && !/^(?:혹시|그럼|그런데|근데|정말|진짜|여기|거기|이거|그거|어떻게|어디|언제|얼마|무슨|어떤|궁금|질문|포스팅|글)$/.test(word));
+  return !words.length || words.some((word) => post.includes(word));
+}
+
 export class EmbeddedLlamaServer extends EventEmitter {
   constructor({ 
     modelManager, 
@@ -477,6 +487,20 @@ export class EmbeddedLlamaServer extends EventEmitter {
     if (!source) throw new Error('답글을 만들 댓글 내용이 없습니다.');
     this.lastReplyKind = 'ai';
     const recent = this.recentOutputsOf('reply', recentReplies).slice(0, 15);
+    // A greeting, a visit request or a one-line compliment gets a set reply that names what they liked: on 171 real
+    // comments (2026-10-20 eval) almost every bad reply was E2B writing freely to these ("답방 와 주세요" → "저도 답방
+    // 기다리고 있어요", "깔끔하다니 다행이네요"), while the set replies were fine. The model answers what has content.
+    const type = classifyComment(source);
+    // A question about something my post does not mention ("드레스코드 있나요?" on a post that never says): E2B made up
+    // "없어요" while the real answer was the opposite. Only I can answer that one.
+    if (type === 'question' && !questionInPost(source, `${postTitle} ${postSnippet}`)) {
+      throw new Error('글에 없는 내용을 묻는 질문이라 AI가 답하지 않았습니다. 직접 답해 주세요.');
+    }
+    // A complaint ("가격이 아쉬웠어요") too: E2B either agreed like the shop or turned it into nonsense.
+    if (type === 'greeting' || (type === 'remark' && (source.replace(/[^가-힣A-Za-z0-9]/g, '').length < 22 || COMPLAINT_COMMENT.test(source)))) {
+      const fixed = pickDefaultReply(type, source, recent, { postTitle });
+      if (fixed) { this.rememberOutput('reply', fixed); this.lastReplyKind = 'default'; return fixed; }
+    }
     const system = [
       '당신은 이 글을 직접 쓴 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 글쓴이로서 자연스러운 한국어 대댓글 1~2문장을 씁니다.',
       '- 글쓴이 시점을 지키세요. "정리해 주셔서", "좋은 글 감사합니다", "덕분에 알게 됐어요" 같은 독자 말투는 쓰지 않습니다.',
@@ -487,7 +511,19 @@ export class EmbeddedLlamaServer extends EventEmitter {
       '- 댓글과 내 글에 없는 사물·사건·기능을 지어내지 마세요. 출시·배포 여부, 일정, 가격, 지원 범위를 약속하지 마세요.',
       '- 상대가 묻지 않은 충고나 훈계("너무 의존하지 않는 게 중요해요")를 하지 마세요.',
       '- "도움이 되셨다니 다행", "궁금한 점 있으시면 언제든" 같은 상투적인 문장, 최근 대댓글과 비슷한 문장은 쓰지 마세요.',
-      '- 이모지는 0~1개, 해시태그·URL·따옴표·자기소개 금지. 답글만 출력하세요.'
+      '- 이모지는 0~1개, 해시태그·URL·따옴표·자기소개 금지. 답글만 출력하세요.',
+      '',
+      '[좋은 답글 예시: 말투만 참고하고 내용은 따라 쓰지 마세요]',
+      '- (칼국수집 후기) 댓글 "국물 진짜 시원해 보여요!" → 국물이 정말 시원해서 저도 끝까지 다 마셨어요. 들러 주셔서 고마워요!',
+      '- (가계부 앱을 만든 글) 댓글 "이런 프로그램도 있네요 신기해요" → 매번 손으로 정리하던 게 번거로워서 직접 만들어 봤어요. 관심 가져 주셔서 감사해요.',
+      '- (카페 후기) 댓글 "가격은 좀 아쉽더라고요" → 맞아요, 가격은 저도 조금 아쉬웠어요. 솔직한 이야기 고마워요.',
+      '- (여행 후기) 댓글 "저도 꼭 가 봐야겠어요" → 꼭 가 보세요! 다녀오시면 어떠셨는지 들려주세요.',
+      '- 댓글 "잘 보고 갑니다~ 좋은 하루 보내세요" → 들러 주셔서 고마워요. 남은 하루도 편안하게 보내세요!',
+      '[나쁜 답글 예시: 이렇게 쓰지 마세요]',
+      '- 국물이 시원해 보인다고 하니 다행이네요. (상대 말 되받기)',
+      '- 저도 한번 먹어 보고 싶어요. / 기대되네요. (내가 쓴 글인데 독자처럼 말함)',
+      '- 저희 가게에 또 들러 주세요. (나는 가게 주인이 아님)',
+      '- 어떤 메뉴를 좋아하시는지 알려주시면 추천해 드릴게요. (상담원 말투)'
     ].join('\n');
     const user = [
       `[내 글 제목]\n${postTitle}`,
@@ -507,7 +543,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
     });
     if (result.text) { this.noteHarnessOutcome('대댓글', result); this.rememberOutput('reply', result.text); return result.text; }
     // A greeting or a remark the model could not answer well gets a default reply; a question needs a real answer.
-    const fallback = !lastError && pickDefaultReply(classifyComment(source), source, recent);
+    const fallback = !lastError && pickDefaultReply(classifyComment(source), source, recent, { postTitle });
     if (fallback) { this.rememberOutput('reply', fallback); this.lastReplyKind = 'default'; return fallback; }
     const why = result.attempts.at(-1)?.reasons.map((item) => item.code).join(', ') || lastError || '응답 없음';
     throw new Error(`AI가 조건에 맞는 대댓글을 만들지 못했습니다 (${why}). 다음 차례에 다시 시도합니다.`);

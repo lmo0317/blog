@@ -43,8 +43,8 @@ test('comment replies avoid stock sentences and recent replies; a remark falls b
   const answers = ['도움이 되셨다니 다행이에요 😊 궁금한 점 있으시면 언제든 찾아주세요!', '들러 주셔서 고마워요. 편안한 저녁 보내세요.'];
   const prompts = [];
   llama.chatCompletion = async (messages) => { prompts.push(messages[1].content); return answers.shift(); };
-  const reply = await llama.generateCommentReply({ postTitle: '사진 백업 정리', postSnippet: '카메라 사진을 한 번에 백업하는 방법', commentText: '잘보고갑니다', commenterName: '뚜벅이', recentReplies: ['응원해주셔서 감사해요!'] });
-  assert.match(reply, /들러 주셔서/);
+  const reply = await llama.generateCommentReply({ postTitle: '사진 백업 정리', postSnippet: '카메라 사진을 한 번에 백업하는 방법', commentText: '카메라 사진 백업을 매번 손으로 하느라 힘들었는데 이런 방법이 있었네요', commenterName: '뚜벅이', recentReplies: ['응원해주셔서 감사해요!'] });
+  assert.ok(reply && !/궁금한 점/.test(reply));
   assert.match(prompts[0], /\[내 글 앞부분\]/);
   assert.match(prompts[0], /\[최근에 쓴 대댓글\]\n- 응원해주셔서 감사해요!/);
 
@@ -52,7 +52,9 @@ test('comment replies avoid stock sentences and recent replies; a remark falls b
   const fallback = await llama.generateCommentReply({ commentText: '응원합니다', recentReplies: ['응원해주셔서 정말 감사해요! 힘이 나네요.'] });
   assert.equal(llama.lastReplyKind, 'default');
   assert.ok(fallback && !/응원해주셔서 정말/.test(fallback));
-  await assert.rejects(() => llama.generateCommentReply({ commentText: '이건 어디서 받을 수 있나요?', recentReplies: ['응원해주셔서 정말 감사해요! 힘이 나네요.'] }), /조건에 맞는 대댓글을 만들지 못했습니다/);
+  await assert.rejects(() => llama.generateCommentReply({ postTitle: '사진 백업 프로그램', postSnippet: '프로그램으로 사진을 백업합니다', commentText: '이 프로그램은 어디서 받을 수 있나요?', recentReplies: ['응원해주셔서 정말 감사해요! 힘이 나네요.'] }), /조건에 맞는 대댓글을 만들지 못했습니다/);
+  // Asked about something the post never mentions: no AI answer at all.
+  await assert.rejects(() => llama.generateCommentReply({ postTitle: '검단 포케 맛집 후기', postSnippet: '육회포케와 메밀면을 먹었어요.', commentText: '혹시 드레스코드 있나요~~?' }), /직접 답해 주세요/);
 });
 
 test('blog comments are skipped, not filled from a template, when the AI fails', async () => {
