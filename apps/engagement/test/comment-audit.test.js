@@ -177,3 +177,30 @@ test('E2B habits on replies found by the eval are rejected', () => {
   assert.ok(codes('저도 다음에 방문할 생각이에요.', '사진도 깔끔하고 분위기까지 잘 보여서 좋았어요').includes('reader_voice'));
   assert.ok(codes('저도 다이어트 때문에 포케 자주 찾게 되거든요.', '다이어트 중이라 저도 포케 자주찾게 되던데').includes('echo'));
 });
+
+test('E2B replies the eval v7-v10 still let through are rejected', () => {
+  const bad = (reply, commentText) => !checkReply(reply, { commentText, postTitle: '테스트 글' }).ok;
+  assert.ok(bad('육회포케가 맛있어 보인다고 하니 저도 기분이 좋네요.', '와 육회포케에 육회가 가득들어있어서 너무 맛있어보이네요'));
+  assert.ok(bad('비주얼 좋다고 해주시니 저도 기분이 좋네요.', '비주얼 너무 좋네요 ㅎㅎ 맛있어보여요'));
+  assert.ok(bad('꿀 정보라고 말씀해주셔서 다행입니다.', '블로그운영하는사람한테 꿀 정보네요!!'));
+  assert.ok(bad('샴푸 사용해 보라는 의견 주셔서 저도 그 방법으로 시도해 봤어요.', '샴푸 한번 사용해보면 좋을 것 같아요!'));
+  assert.ok(bad('답방 원하신다고 하니 꼭 들를게요.', '답방이라는 의미에 대해 다시 생각해보는 글이네요, 인간미 넘치는 답글 해보도록 할께요 !'));
+  assert.ok(bad('육회 들어가는 포케 맛에 대해 궁금하시군요.', '저 사실 포케 한번도 안 먹어봤는데 육회 들어가면 넘 맛나겠어요!!'));
+  assert.ok(bad('우미카 중고차 한번 찾아봤어요.', '오늘도 같이 힘내봐요 ^^우미카 중고차 정대표 입니다'));
+  assert.ok(bad('손물림은 하지 않게 조심해서 다뤄야 해요.', '꽃게를 샀으면 손물림은 없었을텐데...싶은 생각이ㅎㅎ'));
+  assert.ok(bad('읽어 주셔서 감사해요. 답방 꼭 가보세요.', '포스팅 잘 보고 갑니다 !늦어도 답방 꼭 갑니다 ~'));
+  assert.ok(bad('정보 잘 보고 가줘서 고맙다.', '좋은 정보 감사합니다포스팅 잘보고가요!'));
+  assert.ok(bad('다이어트 중이라 자주 찾는구나. 건강하게 즐기길 바라요.', '다이어트 중이라 저도 포케 자주찾게 되던데'));
+  assert.ok(bad('프로그램 만드신 것에 대해 좋게 봐 주셔서 감사합니다.', '프로그램을 만드셨다니 대단하네요'));
+  assert.ok(bad('환절기 감기 조심하라는 말씀 잘 들었습니다.', '환절기 감기조심하세요~'));
+  // Still fine: a thank-you in my own words, and a visit request answered with a visit.
+  assert.ok(!bad('늘 열심이라고 응원해 주셔서 고맙습니다. 덕분에 힘이 나네요.', '포스팅 잘 보고 갑니다.늘 열심! 당신을 응원합니다~~~'));
+  assert.ok(!bad('답방 와 주셔서 고마워요. 저도 꼭 들를게요.', '답방 왔어요~ 저희 블로그도 놀러 와 주세요'));
+});
+
+test('remarks get set replies that fit what was said (eval v12)', async () => {
+  const { pickDefaultReply } = await import('../lib/comment-style.js');
+  const title = "[검단 포케 맛집] 검단 다양하고 맛있는 포케집 '슬로우캘리 검단신도시점'";
+  assert.match(pickDefaultReply('remark', '정리가 쉽지않아요 ㅋㅋ ~', [], { postTitle: '이웃 정리 방법' }), /쉽지 않죠|그 마음/);
+  assert.doesNotMatch(pickDefaultReply('remark', '위치 바로 지도에 켜서 저장해뒀어요 메뉴 고르기 힘들 때 여기로 가야겠어요 ㅎㅎ', [], { postTitle: title }), /쉽지 않죠|그 마음/);
+});

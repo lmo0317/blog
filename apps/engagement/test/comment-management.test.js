@@ -37,13 +37,13 @@ test('a repeated comment from the same person on the same post is answered once'
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('comment replies avoid stock sentences and recent replies; a remark falls back to a default reply', async () => {
+test('comment replies avoid stock sentences and recent replies; a remark gets a default reply', async () => {
   const { EmbeddedLlamaServer } = await import('../lib/embedded-llama.js');
   const llama = new EmbeddedLlamaServer({ modelManager: null });
-  const answers = ['도움이 되셨다니 다행이에요 😊 궁금한 점 있으시면 언제든 찾아주세요!', '들러 주셔서 고마워요. 편안한 저녁 보내세요.'];
+  const answers = ['도움이 되셨다니 다행이에요 😊 궁금한 점 있으시면 언제든 찾아주세요!', '네, 카메라 사진도 한 번에 백업돼요. 편하게 써 보세요.'];
   const prompts = [];
   llama.chatCompletion = async (messages) => { prompts.push(messages[1].content); return answers.shift(); };
-  const reply = await llama.generateCommentReply({ postTitle: '사진 백업 정리', postSnippet: '카메라 사진을 한 번에 백업하는 방법', commentText: '카메라 사진 백업을 매번 손으로 하느라 힘들었는데 이런 방법이 있었네요', commenterName: '뚜벅이', recentReplies: ['응원해주셔서 감사해요!'] });
+  const reply = await llama.generateCommentReply({ postTitle: '사진 백업 정리', postSnippet: '카메라 사진을 한 번에 백업하는 방법', commentText: '카메라 사진도 한 번에 백업되나요?', commenterName: '뚜벅이', recentReplies: ['응원해주셔서 감사해요!'] });
   assert.ok(reply && !/궁금한 점/.test(reply));
   assert.match(prompts[0], /\[내 글 앞부분\]/);
   assert.match(prompts[0], /\[최근에 쓴 대댓글\]\n- 응원해주셔서 감사해요!/);

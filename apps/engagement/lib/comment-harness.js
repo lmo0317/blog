@@ -135,6 +135,9 @@ export function checkComment(text, context = {}, recent = []) {
   return { ok: reasons.length === 0, text: clean, reasons, action: 'comment' };
 }
 
+// They ask me to visit back ("답방 와주세요", "놀러 오세요"), not just mention 답방 ("답방이라는 의미").
+const VISIT_ASK = /답방 ?(?:와|오|부탁|환영|해 ?주|요(?![가-힣]))|놀러 ?(?:와|오)|(?:와|들러|방문해) ?주(?:세요|시면|실)/;
+
 /** What kind of comment I received, so the reply answers the right thing. */
 export function classifyComment(text) {
   const clean = normalizeCommentText(text);
@@ -254,6 +257,45 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   // Repeating what they said back to them ("신기하다고 하셨네요") answers nothing.
   if (/(?:다고|라고|다는|라는) (?:하셨|말씀하셨)(?:네요|군요|어요|는데|으니|다니)/.test(clean)) reasons.push(reason('echo', '상대가 한 말을 "~다고 하셨네요"로 되풀이하지 말고 글쓴이로서 답하세요.'));
   if (/다녀갑|다녀가요|다녀가용|들렀다 갑|보고 ?갑|보고 ?가요|읽고 ?갑/.test(commentText) && /다녀오세요|잘 다녀|여행|즐겁게 다녀|보고 가세요|읽고 가세요|다녀가세요|보고 다녀가/.test(clean)) reasons.push(reason('misread', '"다녀갑니다"는 내 블로그에 들렀다 간다는 인사입니다. 들러 줘서 고맙다고 답하세요.'));
+  // Still the most common bot sound after the rules above (2026-10-20 eval v7): "육회포케가 맛있어 보인다고 하니 저도
+  // 기분이 좋네요", "양 푸짐하게 준다고 하니 좋네요", "꿀 정보라고 말씀해주셔서 다행입니다". Their words handed back with
+  // a feeling attached; a thank-you said in my own words reads as the author.
+  if (/(?:다|라)고 하(?:니|시니)|(?:다는|라는) (?:말|말씀|평|점|의견)에|저도 [^.!?]{0,25}(?:다니|셨다니|라니)/.test(clean)
+    // "…좋다고 해주시니 저도 기분이 좋네요", "잘 보고 가신다니 저도 기분 좋네요" (v8); "응원해 주시니 힘이 나네요" is a thank-you.
+    || /(?:다니|라니|하시니|해 ?주시니|말씀해 ?주시니|생각해 ?주시니)[^.!?]{0,15}(?:좋네|기쁘|기쁩|기분|뿌듯|좋아요)/.test(clean.replace(/응원해 ?주시니/g, ''))
+    || (/다행/.test(clean) && classifyComment(commentText) !== 'question')) {
+    reasons.push(reason('echo', '상대 말을 "~다고 하니", "~다는 말에"로 받아 "다행이네요/기분 좋네요"로 끝내지 마세요. 고맙다는 말과 글쓴이로서 한마디를 내 말로 쓰세요.'));
+  }
+  // What they plan to do read as advice to me: "샴푸 한번 사용해보면 좋을 것 같아요" → "사용해 보라는 의견 주셔서",
+  // "인간미 넘치는 답글 해보도록 할께요" → "생각해 보라는 조언 감사합니다".
+  if (/(?:보라|하라|해 ?보라)(?:는|고)|조언|의견 주셔서/.test(clean) && !/(?:보세요|하세요|해 ?보시|추천|권해|조언)/.test(commentText)) {
+    reasons.push(reason('misread', '상대는 조언한 게 아니라 자기 생각이나 계획을 말했습니다. 조언해 줘서 고맙다고 하지 마세요.'));
+  }
+  // A visit or a question they never asked for: "답방 원하신다고 하니 꼭 들를게요" under a comment about the post's
+  // own topic (답방), "궁금하시군요" under a compliment.
+  if ((/답방 (?:원하|와 ?달|부탁)|꼭 (?:들를|찾아뵐|놀러 갈)/.test(clean) && !VISIT_ASK.test(commentText))
+    || (/궁금하시(?:군요|구나|죠|네요)/.test(clean) && classifyComment(commentText) !== 'question')) {
+    reasons.push(reason('misread', '상대가 하지 않은 부탁이나 질문에 답하지 마세요. 상대가 실제로 한 말에 답하세요.'));
+  }
+  // A promise to look up their business or blog ("우미카 검색해 볼게요"), a thank-you for reading my comment.
+  // "늦어도 답방 꼭 갑니다" → "답방 꼭 가보세요": they are the one visiting.
+  if (/답방 (?:꼭 )?가(?:보세요|세요)/.test(clean)) reasons.push(reason('misread', '상대가 답방을 오겠다고 했습니다. 와 주신다니 고맙다고 하세요.'));
+  // "저도 다음에 방문해서 꼭 먹고 싶어요": I already went there; "네가 …": a slip for 네.
+  if (/저도 다음에 (?:방문|가|들러|먹)|^네가 /.test(clean)) reasons.push(reason('reader_voice', '당신은 이미 다녀와서 글을 쓴 사람입니다. 처음 가 보려는 사람처럼 쓰지 마세요.'));
+  // v9: "맛있어 보인다는 말씀 들으니 저도 기분이 좋네요", "건강하게 식사하셨다고 말씀해주셔서 저도 기분이 좋네요",
+  // "감기 조심하라는 말씀 잘 들었습니다", "프로그램이 유용해 보여서 저도 기쁘네요" (my own program).
+  if (/(?:말씀|말) 들으니|말씀해 ?주셔서 저도 기분|말씀 잘 들었|해 보여서 저도/.test(clean)) reasons.push(reason('echo', '상대 말을 받아 "말씀 들으니 기분이 좋네요"로 끝내지 말고, 고맙다는 말과 글쓴이로서 한마디를 내 말로 쓰세요.'));
+  // Banmal ("정보 잘 보고 가줘서 고맙다.") and asking them to report back ("어떤 느낌인지 알려주세요").
+  if (/(?:고맙|좋|기쁘|감사하|했)다[.!~]*$|가줘서|와줘서/.test(clean)) reasons.push(reason('awkward', '반말 말고 존댓말로 쓰세요.'));
+  if (/[가-힣]구나(?=[.!~s]|$)/.test(clean)) reasons.push(reason('awkward', '반말 말고 존댓말로 쓰세요.'));
+  // v10: "정성 포스팅 잘 본다고 말씀해 주셨네요", "우미카 중고차 한번 찾아봤어요" (made up), "프로그램 만드신 것에" (I made it).
+  if (/말씀해 ?주셨네요|찾아봤어요|검색해 ?봤/.test(clean)) reasons.push(reason('echo', '상대 말을 되풀이하거나 하지 않은 일을 했다고 쓰지 마세요.'));
+  if (/(?:만드|쓰|작성하|정리하|올리)(?:신 |셨)/.test(clean) && /(?:만드|쓰|작성|정리|올리)(?:셨|신)|주셔서|대단/.test(commentText)) reasons.push(reason('misattribution', '그 글과 프로그램은 내가 만들었습니다. 상대가 만든 것처럼 쓰지 마세요.'));
+  if (/알려 ?주세요/.test(clean)) reasons.push(reason('chatbot', '상대에게 알려 달라고 하지 마세요.'));
+  if (/다 기분/.test(clean)) reasons.push(reason('awkward', '"다 기분이 좋네요"처럼 어색한 말을 쓰지 마세요.'));
+  if (/검색해 ?(?:볼게|보겠|봐야)|댓글(?: 내용)? 읽어 ?주셔서/.test(clean)) reasons.push(reason('misread', '상대 홍보에 답하거나 엉뚱한 일에 고마워하지 말고, 들러 준 데 고맙다고 하세요.'));
+  // A warning nobody asked for: "손물림은 하지 않게 조심해서 다뤄야 해요".
+  if (/조심해서 [^.!?]{0,10}해야 해요|하지 않게 조심/.test(clean)) reasons.push(reason('unsolicited_advice', '상대가 묻지 않은 주의나 충고를 하지 마세요.'));
   const similar = recentReplies.find((reply) => commentSimilarity(clean, reply) >= 0.6);
   if (similar) {
     const exact = commentSimilarity(clean, similar) >= 0.7;

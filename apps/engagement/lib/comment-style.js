@@ -146,6 +146,10 @@ export function pickDefaultReply(type, commentText = '', recentReplies = [], { r
   if (type === 'remark' && COMPLAINT.test(commentText)) {
     return pickFresh(['솔직한 이야기 남겨 주셔서 고마워요. 편안한 하루 보내세요.', '솔직하게 말씀해 주셔서 감사해요. 좋은 하루 되세요.'], recentReplies, random);
   }
+  // "정리가 쉽지않아요 ㅋㅋ": they share a struggle; "꼼꼼히 읽어 주셔서" ignores it (eval v11).
+  if (type === 'remark' && /쉽지 ?않|어렵(?:더|네|다|어|고)|힘들(?:어|었|다|네|더|고)|막막|번거롭|귀찮/.test(commentText) && !PRAISE.test(commentText)) {
+    return pickFresh(['맞아요, 쉽지 않죠. 공감해 주셔서 고마워요. 편안한 하루 보내세요.', '저도 그 마음 알아요. 이야기 나눠 주셔서 감사해요, 좋은 하루 되세요.'], recentReplies, random);
+  }
   const topic = type === 'remark' && !VISIT_REQUEST.test(commentText) ? commentTopic(commentText, postTitle) : '';
   if (topic) {
     const lines = PRAISE.test(commentText)

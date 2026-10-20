@@ -1,6 +1,6 @@
 // Regenerates replies for the 171 real comments in fixtures/reply-cases.json with E2B, the way the app routes them.
 // Judge the output blind with REPLY-JUDGE.md (good / minor / bad) and compare against the last run before saying a
-// reply change is better. 2026-10-20 baseline: good 131, minor 31, bad 9.
+// reply change is better. 2026-10-20 baselines: v6 (E2B on remarks) good 131 / minor 31 / bad 9; v12 (set replies on remarks) good 142 / minor 28 / bad 1.
 // usage: node eval/reply-eval.mjs [out.json] [llama url]
 import fs from 'node:fs';
 import { classifyComment } from '../lib/comment-harness.js';

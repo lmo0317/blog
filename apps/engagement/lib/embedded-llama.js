@@ -8,7 +8,6 @@ import { checkComment, checkReply, classifyComment, replyGuidance, runHarness, s
 import { pickDefaultComment, pickDefaultReply } from './comment-style.js';
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
-const COMPLAINT_COMMENT = /아쉽|아쉬웠|별로|비싸|실망|불친절|불편|짜더|싱겁/;
 // Does my post talk about what they asked? Their content words (조사 removed), any one found in my title or snippet.
 function questionInPost(question, postText) {
   const post = String(postText || '').replace(/\s/g, '');
@@ -497,7 +496,10 @@ export class EmbeddedLlamaServer extends EventEmitter {
       throw new Error('글에 없는 내용을 묻는 질문이라 AI가 답하지 않았습니다. 직접 답해 주세요.');
     }
     // A complaint ("가격이 아쉬웠어요") too: E2B either agreed like the shop or turned it into nonsense.
-    if (type === 'greeting' || (type === 'remark' && (source.replace(/[^가-힣A-Za-z0-9]/g, '').length < 22 || COMPLAINT_COMMENT.test(source)))) {
+    // Every other remark too: after four rounds of checks, E2B's free replies to remarks were still bad 8 times in 29
+    // (eval v11: misread weather, parroted ads, made-up "저도 처음엔 걱정됐어요"), the set replies 2 in 138. Each new run
+    // found a new way to be wrong, so the model only answers questions my post can answer.
+    if (type === 'greeting' || type === 'remark') {
       const fixed = pickDefaultReply(type, source, recent, { postTitle });
       if (fixed) { this.rememberOutput('reply', fixed); this.lastReplyKind = 'default'; return fixed; }
     }
