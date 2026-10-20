@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="login.css">
   <link rel="stylesheet" href="refresh.css?v=39">
   <link rel="stylesheet" href="app-mode.css?v=69">
-  <link rel="stylesheet" href="summary.css?v=3">
+  <link rel="stylesheet" href="summary.css?v=4">
 </head>
 <body>
   <main class="shell">
@@ -79,6 +79,7 @@
 
     <!-- Workspace: Summary (지금 상태 · 오늘 숫자 · 접어 둔 상세 기록) -->
     <section class="workspace-panel" id="summaryWorkspace" role="tabpanel" aria-labelledby="summaryTab" data-tab-panel="summary">
+      <div class="sum-shell">
       <div class="sum-board">
         <!-- 1. 지금 상태: 자율 주행 + 백그라운드 시스템 -->
         <div class="desktop-card sum-live" id="sumLiveCard">
@@ -123,18 +124,21 @@
             <summary><span class="sum-fold-icon" aria-hidden="true">💬</span><strong>이웃 글에 단 댓글</strong><span class="sum-fold-count" id="sumCommentPill">0개</span><i class="sum-chevron" aria-hidden="true"></i></summary>
             <div class="sum-list" id="sumCommentList"></div>
           </details>
-          <details class="sum-fold sum-fold-days" id="sumDaysFold">
-            <summary><span class="sum-fold-icon" aria-hidden="true">📅</span><strong>날짜별 기록</strong><span class="sum-fold-hint" id="sumDaysHint">날짜를 누르면 그날 기록을 봅니다</span><i class="sum-chevron" aria-hidden="true"></i></summary>
-            <div class="sum-days-wrap">
-              <table class="sum-days-table">
-                <thead><tr><th scope="col">날짜</th><th scope="col" title="추가한 이웃">🤝 이웃</th><th scope="col" title="내 글 대댓글">↩️ 대댓글</th><th scope="col" title="이웃 글 댓글">💬 댓글</th></tr></thead>
-                <tbody id="sumDaysBody"></tbody>
-                <tfoot id="sumDaysFoot"></tfoot>
-              </table>
-              <button type="button" class="sum-more-btn hidden" id="sumMoreDays" data-sum-more-days>이전 날짜 더 보기</button>
-            </div>
-          </details>
         </div>
+      </div>
+
+      <!-- 4. 날짜별 기록 (오른쪽) -->
+      <aside class="desktop-card sum-days-card" id="sumDaysCard" aria-label="날짜별 기록">
+        <div class="sum-days-head"><span aria-hidden="true">📅</span><h3>날짜별 기록</h3><span class="sum-fold-hint" id="sumDaysHint"></span></div>
+        <div class="sum-days-wrap">
+          <table class="sum-days-table">
+            <thead><tr><th scope="col">날짜</th><th scope="col" title="추가한 이웃">🤝</th><th scope="col" title="내 글 대댓글">↩️</th><th scope="col" title="이웃 글 댓글">💬</th></tr></thead>
+            <tbody id="sumDaysBody"></tbody>
+            <tfoot id="sumDaysFoot"></tfoot>
+          </table>
+          <button type="button" class="sum-more-btn hidden" id="sumMoreDays" data-sum-more-days>이전 날짜 더 보기</button>
+        </div>
+      </aside>
       </div>
     </section>
     <!-- Workspace: Autopilot (자율 주행) -->

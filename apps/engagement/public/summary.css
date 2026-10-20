@@ -1,6 +1,38 @@
 /* --------------------------------------------------------------------------
    Summary tab: 지금 상태 (자율 주행 + 시스템) · 오늘 숫자 · 접어 둔 상세 기록
    -------------------------------------------------------------------------- */
+/* Board on the left, the by-date list on the right */
+.sum-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 12px;
+  align-items: start;
+}
+.sum-days-card {
+  margin: 0;
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 150px);
+  min-height: 0;
+  overflow: hidden;
+}
+.sum-days-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.sum-days-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: #0f172a; white-space: nowrap; }
+.sum-days-head .sum-fold-hint { margin-left: auto; }
+.sum-days-card .sum-days-wrap { max-height: none; flex: 1; min-height: 0; }
+.sum-days-card .sum-days-table th,
+.sum-days-card .sum-days-table td { padding-left: 8px; padding-right: 8px; }
+.sum-days-card .sum-days-table th:first-child { padding-left: 16px; }
+.sum-days-card .sum-days-table td:last-child { padding-right: 16px; }
+
 .sum-board {
   display: flex;
   flex-direction: column;
@@ -700,6 +732,10 @@ span.sum-post-link { color: #64748b; }
 }
 
 /* Narrow widths */
+@media (max-width: 1100px) {
+  .sum-shell { grid-template-columns: minmax(0, 1fr); }
+  .sum-days-card { position: static; max-height: 480px; }
+}
 @media (max-width: 900px) {
   .sum-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
