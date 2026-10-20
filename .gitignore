@@ -27,3 +27,4 @@ __pycache__/
 *.pyc
 apps/engagement/.build/
 apps/engagement/dist/
+apps/engagement/dist-slim/
