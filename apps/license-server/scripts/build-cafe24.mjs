@@ -17,6 +17,21 @@ for (const entry of fs.readdirSync(out)) if (entry !== '.git') fs.rmSync(path.jo
 for (const dir of ['lib', 'admin']) fs.cpSync(path.join(root, dir), path.join(out, dir), { recursive: true });
 fs.copyFileSync(path.join(root, 'server.js'), path.join(out, 'server.js'));
 fs.copyFileSync(path.resolve(configArg), path.join(out, 'cafe24.config.json'));
+// The promo site (apps/landing) is the home page here. cafe24 meters traffic, so the 5MB promo video stays
+// off: the phone frame shows its first frame as a still picture instead.
+const site = path.join(out, 'site');
+const landing = path.resolve(root, '..', 'landing');
+fs.mkdirSync(site, { recursive: true });
+for (const page of ['index.html', 'about.html', 'qna.html', 'terms.html', 'privacy.html']) fs.copyFileSync(path.join(landing, page), path.join(site, page));
+fs.cpSync(path.join(landing, 'assets'), path.join(site, 'assets'), { recursive: true, filter: (src) => !src.endsWith('.mp4') });
+const home = path.join(site, 'index.html');
+const stripped = fs.readFileSync(home, 'utf8')
+  .replace(/<video id="promo"[\s\S]*?<\/video>\s*<button class="sound-btn"[^>]*>[^<]*<\/button>/, '<img src="assets/shorts-poster.webp?v=20261016" alt="블로그 켜두기만 한 9월 한 달, 서로이웃 694명 증가" width="540" height="960">')
+  .replace(/<p class="phone-cap">[^<]*<\/p>/, '<p class="phone-cap">켜두기만 한 9월 한 달, 서로이웃 +694명</p>')
+  .replace(/\s*\/\/ The promo video plays[\s\S]*?\r?\n  \}\);\r?\n/, '\n')
+  .replace('</head>', '<style>.phone img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 29px; background: #0b1220; } @media (max-width: 640px) { .phone img { border-radius: 25px; } }</style>\n</head>');
+if (/<video|neighbormate-shorts|soundBtn/.test(stripped)) throw new Error('promo video left in site/index.html');
+fs.writeFileSync(home, stripped);
 if (seedArg) { fs.mkdirSync(path.join(out, 'seed'), { recursive: true }); fs.copyFileSync(path.resolve(seedArg), path.join(out, 'seed', 'license.db')); }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -69,8 +84,14 @@ const { LicenseDatabase } = await import('./lib/db.js');
 const { driver } = await import('./lib/sqlite.js');
 const file = dataFile();
 applySeed(file);
+const { default: express } = await import('express');
 const { app } = createLicenseServer(new LicenseDatabase(file));
+// The promo site at /, the license server at /license (the paths the site and the app use) and at / as before.
+const web = express();
+web.use('/license', app);
+web.use(express.static(path.join(here, 'site')));
+web.use(app);
 const port = Number(process.env.PORT) || 8001;
-app.listen(port, () => console.log(\`[NeighborMate license] node \${process.version}, \${driver}, data \${file}, port \${port}\`));
+web.listen(port, () => console.log(\`[NeighborMate license] node \${process.version}, \${driver}, data \${file}, port \${port}\`));
 `);
 console.log(`built ${out}`);
