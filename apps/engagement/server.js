@@ -25,6 +25,7 @@ import { CommentReplyStore } from './lib/comment-replies.js';
 import { NeighborActionStore } from './lib/neighbor-actions.js';
 import { buildActivityReport, REPORT_RANGES } from './lib/activity-report.js';
 import { buildDailySummary } from './lib/daily-summary.js';
+import { buildSystemStatus } from './lib/system-status.js';
 import { buildXlsx } from './lib/xlsx.js';
 import { returnVisitCommenter } from './lib/return-visit.js';
 import { AutopilotManager } from './lib/autopilot.js';
@@ -1548,6 +1549,36 @@ app.get('/api/summary', async (req, res, next) => {
       neighborActions: await neighborActionStore.list(),
       neighborHistory: historyStore.data.records
     }, { date: String(req.query.date || '') }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Summary tab, top: is autopilot on, which step, and one line per background system. Read-only.
+app.get('/api/summary/status', async (_req, res, next) => {
+  try {
+    const [usage, engagement, engineLabel] = await Promise.all([
+      getCombinedTodayUsage().catch(() => ({ likes: 0, comments: 0 })),
+      engagementHistoryStore.getSummary().catch(() => ({})),
+      activeEngineLabel().catch(() => '')
+    ]);
+    const engine = cloudLlm.settings?.engine || 'local';
+    const license = licenseClient.getStatus();
+    res.json(buildSystemStatus({
+      autopilot: autopilot.getStatus(),
+      engagement: engagementManager.getStatus(),
+      feed: feedManager.getState(),
+      cleaner: neighborCleanerManager.getState(),
+      neighborAuto: automationManager.getStatus(),
+      neighborHealth: neighborHealthManager.getStatus(),
+      repliesActive: commentProcessingActive,
+      ai: { engine, cloudConnected: engine !== 'local' && cloudLlm.isConnected(engine), label: engineLabel, runtime: embeddedLlama.getRuntimeStatus() },
+      naver: { connected: Boolean(browserSession.connected), blogId: browserSession.myBlogId || '' },
+      license: { status: license.status, daysLeft: license.daysLeft },
+      update: appUpdater ? appUpdater.getState() : { status: 'unavailable' },
+      appVersion,
+      usage: { ...usage, neighbors: Number(engagement.todayNeighbors) || 0 }
+    }));
   } catch (error) {
     next(error);
   }
