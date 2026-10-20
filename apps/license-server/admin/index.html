@@ -928,13 +928,25 @@
   async function loadHome() {
     const data = await api(`api/admin/home?latest=${encodeURIComponent(latestVersion)}${since ? `&since=${encodeURIComponent(since)}` : ''}`);
     state.home = data;
+    moveLocalDismissed();
     updateNav();
     synced();
     if (state.view === 'home') renderHome();
     return data;
   }
 
-  const dismissed = () => local.get('nm-admin-dismissed', {});
+  // Kept on the server so a card dismissed on the PC stays hidden on the phone. Older ones saved in this browser
+  // are moved up once.
+  const dismissed = () => state.home?.dismissed || {};
+  async function saveDismiss(body) {
+    const result = await api('api/admin/dismiss', { method: 'POST', body });
+    if (state.home && result?.dismissed) state.home.dismissed = result.dismissed;
+  }
+  async function moveLocalDismissed() {
+    const old = Object.keys(local.get('nm-admin-dismissed', {}));
+    if (!old.length) return;
+    try { await saveDismiss({ keys: old }); local.set('nm-admin-dismissed', {}); renderHome(); updateNav(); } catch {}
+  }
   function visibleTodo() {
     const hide = dismissed();
     return (state.home?.todo || []).filter((t) => !hide[t.key]);
@@ -1081,19 +1093,17 @@
   $('#todoList').addEventListener('click', (e) => {
     const dismiss = e.target.closest('[data-dismiss]');
     if (dismiss) {
-      const hide = dismissed();
-      hide[dismiss.dataset.dismiss] = new Date().toISOString();
-      // Keep the list short: forget what was hidden more than 30 days ago.
-      for (const [key, at] of Object.entries(hide)) if (Date.now() - Date.parse(at) > 30 * 86400000) delete hide[key];
-      local.set('nm-admin-dismissed', hide);
+      const key = dismiss.dataset.dismiss;
+      if (state.home) state.home.dismissed = { ...dismissed(), [key]: new Date().toISOString() };
       renderHome(); updateNav();
-      toast('✓ 확인했습니다. 상황이 바뀌면 다시 뜹니다.');
+      saveDismiss({ keys: [key] }).then(() => toast('✓ 확인했습니다. 다른 기기에서도 숨겨지고, 상황이 바뀌면 다시 뜹니다.'))
+        .catch(() => toast('저장하지 못했습니다. 잠시 후 다시 눌러 주세요.'));
       return;
     }
     const item = e.target.closest('[data-todo]');
     if (item) openTarget(visibleTodo()[Number(item.dataset.todo)]?.target);
   });
-  $('#todoHidden').addEventListener('click', () => { local.set('nm-admin-dismissed', {}); renderHome(); updateNav(); });
+  $('#todoHidden').addEventListener('click', () => { if (state.home) state.home.dismissed = {}; renderHome(); updateNav(); saveDismiss({ reset: true }).catch(() => {}); });
   $('#newsList').addEventListener('click', (e) => {
     const item = e.target.closest('[data-news]');
     if (item) openTarget(state.home.news[Number(item.dataset.news)]?.target);

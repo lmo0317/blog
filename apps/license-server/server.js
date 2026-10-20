@@ -206,6 +206,7 @@ ${q.body}
   app.get('/api/admin/summary', requireAdmin, (_req, res) => send(res, service.adminSummary()));
   // Home: to-do list, funnel, 30-day trend, versions, news; `since` = when the admin last looked, `latest` = newest app version
   app.get('/api/admin/home', requireAdmin, (req, res) => send(res, insights.home({ since: req.query.since, latest: req.query.latest })));
+  app.post('/api/admin/dismiss', requireAdmin, (req, res) => send(res, insights.dismiss(req.body?.keys || req.body?.key, { reset: req.body?.reset === true })));
   app.get('/api/admin/people', requireAdmin, (_req, res) => send(res, insights.people()));
   app.get('/api/admin/vouchers', requireAdmin, (req, res) => send(res, service.adminListVouchers({ status: req.query.status })));
   app.post('/api/admin/vouchers', requireAdmin, (req, res) => send(res, service.adminIssueVouchers(req.body || {})));

@@ -129,6 +129,21 @@ export class InsightsService {
   }
 
   // ---- Home page ----
+  // To-do cards the admin marked done, kept on the server: in the browser they came back on the phone after being
+  // dismissed on the PC (2026-10-20). { key: dismissedAt }, forgotten after 30 days.
+  dismissed() {
+    try { return JSON.parse(this.db.prepare("SELECT value FROM server_settings WHERE key = 'admin_dismissed'").get()?.value || '{}'); } catch { return {}; }
+  }
+
+  dismiss(keys = [], { reset = false } = {}) {
+    const hide = reset ? {} : this.dismissed();
+    const at = new Date(this.now()).toISOString();
+    for (const key of (Array.isArray(keys) ? keys : [keys]).map((k) => String(k || '').slice(0, 300)).filter(Boolean)) hide[key] ||= at;
+    for (const [key, when] of Object.entries(hide)) if (this.now() - Date.parse(when) > 30 * 86400000) delete hide[key];
+    this.db.prepare("INSERT INTO server_settings (key, value) VALUES ('admin_dismissed', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(hide));
+    return { ok: true, dismissed: hide };
+  }
+
   home({ since = '', latest = '' } = {}) {
     const now = this.now();
     const users = this.usersById();
@@ -277,6 +292,7 @@ export class InsightsService {
       at: new Date(now).toISOString(),
       kpi,
       todo,
+      dismissed: this.dismissed(),
       funnel: { week: funnel(7), month: funnel(30), all: funnel(0) },
       daily,
       versions: this.reports.versions(),
