@@ -138,7 +138,7 @@ export class InsightsService {
   dismiss(keys = [], { reset = false } = {}) {
     const hide = reset ? {} : this.dismissed();
     const at = new Date(this.now()).toISOString();
-    for (const key of (Array.isArray(keys) ? keys : [keys]).map((k) => String(k || '').slice(0, 300)).filter(Boolean)) hide[key] ||= at;
+    for (const key of (Array.isArray(keys) ? keys : [keys]).map((k) => String(k || '').slice(0, 300)).filter(Boolean)) hide[key] = hide[key] || at;
     for (const [key, when] of Object.entries(hide)) if (this.now() - Date.parse(when) > 30 * 86400000) delete hide[key];
     this.db.prepare("INSERT INTO server_settings (key, value) VALUES ('admin_dismissed', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(hide));
     return { ok: true, dismissed: hide };

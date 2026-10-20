@@ -286,13 +286,13 @@ export class VisitService {
       }
       p.visits += 1;
       p.lastAt = v.endedAt;
-      p.download ||= v.download; p.buy ||= v.buy; p.video ||= v.video;
+      p.download = p.download || v.download; p.buy = p.buy || v.buy; p.video = p.video || v.video;
       p.seconds += v.seconds;
       p.depth = Math.max(p.depth, v.depth);
       for (const x of v.pages) if (!p.pages.includes(x)) p.pages.push(x);
       for (const x of v.seen) if (!p.seen.includes(x)) p.seen.push(x);
-      p.from ||= v.from;
-      p.campaign ||= v.campaign;
+      p.from = p.from || v.from;
+      p.campaign = p.campaign || v.campaign;
       if (v.ip && !p.ips.includes(v.ip)) p.ips.push(v.ip);
       p.sessions.push(v);
     }

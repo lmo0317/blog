@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { openDatabase } from './sqlite.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -9,14 +9,14 @@ const __dirname = path.dirname(__filename);
 export class LicenseDatabase {
   constructor(dbPath = null) {
     if (dbPath === ':memory:') {
-      this.db = new DatabaseSync(':memory:');
+      this.db = openDatabase(':memory:');
     } else {
       const resolvedPath = dbPath || path.resolve(__dirname, '..', 'data', 'license.db');
       const dir = path.dirname(resolvedPath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      this.db = new DatabaseSync(resolvedPath);
+      this.db = openDatabase(resolvedPath);
     }
 
     this.initSchema();
