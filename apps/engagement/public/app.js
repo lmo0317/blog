@@ -78,7 +78,11 @@ async function refreshEngagementNeighborQuota() {
 function initEngagementNeighborQuota() {
   if (engagementNeighborQuotaTimer) clearInterval(engagementNeighborQuotaTimer);
   refreshEngagementNeighborQuota();
-  engagementNeighborQuotaTimer = setInterval(refreshEngagementNeighborQuota, 60 * 1000);
+  // Only while the 소통 tab is on screen: it showed up as a call every minute in every customer's activity log,
+  // which read as the app being stuck on "서로이웃 한도 확인" (2026-10-20).
+  engagementNeighborQuotaTimer = setInterval(() => {
+    if (!document.hidden && !$('#engagementWorkspace')?.classList.contains('hidden')) refreshEngagementNeighborQuota();
+  }, 60 * 1000);
   $('#engDailyNeighborLimit')?.addEventListener('input', refreshEngagementNeighborQuota);
 }
 
@@ -237,6 +241,7 @@ function setActiveTab(tabName, moveFocus = false) {
   });
   reportScreen('tab', tabName);
   if (tabName === 'summary') { loadSummary(); loadSummaryStatus(); }
+  if (tabName === 'engagement') refreshEngagementNeighborQuota();
   if (tabName === 'comments') {
     const feedModeActive = $('.category-mode-tab[data-comment-mode="neighbor-feed"]')?.classList.contains('active');
     if (feedModeActive) {
