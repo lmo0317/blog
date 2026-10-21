@@ -3,8 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeCommentText, sensitivePostReason, validateBlogComment } from '../lib/comment-prompt.js';
-import { checkReply, classifyComment, SOFT_CODES } from '../lib/comment-harness.js';
-import { cleanFeedAuthor } from '../lib/naver-feed-engage.js';
+import { checkComment, checkReply, classifyComment, SOFT_CODES } from '../lib/comment-harness.js';
+import { cleanFeedAuthor, isNeighborFeedPost } from '../lib/naver-feed-engage.js';
 import { DEFAULT_COMMENTS, DEFAULT_REPLIES, isDeliberateCommentSkip } from '../lib/comment-style.js';
 
 test('no AI comment on deaths, crimes and trials, accidents, illness or clinic procedure ads', () => {
@@ -89,22 +89,16 @@ test('found on the deployed E2B: restating the visitor and "보고 가세요"', 
   assert.match(sensitivePostReason({ title: '“암 진행 가능성” 10kg 감량했던 개그우먼 갑상선 4분의 3 절제 후 전한 속사정' }), /투병/);
 });
 
-test('default comments: only after the model answered, never on sensitive posts, never the same line twice in a row', async () => {
+test('no set comment when the AI says SKIP or fails: a like only (2026-10-21, canned lines under news posts)', async () => {
   const { EmbeddedLlamaServer } = await import('../lib/embedded-llama.js');
-  const { DEFAULT_COMMENTS } = await import('../lib/comment-style.js');
   const llama = new EmbeddedLlamaServer({ modelManager: null });
   llama.chatCompletion = async () => 'SKIP';
-  const first = await llama.generateBlogComment({ title: '사진 몇 장', contentSnippet: '' });
-  assert.ok(DEFAULT_COMMENTS.includes(first));
-  const second = await llama.generateBlogComment({ title: '사진 몇 장 2', contentSnippet: '' });
-  assert.notEqual(second, first);
+  assert.equal(await llama.generateBlogComment({ title: '사진 몇 장', contentSnippet: '' }), '');
+  assert.match(llama.lastCommentFailure, /공감만 했습니다/);
   assert.equal(await llama.generateBlogComment({ title: '배우 OOO 별세… 향년 78세', contentSnippet: '' }), '');
   llama.chatCompletion = async () => { throw new Error('timeout'); };
   assert.equal(await llama.generateBlogComment({ title: '오사카 맛집', contentSnippet: '규카츠' }), '');
-  // They say nothing about any post, so they cannot misread one.
-  for (const line of DEFAULT_COMMENTS) assert.doesNotMatch(line, /저도|저희|우리 |하셨다니|다녀오|맛있|예쁘|사진/);
 });
-
 test('a reply that reuses one of the visitor sentences is an echo', () => {
   const r = checkReply('답방 왔어요! 저도 자주 놀러 갈게요.', { postTitle: '블로그 서로이웃 늘리는 법', commentText: '답방 왔어요! 제 블로그도 놀러 와 주세요' });
   assert.ok(r.reasons.some((x) => x.code === 'echo'));
@@ -203,4 +197,20 @@ test('remarks get set replies that fit what was said (eval v12)', async () => {
   const title = "[검단 포케 맛집] 검단 다양하고 맛있는 포케집 '슬로우캘리 검단신도시점'";
   assert.match(pickDefaultReply('remark', '정리가 쉽지않아요 ㅋㅋ ~', [], { postTitle: '이웃 정리 방법' }), /쉽지 않죠|그 마음/);
   assert.doesNotMatch(pickDefaultReply('remark', '위치 바로 지도에 켜서 저장해뒀어요 메뉴 고르기 힘들 때 여기로 가야겠어요 ㅎㅎ', [], { postTitle: title }), /쉽지 않죠|그 마음/);
+});
+
+// 2026-10-21 audit of 92 feed comments on 112: review/anchor sentences, stranger posts, accident news.
+test('feed comments: no commentary voice, only neighbors, no comment on accident news', () => {
+  const context = { title: '빈패스트 픽업트럭 출시', contentSnippet: 'VinFast는 올해 상반기 픽업트럭 신차를 공개했다' };
+  for (const text of ['새로운 픽업트럭 모델 출시 소식을 보니 시장 변화에 빠르게 대응하는 모습이 인상적이네요.',
+    'VinFast 픽업트럭이 나온다니 흥미롭네요.', 'VinFast 신차 소식을 접했습니다. 앞으로가 중요할 것 같아요.']) {
+    assert.ok(checkComment(text, context, []).reasons.some((item) => item.code === 'commentary'), text);
+  }
+  assert.ok(!checkComment('VinFast가 픽업트럭까지 낸다니 라인업이 빠르게 늘어나네요.', context, []).reasons.some((item) => item.code === 'commentary'));
+  for (const author of ['당신을 위한 추천글 새벽리더', '내 이웃의 인기글 머니타임', '내 이웃이 반응한 글 MJ소프트링크']) assert.equal(isNeighborFeedPost({ author }), false, author);
+  assert.equal(isNeighborFeedPost({ author: '찌니쭈' }), true);
+  for (const title of ['강릉 유천동 BMW 인도 돌진 후 전도, 4명 부상', '제주 과수원서 전동가위에 손가락 절단 사고', '광주 광산구 교차로서 버스·승합차·오토바이 충돌 사고로 2명 부상']) {
+    assert.match(sensitivePostReason({ title }), /민감한 주제/, title);
+  }
+  assert.equal(sensitivePostReason({ title: '인천 부평 진미막창 감자막창 후기' }), '');
 });

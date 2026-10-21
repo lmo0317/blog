@@ -42,21 +42,29 @@ record('static', '라이선스 서버 테스트 (sql.js, cafe24용)', r.status =
 console.log('\n[2] 대댓글 라우팅 (실제 댓글 171건)');
 {
   const { classifyComment, checkReply } = await import(new URL('../lib/comment-harness.js', import.meta.url));
-  const { pickDefaultReply } = await import(new URL('../lib/comment-style.js', import.meta.url));
+  const { composeReply } = await import(new URL('../lib/reply-compose.js', import.meta.url));
   const cases = JSON.parse(fs.readFileSync(path.join(root, 'eval', 'fixtures', 'reply-cases.json'), 'utf8'));
-  let empty = 0; let broken = 0; let owner = 0; const bad = [];
+  let empty = 0; let broken = 0; let owner = 0; const bad = []; const recent = {}; const counts = {};
+  // A fixed seed, so the same code gives the same verdict.
+  let seed = 11; const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   for (const c of cases) {
     const type = classifyComment(c.comment);
     if (type === 'question' || type === 'request') { owner += 1; continue; }
-    const reply = pickDefaultReply(type, c.comment, [], { postTitle: c.title });
+    recent[c.blog] ||= [];
+    const reply = composeReply(c.comment, { postTitle: c.title, postSnippet: c.post, recentReplies: [...recent[c.blog]].reverse().slice(0, 12), random });
+    recent[c.blog].push(reply);
+    counts[reply] = (counts[reply] || 0) + 1;
     if (!reply) { empty += 1; bad.push(`${c.id}: 빈 답글`); continue; }
-    // A set reply must not trip the hard checks that would make it read like a bot or a misread.
+    // A composed reply must not trip the hard checks that would make it read like a bot or a misread.
     const hard = checkReply(reply, { commentText: c.comment, postTitle: c.title, postSnippet: c.post }).reasons
       .filter((item) => ['echo', 'misread', 'reader_voice', 'wrong_role', 'awkward', 'chatbot', 'misattribution'].includes(item.code));
     if (hard.length) { broken += 1; bad.push(`${c.id}: ${hard.map((item) => item.code).join(',')} — ${reply}`); }
   }
   record('replies', `빈 답글 없음 (${cases.length}건 중 주인에게 넘김 ${owner})`, empty === 0, bad.filter((line) => line.includes('빈 답글')).slice(0, 3).join(' / '));
-  record('replies', '정해진 답글이 검사기에 걸리지 않음', broken === 0, bad.filter((line) => !line.includes('빈 답글')).slice(0, 3).join(' / '));
+  record('replies', '답글이 검사기에 걸리지 않음', broken === 0, bad.filter((line) => !line.includes('빈 답글')).slice(0, 3).join(' / '));
+  // 2026-10-21: one set line went up 16 times in three days under the owner's posts.
+  const [top, times] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] || ['', 0];
+  record('replies', `같은 답글 반복 없음 (가장 많이 쓴 답글 ${times}번 / ${Object.values(counts).reduce((a, b) => a + b, 0)}건)`, times <= 5, times > 5 ? top : '');
 }
 
 console.log('\n[3] 실제 네이버 (112, 이 코드로 비밀댓글 → 대댓글 → 확인 → 삭제)');

@@ -5,7 +5,8 @@ import { EventEmitter } from 'node:events';
 import { detectGpuSpecs } from './hardware.js';
 import { buildBlogCommentMessages, buildNeighborMessagePrompt, normalizeCommentText, sensitivePostReason, validateNeighborMessage } from './comment-prompt.js';
 import { checkComment, checkReply, classifyComment, replyGuidance, runHarness, styleGuidance } from './comment-harness.js';
-import { pickDefaultComment, pickDefaultReply } from './comment-style.js';
+import { composeReply, needsOwnAnswer } from './reply-compose.js';
+
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
 // Does my post talk about what they asked? Their content words (조사 removed), any one found in my title or snippet.
@@ -486,23 +487,22 @@ export class EmbeddedLlamaServer extends EventEmitter {
     if (!source) throw new Error('답글을 만들 댓글 내용이 없습니다.');
     this.lastReplyKind = 'ai';
     const recent = this.recentOutputsOf('reply', recentReplies).slice(0, 15);
-    // A greeting, a visit request or a one-line compliment gets a set reply that names what they liked: on 171 real
-    // comments (2026-10-20 eval) almost every bad reply was E2B writing freely to these ("답방 와 주세요" → "저도 답방
-    // 기다리고 있어요", "깔끔하다니 다행이네요"), while the set replies were fine. The model answers what has content.
     const type = classifyComment(source);
     // A question about something my post does not mention ("드레스코드 있나요?" on a post that never says): E2B made up
     // "없어요" while the real answer was the opposite. Only I can answer that one.
     if (type === 'question' && !questionInPost(source, `${postTitle} ${postSnippet}`)) {
       throw new Error('글에 없는 내용을 묻는 질문이라 AI가 답하지 않았습니다. 직접 답해 주세요.');
     }
-    // A complaint ("가격이 아쉬웠어요") too: E2B either agreed like the shop or turned it into nonsense.
-    // Every other remark too: after four rounds of checks, E2B's free replies to remarks were still bad 8 times in 29
-    // (eval v11: misread weather, parroted ads, made-up "저도 처음엔 걱정됐어요"), the set replies 2 in 138. Each new run
-    // found a new way to be wrong, so the model only answers questions my post can answer.
-    if (type === 'greeting' || type === 'remark') {
-      const fixed = pickDefaultReply(type, source, recent, { postTitle });
-      if (fixed) { this.rememberOutput('reply', fixed); this.lastReplyKind = 'default'; return fixed; }
-    }
+    // Greetings and remarks get a reply built from what they said (lib/reply-compose.js): on 167 real comments E2B's
+    // own replies passed the checks 63 times and were still often wrong, and the old 15 set lines ignored the comment.
+    // The model only answers questions my post covers and comments with an opinion or story of their own.
+    const composed = () => {
+      const text = composeReply(source, { postTitle, postSnippet, recentReplies: recent });
+      this.lastReplyKind = 'composed';
+      this.rememberOutput('reply', text);
+      return text;
+    };
+    if (type !== 'question' && !needsOwnAnswer(source, { postTitle, postSnippet })) return composed();
     const system = [
       '당신은 이 글을 직접 쓴 네이버 블로그 운영자입니다. 내 글에 달린 방문자 댓글에 글쓴이로서 자연스러운 한국어 대댓글 1~2문장을 씁니다.',
       '- 글쓴이 시점을 지키세요. "정리해 주셔서", "좋은 글 감사합니다", "덕분에 알게 됐어요" 같은 독자 말투는 쓰지 않습니다.',
@@ -544,9 +544,8 @@ export class EmbeddedLlamaServer extends EventEmitter {
       onReject: (text, reasons, attempt) => this.addLog(`Reply rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
     });
     if (result.text) { this.noteHarnessOutcome('대댓글', result); this.rememberOutput('reply', result.text); return result.text; }
-    // A greeting or a remark the model could not answer well gets a default reply; a question needs a real answer.
-    const fallback = !lastError && pickDefaultReply(classifyComment(source), source, recent, { postTitle });
-    if (fallback) { this.rememberOutput('reply', fallback); this.lastReplyKind = 'default'; return fallback; }
+    // A remark the model could not answer well still gets a reply that answers what it can; a question needs a real answer.
+    if (type !== 'question' && !lastError) return composed();
     const why = result.attempts.at(-1)?.reasons.map((item) => item.code).join(', ') || lastError || '응답 없음';
     throw new Error(`AI가 조건에 맞는 대댓글을 만들지 못했습니다 (${why}). 다음 차례에 다시 시도합니다.`);
   }
@@ -597,17 +596,13 @@ export class EmbeddedLlamaServer extends EventEmitter {
       onReject: (text, reasons, attempt) => this.addLog(`Comment rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
     });
     if (result.text) { this.noteHarnessOutcome('댓글', result); this.rememberOutput('comment', result.text); return result.text; }
-    // The model answered but nothing it wrote was safe to post (or it said SKIP): a default comment that says
-    // nothing about the post. Not when the engine itself failed: that would put the same lines on every post.
+    // Nothing safe to post: a like only. No set comment in its place: 2026-10-21, "쉬어 가는 마음으로 읽고 가요" and
+    // "정리된 글이라 읽기 편했어요" under news and stock posts said nothing about them and repeated across the feed.
     if (!failed) {
       const last = result.attempts.at(-1);
-      this.lastCommentFailure = result.skipped ? 'AI가 맞춤 댓글을 쓰기 어려운 글이라고 판단해 기본 댓글을 달았습니다.'
-        : `AI 댓글이 검사를 3번 통과하지 못해 기본 댓글을 달았습니다 (${(last?.reasons || []).map((item) => item.code).join(', ') || '빈 응답'})`;
-      const text = pickDefaultComment(recent);
-      this.lastCommentKind = 'default';
+      this.lastCommentFailure = result.skipped ? 'AI가 맞춤 댓글을 쓰기 어려운 글이라고 판단해 공감만 했습니다.'
+        : `AI 댓글이 검사를 3번 통과하지 못해 공감만 했습니다 (${(last?.reasons || []).map((item) => item.code).join(', ') || '빈 응답'})`;
       this.addLog(this.lastCommentFailure, 'info');
-      this.rememberOutput('comment', text);
-      return text;
     }
     return '';
   }

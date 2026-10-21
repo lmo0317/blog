@@ -1295,8 +1295,12 @@ export class NaverBrowserSession {
 
       const inspection = await page.evaluate(() => {
         // Title
-        const titleEl = document.querySelector('.se-title-text, .se-documentTitle, .tit_h3, h3.se_textarea, .post_title, .title_area, .se_title');
-        const title = (titleEl?.innerText || titleEl?.textContent || '').trim();
+        // The title text itself first: one selector list matches in page order, and .se-documentTitle (the whole header:
+        // category, title, nickname, date, "서로이웃 본문 기타 기능") comes before the .se-title-text inside it. 2026-10-21:
+        // all 60 feed posts checked gave the AI that header as the title.
+        const titleEl = ['.se-title-text', '.se_title .se_textarea', '.tit_h3', 'h3.se_textarea', '.post_title', '.se-documentTitle', '.title_area', '.se_title']
+          .map((selector) => document.querySelector(selector)).find((el) => el && (el.innerText || el.textContent || '').trim());
+        const title = (titleEl?.innerText || titleEl?.textContent || '').replace(/\s+/g, ' ').trim();
 
         // Content Snippet
         // Body paragraphs only. '.se-component-content' also matched the post header (category, title, nickname, date,

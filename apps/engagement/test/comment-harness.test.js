@@ -95,13 +95,11 @@ test('runHarness feeds the reasons back and returns the first answer that passes
   assert.match(seen[1].at(-1).content, /거절됐습니다[\s\S]*아무 글에나 쓰는 말/);
 });
 
-test('generateBlogComment falls back to a default comment after three rejected answers and remembers what it wrote', async () => {
+test('generateBlogComment gives up after three rejected answers (a like only) and remembers what it wrote', async () => {
   const server = new EmbeddedLlamaServer({ appRoot: process.cwd() });
   let calls = 0;
   server.chatCompletion = async () => { calls += 1; return '좋은 정보 잘 보고 갑니다! 정말 유익해요.'; };
-  const fallback = await server.generateBlogComment({ title: '캠핑 의자 수납 팁', contentSnippet: '캠핑 의자를 접어 수납하는 방법' });
-  assert.ok(DEFAULT_COMMENTS.includes(fallback), fallback);
-  assert.equal(server.lastCommentKind, 'default');
+  assert.equal(await server.generateBlogComment({ title: '캠핑 의자 수납 팁', contentSnippet: '캠핑 의자를 접어 수납하는 방법' }), '');
   assert.equal(calls, 3);
   assert.match(server.lastCommentFailure, /stock/);
 
@@ -111,11 +109,10 @@ test('generateBlogComment falls back to a default comment after three rejected a
   // The next post gets a different sentence: the same one is now a duplicate.
   calls = 0;
   server.chatCompletion = async () => { calls += 1; return text; };
-  assert.ok(DEFAULT_COMMENTS.includes(await server.generateBlogComment({ title: '캠핑 의자 수납 팁 2', contentSnippet: '캠핑 의자를 접어 수납하는 방법' })));
+  assert.equal(await server.generateBlogComment({ title: '캠핑 의자 수납 팁 2', contentSnippet: '캠핑 의자를 접어 수납하는 방법' }), '');
   assert.equal(calls, 3);
 });
-
-test('generateCommentReply retries with the reasons; greetings and remarks get a set reply without the model', async () => {
+test('generateCommentReply retries with the reasons; greetings get a reply composed from what they said', async () => {
   const server = new EmbeddedLlamaServer({ appRoot: process.cwd() });
   const prompts = [];
   const replies = ['비활성 이웃 정리도 돼요. 궁금한 점 있으시면 언제든 물어봐 주세요!', '네, 비활성 이웃 정리도 자율 주행으로 같이 처리해요. 관심 가져 주셔서 고마워요.'];
@@ -124,8 +121,12 @@ test('generateCommentReply retries with the reasons; greetings and remarks get a
   assert.equal(reply, replies[1]);
   assert.match(prompts[1].at(-1).content, /상투적인/);
 
+  // 2026-10-21: a greeting is answered in its own terms (the weekend, the cheer), without the model.
   server.chatCompletion = async () => { throw new Error('a greeting must not reach the model'); };
-  assert.ok(DEFAULT_REPLIES.greeting.includes(await server.generateCommentReply({ ...myPost, commentText: '잘 보고 가요', commenterName: '이웃' })));
+  const greeting = await server.generateCommentReply({ ...myPost, commentText: '잘 보고 갑니다 응원합니다! 즐거운 주말 보내세요', commenterName: '이웃' });
+  assert.match(greeting, /응원/);
+  assert.match(greeting, /주말/);
+  assert.equal(server.lastReplyKind, 'composed');
   server.chatCompletion = async () => '도움이 되셨다니 다행이에요. 궁금한 점 있으시면 언제든 물어봐 주세요!';
   await assert.rejects(server.generateCommentReply({ ...myPost, commentText: '이 프로그램은 맥에서도 되나요?', commenterName: '이웃' }), /stock/);
 });

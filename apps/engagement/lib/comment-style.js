@@ -64,7 +64,7 @@ export function isCommentClosedByAuthor(reason = '') {
 
 // A comment left out on purpose (comments closed, a sensitive post, the AI judged it better to skip): a skip, not an error.
 export function isDeliberateCommentSkip(reason = '') {
-  return isCommentClosedByAuthor(reason) || /민감한 주제|댓글을 달지 않는 게 낫다/.test(String(reason));
+  return isCommentClosedByAuthor(reason) || /민감한 주제|댓글을 달지 않는 게 낫다|공감만 했습니다/.test(String(reason));
 }
 
 // Default comments for when the AI cannot write one that passes the checks (or answers SKIP). They say nothing

@@ -37,7 +37,7 @@ test('a repeated comment from the same person on the same post is answered once'
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('comment replies avoid stock sentences and recent replies; a remark gets a default reply', async () => {
+test('comment replies avoid stock sentences and recent replies; a question the model fails stays unanswered', async () => {
   const { EmbeddedLlamaServer } = await import('../lib/embedded-llama.js');
   const llama = new EmbeddedLlamaServer({ modelManager: null });
   const answers = ['도움이 되셨다니 다행이에요 😊 궁금한 점 있으시면 언제든 찾아주세요!', '네, 카메라 사진도 한 번에 백업돼요. 편하게 써 보세요.'];
@@ -49,9 +49,11 @@ test('comment replies avoid stock sentences and recent replies; a remark gets a 
   assert.match(prompts[0], /\[최근에 쓴 대댓글\]\n- 응원해주셔서 감사해요!/);
 
   llama.chatCompletion = async () => '응원해주셔서 정말 감사해요! 힘이 납니다.';
-  const fallback = await llama.generateCommentReply({ commentText: '응원합니다', recentReplies: ['응원해주셔서 정말 감사해요! 힘이 나네요.'] });
-  assert.equal(llama.lastReplyKind, 'default');
-  assert.ok(fallback && !/응원해주셔서 정말/.test(fallback));
+  // A cheer is answered without the model, and not with the line just used.
+  const cheer = await llama.generateCommentReply({ commentText: '응원합니다', recentReplies: ['응원 덕분에 힘이 나요! 오늘도 좋은 하루 보내세요!'] });
+  assert.equal(llama.lastReplyKind, 'composed');
+  assert.match(cheer, /응원/);
+  assert.ok(!cheer.startsWith('응원 덕분에 힘이 나요!'), cheer);
   await assert.rejects(() => llama.generateCommentReply({ postTitle: '사진 백업 프로그램', postSnippet: '프로그램으로 사진을 백업합니다', commentText: '이 프로그램은 어디서 받을 수 있나요?', recentReplies: ['응원해주셔서 정말 감사해요! 힘이 나네요.'] }), /조건에 맞는 대댓글을 만들지 못했습니다/);
   // Asked about something the post never mentions: no AI answer at all.
   await assert.rejects(() => llama.generateCommentReply({ postTitle: '검단 포케 맛집 후기', postSnippet: '육회포케와 메밀면을 먹었어요.', commentText: '혹시 드레스코드 있나요~~?' }), /직접 답해 주세요/);

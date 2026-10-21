@@ -100,6 +100,7 @@ export function styleGuidance(recent = [], { random = Math.random } = {}) {
 }
 
 const reason = (code, fix) => ({ code, fix });
+const COMMENTARY = /인상적|인상 깊|흥미롭|흥미로운|소식을 (?:접|보니|들으니|듣고)|(?:다시 ?)?생각해 ?보게|생각하게 (?:되|됩)|중요할 것 같|중요하겠|중요해 보|중요하다는 (?:점|생각)|의미 있는 (?:일|변화)|새롭게 알게|새로 알게 되|(?:부분|점)이 눈에 띄/;
 
 /** Every rule a comment on someone else's post must pass. */
 export function checkComment(text, context = {}, recent = []) {
@@ -122,6 +123,9 @@ export function checkComment(text, context = {}, recent = []) {
   const reasons = base.reasons.map((code) => reason(code, fixes[code] || code));
   const profile = styleProfile(recent);
   if (STOCK_COMMENT.test(clean)) reasons.push(reason('stock', '"좋은 정보", "잘 보고 갑니다", "큰 도움이 됐어요" 같은 아무 글에나 쓰는 말을 빼세요.'));
+  // A review or a news anchor, not a neighbor: 2026-10-21, 92 feed comments on 112 had "인상적" 15×, "흥미롭" 16×,
+  // "소식을 접했" 9×, "생각해 보게" 7×, "중요할 것 같" 8×.
+  if (COMMENTARY.test(clean)) reasons.push(reason('commentary', '"인상적이네요", "흥미롭네요", "소식을 접했어요", "생각해 보게 되네요" 같은 감상문·논평 말투 말고, 이웃에게 건네듯 글의 한 가지에 솔직하게 반응하세요.'));
   if ((clean.match(EMOJI) || []).length > 1) reasons.push(reason('emoji_count', '이모지는 0~1개만 쓰세요.'));
   if (profile.emojiHeavy && TRAILING_EMOJI.test(clean)) reasons.push(reason('emoji_habit', '최근 댓글이 모두 이모지로 끝났습니다. 이번에는 이모지 없이 쓰세요.'));
   const opening = firstWord(clean);

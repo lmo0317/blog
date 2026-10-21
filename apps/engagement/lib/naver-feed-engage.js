@@ -11,6 +11,12 @@ export function cleanFeedAuthor(author, blogId = '') {
   while (FEED_SECTION_LABELS.test(cleaned)) cleaned = cleaned.replace(FEED_SECTION_LABELS, '').trim();
   return cleaned || blogId || name;
 }
+// The feed also mixes in Naver's own picks: "당신을 위한 추천글", "내 이웃의 인기글", "내 이웃이 반응한 글" are posts by
+// strangers, not my neighbors' new posts (2026-10-21: 26 of 178 cards in a day got a 찐이웃 comment).
+const NOT_NEIGHBOR_SECTIONS = /^(?:당신을 위한 추천글|내 이웃의 인기글|내 이웃이 반응한 글|최근 방문한 블로그의 다른 글|추천글)\s/;
+export function isNeighborFeedPost(post = {}) {
+  return !NOT_NEIGHBOR_SECTIONS.test(String(post.author || '').replace(/\s+/g, ' ').trim());
+}
 
 
 function koreaDateKey(date = new Date()) {
@@ -633,6 +639,9 @@ export class FeedEngagementManager {
         await feedPage.close().catch(() => {});
         feedPage = null;
 
+        const strangers = feedPosts.filter((post) => !isNeighborFeedPost(post)).length;
+        feedPosts = feedPosts.filter(isNeighborFeedPost);
+        if (strangers) this.log(`🚫 네이버 추천글·인기글 ${strangers}개는 이웃 글이 아니라서 건너뜁니다.`, 'info');
         this.stats.totalFound = feedPosts.length;
         // Neighbors who commented on my posts first: their new post is where a visit back means the most.
         const first = feedPosts.filter((post) => this.priorityBlogIds?.has(String(post.blogId).toLowerCase()));
