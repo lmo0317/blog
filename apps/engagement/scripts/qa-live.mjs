@@ -98,6 +98,12 @@ try {
     replyNo = replies[0]?.no || '';
     check('대댓글이 그 댓글 아래 1개만 달림', replies.length === 1 && replies[0].parent === commentNo, JSON.stringify(replies));
     check('대댓글이 새 댓글로 따로 달리지 않음', !replies.some((row) => !row.parent));
+    // The same comment asked again (a second run, a retry after a failed check) must not get a second reply.
+    const again = await session.replyToBlogComment({ postUrl: qaPostUrl, commentId: commentNo, commentText, replyText: `QA 두 번째 답글 ${token}` }).catch((error) => ({ error: error.message }));
+    check('이미 답한 댓글에는 두 번째 대댓글을 달지 않음', again.alreadyReplied && !again.replied, again.error || JSON.stringify(again));
+    const extra = (await readComments()).filter((row) => row.text.includes(`두 번째 답글 ${token}`));
+    check('두 번째 대댓글이 실제 페이지에 없음', extra.length === 0, extra.map((row) => row.no).join(','));
+    for (const row of extra) await deleteComment(row.no).catch(() => false);
   }
 } catch (error) {
   check('실행 중 예외', false, error.stack || error.message);

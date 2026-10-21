@@ -33,6 +33,9 @@ export function itemFromPost(commentText = '', postText = '') {
 export function readComment(commentText = '', { postTitle = '', postSnippet = '' } = {}) {
   const text = normalizeCommentText(commentText);
   const has = (re) => re.test(text);
+  // Taste and portion are answered only on a food post: "든든할 줄은 생각 못 했네요" under a prompt-writing post got
+  // "양이 많아서 배부르게 먹고 왔어요" (2026-10-21 audit).
+  const food = /맛집|음식|요리|레시피|메뉴|식당|카페|디저트|빵|고기|국수|포케|후기|먹|맛있|반찬|찌개|볶음|케이크|커피|간식|밀키트/.test(`${postTitle} ${postSnippet}`);
   const holiday = (text.match(/추석|설날|명절|크리스마스|성탄|연휴|한글날|개천절|어린이날|휴일|공휴일/) || [])[0] || '';
   return {
     text,
@@ -41,19 +44,21 @@ export function readComment(commentText = '', { postTitle = '', postSnippet = ''
     // "늦어도 답방 꼭 갑니다", "답방 다녀갑니다": they come to me, which is not asking me to come.
     visitedBack: has(/답방 ?(?:왔|와 ?(?:요|습니다)|다녀|갑니다|가요|드려|드립|꼭 ?갈|꼭 ?갑|갈게|올게)/),
     impressed: has(/대단|신기|놀랍|멋지|멋있|효율적|있군요|있네요|있었네|잇네요|편리|편하겠/),
-    visitAsk: has(/답방 ?(?:부탁|와 ?주|오세요|요(?![가-힣])|환영)|놀러 ?(?:와|오세요|오시)|와 ?주세요|와 ?주실|와 ?주시면|들러 ?주|방문(?:해)? ?주/),
+    // A request, not a description: "답방 와주는 사람들 고맙지만" is not asking me to come.
+    visitAsk: has(/답방 ?(?:부탁|와 ?주(?:세요|실|시면|시길|겠)|오세요|요(?![가-힣])|환영)|놀러 ?(?:와 ?주|오세요|오시)|와 ?주세요|와 ?주실|와 ?주시면|들러 ?주(?:세요|시면|실)|방문(?:해)? ?주(?:세요|시면|실)/),
     neighborAdd: has(/이웃 ?신청 ?(?:했|하고|드려|드렸|남겨|넣|살짝|보냈|합니다|해요)|서이추 ?(?:감사|했|드려|드렸|신청|해요|합니다|하고)|이웃 ?추가 ?(?:했|하고|드려)/),
-    complaint: has(/아쉽|아쉬웠|비싸|별로|실망|불친절|짜더|싱겁/),
+    complaint: food && has(/아쉽|아쉬웠|비싸|별로|실망|불친절|짜더|싱겁/),
     willVisit: has(/(?:자주|또|종종|가끔|매일) ?(?:놀러|들를|올게|올께|와야|찾아|방문)|놀러 ?올게|놀러 ?올께|또 올게|자주 올|소통해요|자주 소통/),
     cheer: has(/응원|화이팅|파이팅|힘내|대박 나/),
-    tasty: has(/맛있|맛나|맛집|먹고 ?싶|침 ?고|군침|땡기|땡길|당기네|입맛|매콤|달달|고소|조합/),
-    portion: has(/양이|양도|푸짐|한가득|든든|배부|포만감/),
-    visual: has(/예쁘|이쁘|사진|비주얼|깔끔|분위기|감성/),
+    tasty: food && has(/맛있|맛나|맛집|먹고 ?싶|침 ?고|군침|땡기|땡길|당기네|입맛|매콤|달달|고소|조합/),
+    portion: food && has(/양이|양도|푸짐|한가득|든든|배부|포만감/),
+    // Praise of how it looks, not a mention of photos ("사진 넣는 게 수월해지겠네요" is about a program).
+    visual: has(/예쁘|이쁘|사진(?:이|도)? ?(?:예쁘|이쁘|좋|멋|잘)|비주얼|깔끔|분위기|감성/),
     info: has(/정보|유익|유용|도움|알찬|꿀팁|팁|배우|알아갑|알고 ?갑|몰랐|새롭|궁금했|방법/),
     effort: has(/정성|꼼꼼|자세|상세|사세|디테일|섬세|정리(?:된|해 ?주|하신|가 잘)|잘 ?정리/),
     wantsToGo: has(/가 ?봐야|가 ?볼래|가 ?보고 ?싶|가봐야|가볼|가보고|방문해 ?보|들러 ?봐|찜|저장|메모|지도에|가야겠/) && /맛집|카페|식당|후기|여행|가게|매장|위치|주차|다녀|방문/.test(`${postTitle} ${postSnippet}`),
     wantsToTry: has(/해야겠|해 ?봐야|해봐야|따라 ?해|써 ?봐야|써봐야|시도해|기억해|참고|챙겨야|바꿔 ?봐야|해 ?볼게|해볼게|적용해/),
-    struggle: has(/쉽지 ?않|어렵|힘들(?!\s?때)|막막|번거롭|귀찮/) && !/고르기 힘들|힘들 때/.test(text),
+    struggle: has(/쉽지 ?않|어렵|힘들(?!\s?때)|힘든|힘드|막막|번거롭|귀찮/) && !/고르기 힘들|힘들 때/.test(text),
     shared: has(/저도|저 역시|나도|공감/),
     monday: has(/월요일|한 ?주(?:를)? 시작|한주 시작|새로운 한 ?주|이번 ?주도|한 ?주 ?(?:되|보내)/),
     weekendEnd: has(/주말 마지막|일요일 (?:저녁|밤)/),

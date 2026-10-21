@@ -598,8 +598,8 @@ async function loadCommentManagementHistory() {
             <span class="mhc-time">${escapeHtml(timeFormatted)}</span>
           </div>
         </div>
-        <span class="mhc-status-pill ${isCompleted ? 'pill-success' : item.status === 'needs_owner' ? 'pill-warning' : 'pill-danger'}">
-          ${isCompleted ? '완료' : item.status === 'needs_owner' ? '🙋 직접 답해 주세요' : '실패'}
+        <span class="mhc-status-pill ${isCompleted || item.status === 'already_replied' ? 'pill-success' : item.status === 'needs_owner' ? 'pill-warning' : 'pill-danger'}">
+          ${isCompleted ? '완료' : item.status === 'already_replied' ? '이미 답함' : item.status === 'needs_owner' ? '🙋 직접 답해 주세요' : '실패'}
         </span>
       </div>
       <div class="mhc-body">

@@ -1402,6 +1402,11 @@ async function processMyBlogComments(comments, { requestNeighbor = true, returnV
           commentText: comment.text,
           replyText
         });
+        if (replyResult?.alreadyReplied) {
+          console.log(`[CommentManagement] 이 댓글에는 이미 내 답글이 있어 달지 않음 (${comment.commentId})`);
+          results.push(await commentReplyStore.add({ ...comment, replyText: replyResult.replyText || '', replied: true, status: 'already_replied', message: '이미 답글이 달린 댓글입니다.' }));
+          continue;
+        }
         console.log(`[CommentManagement] 대댓글 등록 완료!`);
         if (replyResult?.replied !== false) trackAiComment({ kind: 'reply', source: 'replies', postUrl: comment.postUrl, postTitle: comment.postTitle, blogId: comment.myBlogId, text: replyText });
 

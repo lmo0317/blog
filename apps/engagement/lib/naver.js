@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises
 import { existsSync } from 'node:fs';
 import path, { dirname } from 'node:path';
 import { NeighborGroupStore } from './neighbor-groups.js';
+import { parseCommentInfo, ownerRepliesTo } from './reply-guard.js';
 
 const BLOG_ID_PATTERN = /^[a-zA-Z0-9_.-]{2,50}$/;
 const KEYWORD_CATEGORIES = [
@@ -1820,10 +1821,48 @@ export class NaverBrowserSession {
     }
   }
 
+  // Every comment and reply under a post from Naver's comment list, replies unfolded: [{ no, parent, mine, text }].
+  // Null when the list could not be read.
+  async readCommentThread(postUrl) {
+    const blogId = String(postUrl).match(/naver\.com\/([^/?#]+)\/\d/)?.[1] || String(postUrl).match(/[?&]blogId=([^&#]+)/)?.[1] || '';
+    const logNo = String(postUrl).match(/\/(\d{8,20})(?:[/?#]|$)/)?.[1] || String(postUrl).match(/[?&]logNo=(\d+)/)?.[1] || '';
+    if (!blogId || !logNo) return null;
+    const page = await this.context.newPage();
+    try {
+      await page.goto(`https://m.blog.naver.com/CommentList.naver?blogId=${encodeURIComponent(blogId)}&logNo=${logNo}`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.locator('.u_cbox_comment').first().waitFor({ state: 'attached', timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(1200);
+      // Older comments sit behind "더보기".
+      for (let i = 0; i < 30; i += 1) {
+        const more = page.locator('a.u_cbox_btn_more').filter({ visible: true }).first();
+        if (!(await more.isVisible().catch(() => false))) break;
+        await more.click().catch(() => {});
+        await page.waitForTimeout(1000);
+      }
+      const rows = await page.$$eval('.u_cbox_comment', (els) => els.map((el) => ({
+        info: el.getAttribute('data-info') || '',
+        text: (el.querySelector('.u_cbox_contents')?.textContent || '').replace(/\s+/g, ' ').trim()
+      })));
+      return rows.map((row) => ({ ...parseCommentInfo(row.info), text: row.text })).filter((row) => row.no);
+    } catch {
+      return null;
+    } finally {
+      await page.close().catch(() => {});
+    }
+  }
+
   async replyToBlogComment({ postUrl, commentId, authorName = '', commentText = '', replyText = '' }) {
     if (!this.connected || !await this.hasAuthenticatedSession()) throw new Error('네이버 로그인 세션이 필요합니다.');
     const cleanReply = String(replyText || '').replace(/\s+/g, ' ').trim();
     if (cleanReply.length < 2 || cleanReply.length > 300) throw new Error('대댓글은 2~300자로 입력해주세요.');
+    // One reply per comment, checked on the comment list right before posting (see reply-guard.js).
+    const wantedNo = /^\d{6,}$/.test(String(commentId)) ? String(commentId) : '';
+    if (wantedNo) {
+      const thread = await this.readCommentThread(postUrl);
+      if (!thread || !thread.some((row) => row.no === wantedNo)) throw new Error('댓글 목록에서 이 댓글을 확인하지 못해 대댓글을 달지 않았습니다.');
+      const existing = ownerRepliesTo(thread, wantedNo);
+      if (existing.length) return { replied: false, alreadyReplied: true, replyText: existing[0].text };
+    }
     const mobileUrl = String(postUrl).replace('://blog.naver.com/', '://m.blog.naver.com/');
     const page = await this.context.newPage();
     try {
@@ -1846,7 +1885,6 @@ export class NaverBrowserSession {
       let target = null;
       // Match by Naver's comment number. Text or nickname alone matched an earlier comment with the same
       // words (people who leave "잘 보고 갑니다" on every post) and stacked replies under that one.
-      const wantedNo = /^\d{6,}$/.test(String(commentId)) ? String(commentId) : '';
       const wantedText = String(commentText || '').replace(/\s+/g, ' ').trim();
       // The list can still be filling in: wait for this comment's number before reading the rows.
       if (wantedNo) {
@@ -1916,7 +1954,12 @@ export class NaverBrowserSession {
       await submit.click({ force: true, timeout: 4000 }).catch(() => submit.dispatchEvent('click'));
       await page.waitForTimeout(2000);
 
-      // Confirmation: the reply shows up under this comment, or this comment's editor was cleared.
+      // Confirmation on the comment list. A reply that went up but was not seen here was saved as failed and
+      // answered again on the next run (the 2026-09-05 "유익한 정보가 되었길 바랍니다" four times in two hours).
+      if (wantedNo) {
+        const after = await this.readCommentThread(postUrl);
+        if (after && ownerRepliesTo(after, wantedNo).length) return { replied: true, replyText: cleanReply };
+      }
       const confirmed = await replyArea.locator('.u_cbox_contents, .u_cbox_text_wrap').filter({ hasText: cleanReply.slice(0, Math.min(20, cleanReply.length)) }).first().isVisible().catch(() => false);
       if (!confirmed) {
         // Fallback: check if the input value was cleared
