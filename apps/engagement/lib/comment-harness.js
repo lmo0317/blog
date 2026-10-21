@@ -141,7 +141,8 @@ export function checkComment(text, context = {}, recent = []) {
 }
 
 // They ask me to visit back ("답방 와주세요", "놀러 오세요"), not just mention 답방 ("답방이라는 의미").
-const VISIT_ASK = /답방 ?(?:와|오|부탁|환영|해 ?주|요(?![가-힣]))|놀러 ?(?:와|오)|(?:와|들러|방문해) ?주(?:세요|시면|실)/;
+// "답방 와주는 사람들 고맙지만" talks about 답방; "제 글도 보러오세요", "머물러 주셔요" ask for one (2026-10-21).
+const VISIT_ASK = /답방 ?(?:와(?! ?주는)|오(?!는)|부탁|환영|해 ?주|요(?![가-힣]))|놀러 ?(?:와|오)|(?:와|들러|방문해) ?주(?:세요|시면|실)|보러 ?(?:와 ?주|오세요)|머물러 ?주/;
 
 /** What kind of comment I received, so the reply answers the right thing. */
 export function classifyComment(text) {
@@ -152,7 +153,8 @@ export function classifyComment(text) {
   if (/공감(?:하는 ?곳|버튼|누르는)[^.!?]{0,8}(?:없|안 보|못 찾)/.test(clean)) return 'request';
   // A real question ends a sentence like one ("되나요?", "할까요?"); "독서??", "그런 느낌이랄까..?" are a chatty tone
   // (2026-10-20 eval: such greetings were handed to the owner and never answered).
-  const asks = /어떻게|어디서|어디에|언제|얼마|되나요|있나요|인가요|할까요|건가요/.test(clean) || /(?:요|까|나|죠|니|가|래|지|요\?)\s*\?/.test(clean);
+  // "흡수를 돕는군요?!", "쉬라는 뜻인가?ㅎㅎ" talk to themselves (2026-10-21: both went to the model as questions).
+  const asks = /어떻게|어디서|어디에|언제|얼마|되나요|있나요|인가요|할까요|건가요/.test(clean) || /(?<![군네])(?:요|까|나|죠|니|가|래|지)\s*\?(?![?!]*\s*[ㅎㅋ!])/.test(clean);
   if (!visitAsk && asks) return 'question';
   // "앞으로도 자주 올려주세요", "이번 주도 화이팅해요": encouragement, not a request.
   if (/(?:자주|앞으로도|계속|꾸준히)[^.!?]{0,12}(?:올려|써|들려|와|해) ?주세요|화이팅|파이팅/.test(clean) && !/(?:받고|쓰고|공유받고|알고) 싶|보내 ?주|알려 ?주|문의|요청/.test(clean)) return 'greeting';
@@ -371,7 +373,7 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
     if (asked.length && !answered) reasons.push(reason('ignored_request', `댓글의 ${type === 'question' ? '질문' : '요청'}("${normalizeCommentText(commentText).slice(0, 30)}")에 먼저 답하세요.`));
   }
   // 2026-10-18: "시간 나실때 제 블로그에도 방문해주시면 참으로 감사하겠습니다" got an unrelated story; it asks for a visit.
-  if (/답방|놀러 ?와|놀러 ?오|와 ?주실|와 ?주시면|방문(?:해)? ?주|들러 ?주/.test(commentText) && !/답방|들를|갈게|가 ?볼게|찾아갈|놀러 ?갈|방문할|찾아뵐|놀러 갈/.test(clean)) {
+  if (VISIT_ASK.test(commentText) && !/답방|들를|갈게|가 ?볼게|찾아갈|놀러 ?갈|방문할|찾아뵐|놀러 갈/.test(clean)) {
     reasons.push(reason('ignored_request', '상대가 답방을 청했습니다. 들르겠다고 답하세요("꼭 들를게요").'));
   }
   // "저도 이런 경험 많이 해서 공감되네요" to a visitor who told no story: an experience nobody mentioned.

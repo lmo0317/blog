@@ -36,6 +36,7 @@ QA가 실패하면 배포하지 않는다. "사소해 보여서", "급해서"도
 |---|---|
 | 문법 검사 `npm run check` | 모든 파일 `node --check` 통과 |
 | 이웃메이트 단위 테스트 `npm test` | fail 0 |
+| └ 내 블로그 실제 댓글 282건 (`test/blog-comments.test.js`, `test/fixtures/blog-comments.json`) | 댓글마다 정해 둔 답 종류(정보·답방·인사 등)와 같음, 정해진 답글이 검사기에 걸리지 않음 |
 | 라이선스 서버 테스트 (node:sqlite) | fail 0 |
 | 라이선스 서버 테스트 (sql.js, cafe24용 Node 14 경로) | fail 0 |
 
@@ -66,6 +67,7 @@ QA 글: `https://blog.naver.com/lmo0317/224401793308` (`NM_QA_POST`로 변경 �
 | `lib/naver.js` (네이버 화면 조작: 댓글·대댓글·공감·서이추·스캔·발행) | 자동 QA [3]에 더해, 바꾼 기능 자체를 112에서 사장님 블로그/계정으로 1회 실제 실행하고 공개 페이지에서 확인 | 의도한 곳에 1번만 반영, 엉뚱한 버튼·입력창 사용 없음 |
 | 서이추(`addNeighbor`) | 이미 이웃인 계정이나 테스트용 계정으로 그룹 선택·멘트 입력까지 확인 (실제 신청은 사장님 확인 후) | 팝업 단계별 성공, 오류 메시지 없음 |
 | 댓글 생성·검사 (`comment-harness`, `comment-prompt`, `embedded-llama`, `comment-style`) | `node eval/reply-eval.mjs` + 블라인드 판정(`eval/REPLY-JUDGE.md`, 판정자 2명) | bad가 기준선(v12: good 142 / minor 28 / bad 1)보다 늘지 않음 |
+| 대댓글 점검(블로그 전수 조사) | 새로 달린 댓글을 `test/fixtures/blog-comments.json`에 맞는 답 종류와 함께 추가 → `npm test` | 새 댓글까지 전부 통과 (점검 때마다 세트가 늘어남) |
 | 이웃 글 댓글 생성 | 최근 실제 글 20개 이상으로 E2B 생성 → 오독·지어냄·독자 말투 0건 | 사람이 읽어 틀린 말 없음 |
 | UI (`public/`) | ui-designer 스킬 5대 QA 체크리스트 + Chrome에서 넓은 화면(1440~1600)·좁은 화면(560) 스크린샷 | 깨짐·겹침·가로 스크롤 없음, 콘솔 오류 없음 |
 | 서버 API (`server.js`) | 바뀐 API를 112 웹에서 직접 호출(로그인 쿠키) | 200, 기대한 값 |
