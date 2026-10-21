@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이웃메이트 라이트 — 가벼운 이웃메이트</title>
+<meta name="description" content="설치 파일 24MB. 이웃메이트와 같은 기능을 PC에 있는 Edge·Chrome 창으로 가볍게 씁니다.">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/site.css?v=20261020b">
+<style>
+  .lite-hero { padding-bottom: 72px; }
+  .lite-meta { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+  .lite-meta span { padding: 6px 12px; border-radius: 9999px; background: #fff; border: 1px solid var(--line); font-size: 13.5px; font-weight: 650; color: var(--body); }
+  .lite-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 8px 0 72px; }
+  .lite-steps { max-width: 760px; margin: 0 auto 80px; }
+  .lite-steps ol { margin: 14px 0 0; padding-left: 22px; color: var(--body); font-size: 15.5px; line-height: 1.8; }
+  .lite-steps h2 { font-size: 22px; font-weight: 800; }
+  @media (max-width: 860px) { .lite-cards { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><span class="brand-mark" aria-hidden="true"></span>이웃메이트</a>
+    <nav class="nav" aria-label="사이트 메뉴">
+      <a href="./">홈</a>
+      <a href="about.html">기능 소개</a>
+      <a href="lite.html" aria-current="page">라이트</a>
+      <a href="qna.html">문의 게시판</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="lite/download">라이트 받기</a>
+  </div>
+</header>
+
+<main>
+  <section class="hero lite-hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <span class="eyebrow">🪶 이웃메이트 라이트</span>
+        <h1>기능은 그대로,<br><em>설치 파일은 4분의 1</em></h1>
+        <p class="lead">PC에 이미 있는 Edge·Chrome 창으로 이웃메이트를 엽니다. 설치 파일이 24MB라 금방 받고, 업데이트도 가볍습니다.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-lg" href="lite/download">⬇️ 이웃메이트 라이트 받기</a>
+          <a class="btn btn-ghost btn-lg" href="about.html">기능 전부 보기 →</a>
+        </div>
+        <div class="lite-meta">
+          <span id="liteVersion">최신 버전 확인 중…</span>
+          <span>Windows 10 · 11</span>
+          <span>약 24MB</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <div class="lite-cards">
+      <div class="card reveal">
+        <div class="ico">🪶</div>
+        <h3>가볍게 설치</h3>
+        <p>이웃메이트(110MB)의 4분의 1 크기입니다. 창은 PC의 Edge나 Chrome이 열어 줍니다.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ico">🧩</div>
+        <h3>따로 설치되는 프로그램</h3>
+        <p>지금 쓰는 이웃메이트와 폴더·설정이 나뉘어 있어 함께 깔아도 서로 건드리지 않습니다.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ico">🔄</div>
+        <h3>업데이트는 자동</h3>
+        <p>새 버전이 나오면 알아서 받아 두고, 다음에 켤 때 바뀌어 있습니다.</p>
+      </div>
+    </div>
+
+    <div class="card lite-steps">
+      <h2>🛠️ 설치 방법</h2>
+      <ol>
+        <li><b>라이트 받기</b>를 눌러 설치 파일을 받습니다.</li>
+        <li>받은 파일을 엽니다. "Windows의 PC 보호" 창이 뜨면 <b>추가 정보 → 실행</b>을 누릅니다.</li>
+        <li>설치가 끝나면 바탕화면의 <b>이웃메이트 라이트</b>가 열립니다. 이웃메이트 계정으로 로그인하면 됩니다.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 이웃메이트 · 네이버와 제휴하지 않은 독립 소프트웨어입니다.</span>
+    <span class="foot-links"><a href="./">홈</a><a href="about.html">기능 소개</a><a href="qna.html">문의 게시판</a><a href="https://open.kakao.com/o/sxZ1kQRi" target="_blank" rel="noopener">카톡 문의</a><a href="terms.html">이용약관</a><a href="privacy.html"><b>개인정보 처리방침</b></a></span>
+  </div>
+</footer>
+
+<script>
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
+    entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 }) : null;
+  document.querySelectorAll('.reveal').forEach((el) => io ? io.observe(el) : el.classList.add('in'));
+  fetch('lite/latest.json', { cache: 'no-store' }).then((r) => r.json()).then((feed) => {
+    document.getElementById('liteVersion').textContent = feed.version ? `최신 버전 ${feed.version}` : '최신 버전';
+  }).catch(() => { document.getElementById('liteVersion').textContent = '최신 버전'; });
+</script>
+</body>
+</html>

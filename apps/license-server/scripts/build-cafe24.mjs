@@ -32,6 +32,8 @@ const stripped = fs.readFileSync(home, 'utf8')
   .replace('</head>', '<style>.phone img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 29px; background: #0b1220; } @media (max-width: 640px) { .phone img { border-radius: 25px; } }</style>\n</head>');
 if (/<video|neighbormate-shorts|soundBtn/.test(stripped)) throw new Error('promo video left in site/index.html');
 fs.writeFileSync(home, stripped);
+// Pages only this site has (cafe24-site/): the 이웃메이트 라이트 download page.
+fs.cpSync(path.join(root, 'cafe24-site'), site, { recursive: true });
 if (seedArg) { fs.mkdirSync(path.join(out, 'seed'), { recursive: true }); fs.copyFileSync(path.resolve(seedArg), path.join(out, 'seed', 'license.db')); }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -49,6 +51,7 @@ fs.writeFileSync(path.join(out, 'web.js'), `// cafe24 entry: settings from cafe2
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -79,6 +82,30 @@ function applySeed(file) {
   console.log('[NeighborMate license] data replaced from seed/license.db');
 }
 
+// 이웃메이트 라이트 is served from Google Drive: its latest.yml there names the current installer's direct link.
+// Node 14 has no fetch, so this follows Drive's redirects with https.get. Cached for 5 minutes.
+const LITE_FEED = 'https://drive.usercontent.google.com/download?id=1VevdRNhh0q-n-e-SM9qRmS8gIEPAWSOw&export=download';
+const getText = (url, hops = 5) => new Promise((resolve, reject) => {
+  https.get(url, (res) => {
+    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && hops > 0) { res.resume(); resolve(getText(new URL(res.headers.location, url).href, hops - 1)); return; }
+    if (res.statusCode !== 200) { res.resume(); reject(new Error('HTTP ' + res.statusCode)); return; }
+    let body = '';
+    res.setEncoding('utf8');
+    res.on('data', (chunk) => { body += chunk; });
+    res.on('end', () => resolve(body));
+  }).on('error', reject).setTimeout(10000, function () { this.destroy(new Error('timeout')); });
+});
+let liteCache = { at: 0, feed: null };
+async function liteFeed() {
+  if (liteCache.feed && Date.now() - liteCache.at < 5 * 60 * 1000) return liteCache.feed;
+  const text = await getText(LITE_FEED);
+  const pick = (key) => ((text.match(new RegExp('^' + key + ":\\\\s*'?([^'\\\\r\\\\n]*)", 'm')) || [])[1] || '').trim();
+  const feed = { version: pick('version'), path: pick('path') };
+  if (!feed.version || !/^https:\\/\\/drive\\.usercontent\\.google\\.com\\//.test(feed.path)) throw new Error('bad feed');
+  liteCache = { at: Date.now(), feed };
+  return feed;
+}
+
 const { createLicenseServer } = await import('./server.js');
 const { LicenseDatabase } = await import('./lib/db.js');
 const { driver } = await import('./lib/sqlite.js');
@@ -89,6 +116,12 @@ const { app } = createLicenseServer(new LicenseDatabase(file));
 // The promo site at /, the license server at /license (the paths the site and the app use) and at / as before.
 const web = express();
 web.use('/license', app);
+web.get('/lite/latest.json', async (req, res) => {
+  try { const feed = await liteFeed(); res.json({ version: feed.version }); } catch { res.status(502).json({ error: 'feed unavailable' }); }
+});
+web.get('/lite/download', async (req, res) => {
+  try { res.redirect(302, (await liteFeed()).path); } catch { res.status(502).send('다운로드 서버에 잠시 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'); }
+});
 web.use(express.static(path.join(here, 'site')));
 web.use(app);
 const port = Number(process.env.PORT) || 8001;

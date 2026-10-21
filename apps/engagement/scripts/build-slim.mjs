@@ -1,8 +1,8 @@
-// TEST ONLY — smaller installers to compare with the real one (scripts/build-installer.mjs). Never released:
-// a different app id, install folder and data folder, output in dist-slim/.
+// Smaller installers next to the real one (scripts/build-installer.mjs): a different app id, install folder and
+// data folder, output in dist-slim/. The node build ships as 이웃메이트 라이트 (cafe24 page + Google Drive feed).
 //   node scripts/build-slim.mjs electron   Electron with only the Korean and English language packs
 //   node scripts/build-slim.mjs node       no Electron: Node runs the server, the window is Edge in app mode (slim/)
-// NM_SLIM_VERSION sets the version (default: package.json), NM_SLIM_FEED the update feed (default: none).
+// NM_SLIM_VERSION sets the version (default: package.json), NM_SLIM_FEED the update feed (default: the Lite Drive feed).
 import { cp, mkdir, readdir, readFile, rm, writeFile, copyFile } from 'node:fs/promises';
 import { execFileSync, execSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -20,8 +20,12 @@ const version = process.env.NM_SLIM_VERSION || pkg.version;
 const out = path.join(root, 'dist-slim');
 const work = path.join(root, '.build', `slim-${mode}`);
 const app = mode === 'node' ? path.join(work, 'root', 'app') : path.join(work, 'app');
-const PRODUCT = mode === 'node' ? '이웃메이트 경량 테스트' : '이웃메이트 언어축소 테스트';
-const EXE = 'NeighborMateSlimTest.exe';
+// The node build is 이웃메이트 라이트, a program of its own next to the Electron app: its own install folder, data folder,
+// port and update feed (Google Drive, published with slim/publish-drive.ps1), and its pages on the cafe24 site.
+const PRODUCT = mode === 'node' ? '이웃메이트 라이트' : '이웃메이트 언어축소 테스트';
+const EXE = 'NeighborMateLite.exe';
+const LITE_FEED = 'https://drive.usercontent.google.com/download?id=1VevdRNhh0q-n-e-SM9qRmS8gIEPAWSOw&export=download';
+const LITE_SITE = 'http://aieng.cafe24app.com/';
 const step = (message) => console.log(`\n▶ ${message}`);
 
 step('소스 복사');
@@ -31,11 +35,16 @@ const entries = mode === 'node' ? ['server.js', 'lib', 'public'] : ['main.js', '
 for (const entry of entries) await cp(path.join(root, entry), path.join(app, entry), { recursive: true });
 if (mode === 'node') for (const file of ['launcher.js', 'slim-updater.js']) await copyFile(path.join(root, 'slim', file), path.join(app, file));
 
-// The Edge window shows the page icon in its title bar (Electron showed the exe icon).
+// The Edge window shows the page icon in its title bar (Electron showed the exe icon). Links to the homepage,
+// 문의, 약관 and 개인정보 처리방침 go to the cafe24 site.
 if (mode === 'node') {
+  for (const file of [path.join(app, 'lib', 'license-client.js'), path.join(app, 'public', 'index.html')]) {
+    await writeFile(file, (await readFile(file, 'utf8')).replaceAll('https://minohlee.mooo.com/neighbormate-app/', LITE_SITE));
+  }
   await copyFile(path.join(root, 'build', 'icon.png'), path.join(app, 'public', 'app-icon.png'));
   const index = path.join(app, 'public', 'index.html');
-  await writeFile(index, (await readFile(index, 'utf8')).replace('</head>', '<link rel="icon" type="image/png" href="/app-icon.png">\n</head>'));
+  // The window title tells it apart from the Electron app, and launcher.js finds the window by it.
+  await writeFile(index, (await readFile(index, 'utf8')).replace(/<title>[^<]*<\/title>/, '<title>이웃메이트 라이트</title>').replace('</head>', '<link rel="icon" type="image/png" href="/app-icon.png">\n</head>'));
 }
 
 step('코드 난독화 (build-installer.mjs와 같은 설정)');
@@ -53,13 +62,13 @@ step('실행에 필요한 패키지 설치');
 const dependencies = { ...pkg.dependencies };
 if (mode === 'node') delete dependencies['electron-updater'];
 await writeFile(path.join(app, 'package.json'), JSON.stringify({
-  name: 'neighbormate-slim-test',
+  name: mode === 'node' ? 'neighbormate-lite' : 'neighbormate-slim-test',
   productName: PRODUCT,
   version,
   type: 'module',
   main: mode === 'node' ? 'launcher.js' : 'main.js',
   dependencies,
-  ...(mode === 'node' ? { slim: { dataDirName: 'NeighborMate Slim Test', pipeName: 'neighbormate-slim-test', port: 4323, feedUrl: process.env.NM_SLIM_FEED || '', windowTitle: '이웃메이트' } } : {})
+  ...(mode === 'node' ? { slim: { dataDirName: 'NeighborMate Lite', pipeName: 'neighbormate-lite', port: 4333, feedUrl: process.env.NM_SLIM_FEED || LITE_FEED, windowTitle: '이웃메이트 라이트' } } : {})
 }, null, 2));
 execSync('npm install --omit=dev --no-audit --no-fund --no-package-lock --workspaces=false', { cwd: app, stdio: 'inherit', env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' } });
 await mkdir(out, { recursive: true });
@@ -117,11 +126,11 @@ step('설치 파일 만들기 (NSIS)');
 // electron-builder's own NSIS, unpacked in its cache by earlier builds.
 const nsisCache = path.join(process.env.LOCALAPPDATA, 'electron-builder', 'Cache', 'nsis-3.0.4.1');
 const nsisDir = path.join(nsisCache, fs.readdirSync(nsisCache).find((name) => !name.endsWith('.7z')));
-const installerName = `NeighborMate-SlimTest-${version}.exe`;
+const installerName = `NeighborMate-Lite-Setup-${version}.exe`;
 const outFile = path.join(out, 'node', installerName);
 await mkdir(path.dirname(outFile), { recursive: true });
 execFileSync(path.join(nsisDir, 'Bin', 'makensis.exe'), ['-V2', '-INPUTCHARSET', 'UTF8',
-  `-DPRODUCT=${PRODUCT}`, `-DOUTFILE=${outFile}`, '-DDIRNAME=NeighborMateSlimTest', `-DEXE=${EXE}`, `-DSTAGE=${stageRoot}`, `-DICON=${icon}`, `-DVERSION=${version}`,
+  `-DPRODUCT=${PRODUCT}`, `-DOUTFILE=${outFile}`, '-DDIRNAME=NeighborMateLite', `-DEXE=${EXE}`, `-DSTAGE=${stageRoot}`, `-DICON=${icon}`, `-DVERSION=${version}`,
   path.join(root, 'slim', 'installer.nsi')], { stdio: 'inherit', env: { ...process.env, NSISDIR: nsisDir } });
 
 // The update feed file, in electron-builder's latest.yml shape.
