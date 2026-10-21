@@ -184,3 +184,9 @@ test('a reply must answer the comment, and a greeting gets a greeting, not my po
   const changed = checkReply('서로이웃 신청은 하루 100명까지라서 천천히 늘리는 게 좋아요.', { ...guide, commentText: '캠핑 장비 고르는 게 제일 어렵더라고요' });
   assert.ok(codes(changed).includes('unresponsive'), codes(changed).join());
 });
+
+test('the writing instruction handed back as a reply is rejected', () => {
+  const codes = checkReply('구체적인 말 하나를 받아서 이어가세요.', { commentText: '반복해서 받는 질문을 다음 글의 소재로 이어 간다는 부분이 눈에 들어오네요.' }).reasons.map((item) => item.code);
+  assert.ok(codes.includes('prompt_leak'));
+  assert.ok(!checkReply('그렇게 대화를 이어 가면 글이 훨씬 풍성해지더라고요.', { commentText: '반복해서 받는 질문을 다음 글의 소재로 이어 간다는 부분이 눈에 들어오네요.' }).reasons.some((item) => item.code === 'prompt_leak'));
+});

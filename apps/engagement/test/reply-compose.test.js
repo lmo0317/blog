@@ -48,3 +48,20 @@ test('an opinion of their own goes to the model first; greetings and praise do n
   assert.equal(josa('육회', '이/가'), '육회가');
   assert.equal(josa('메밀면', '은/는'), '메밀면은');
 });
+
+// 2026-10-21 second audit of the owner's blog: what the composed replies still missed.
+test('praise of the writing, of a program I made, and encouragement to me each get their own answer', () => {
+  const r = () => 0;
+  const writing = composeReply('글을 참 차분하고 편안하게 쓰셔서 읽는 내내 마음이 편안해지네요. 소중한 이웃님 행복한 하루 보내세요 ~^^', { postTitle: '블로그 이웃 늘리기', random: r });
+  assert.match(writing, /읽으셨다니|읽어 주셔서|읽혔다니/);
+  const program = composeReply('이웃메이트라는 프로그램이 정말 유용해 보이네요. 비활성 이웃을 관리해 주는 점이 매력적이에요.', { postTitle: '이웃 관리 자동화 이웃메이트', random: r });
+  assert.match(program, /만든|다듬어/);
+  const encourage = composeReply('하루 30분 루틴을 잡는 것이 현명할 것 같아요. 꾸준히 시도해보시면 분명 좋은 변화가 생길 거예요.', { postTitle: '댓글 루틴', random: r });
+  assert.match(encourage, /해 볼게요|이어 갈게요/);
+  assert.doesNotMatch(encourage, /해 보시면|해 보세요/);
+});
+
+test('"자주 들릴께요" is a promise to visit', () => {
+  assert.equal(readComment('잘 보았습니다. 자주 들릴께요..!').willVisit, true);
+  assert.match(composeReply('잘 보았습니다. 자주 들릴께요..!', { random: () => 0 }), /자주|놀러|소통/);
+});

@@ -48,7 +48,15 @@ export function readComment(commentText = '', { postTitle = '', postSnippet = ''
     visitAsk: has(/답방 ?(?:부탁|와 ?주(?:세요|실|시면|시길|겠)|오세요|요(?![가-힣])|환영)|놀러 ?(?:와 ?주|오세요|오시)|와 ?주세요|와 ?주실|와 ?주시면|들러 ?주(?:세요|시면|실)|방문(?:해)? ?주(?:세요|시면|실)/),
     neighborAdd: has(/이웃 ?신청 ?(?:했|하고|드려|드렸|남겨|넣|살짝|보냈|합니다|해요)|서이추 ?(?:감사|했|드려|드렸|신청|해요|합니다|하고)|이웃 ?추가 ?(?:했|하고|드려)/),
     complaint: food && has(/아쉽|아쉬웠|비싸|별로|실망|불친절|짜더|싱겁/),
-    willVisit: has(/(?:자주|또|종종|가끔|매일) ?(?:놀러|들를|올게|올께|와야|찾아|방문)|놀러 ?올게|놀러 ?올께|또 올게|자주 올|소통해요|자주 소통/),
+    // "자주 들릴께요" is the common spelling of 들를게요 (2026-10-21 audit: answered with "꼼꼼히 읽어 주셔서").
+    willVisit: has(/(?:자주|또|종종|가끔|매일) ?(?:놀러|들를|들릴|들르|올게|올께|와야|찾아|방문)|놀러 ?올게|놀러 ?올께|또 올게|자주 올|소통해요|자주 소통|들[를릴] ?[게께]|들르겠/),
+    // They praise how it reads ("차분하고 편안하게 쓰셔서 읽는 내내 마음이 편안해지네요"), not what it teaches.
+    writing: has(/(?:차분|편안|편하|술술|쉽)(?:하)?게 (?:쓰|읽)|읽는 내내|글솜씨|필력|문체|글이 (?:참|너무|정말)? ?(?:편안|따뜻|차분|좋)|잘 읽혀|읽기 편/),
+    // They praise a program I made ("이웃메이트라는 프로그램이 정말 유용해 보이네요"), the post being about it.
+    program: has(/프로그램|이웃메이트|직접 만드|만드셨|만드시다니|만드신/) && /프로그램|이웃메이트|만든|PC 버전|앱/.test(`${postTitle} ${postSnippet}`),
+    // Encouragement or advice to me ("꾸준히 시도해보시면 분명 좋은 변화가 생길 거예요"): handing the same words back
+    // to them reads as a role swap (2026-10-21 audit).
+    encourages: has(/(?:해|해 ?보|시도해 ?보|하)시면 (?:분명|꼭|금방|더)?|좋은 변화가 생길|잘 되실|번창하세요|대박 나세요/) && has(/거예요|겁니다|거에요|될 ?거|생길|나실|되실|하세요/),
     cheer: has(/응원|화이팅|파이팅|힘내|대박 나/),
     tasty: food && has(/맛있|맛나|맛집|먹고 ?싶|침 ?고|군침|땡기|땡길|당기네|입맛|매콤|달달|고소|조합/),
     portion: food && has(/양이|양도|푸짐|한가득|든든|배부|포만감/),
@@ -92,7 +100,10 @@ export function composeReply(commentText, { postTitle = '', postSnippet = '', re
   const dish = c.dish && c.dish.length <= 10 ? c.dish : '';
 
   // 1. What they said about the post.
-  if (c.complaint) add(['솔직한 이야기 고마워요.', '솔직하게 말씀해 주셔서 감사해요.', '그 부분은 저도 조금 아쉬웠어요.']);
+  if (c.encourages) add(['좋은 말씀 고마워요, 꾸준히 해 볼게요!', '말씀 듣고 나니 더 힘이 나요, 꾸준히 이어 갈게요.', '응원처럼 들려서 든든해요, 꾸준히 해 볼게요.']);
+  else if (c.program && !c.wantsToTry) add(['필요해서 직접 만든 건데 좋게 봐 주셔서 기뻐요.', '직접 만들어 쓰던 걸 좋게 봐 주셔서 고마워요.', '관심 가져 주셔서 감사해요, 계속 다듬어 갈게요.']);
+  else if (c.writing) add(['편하게 읽으셨다니 다행이에요.', '그렇게 읽어 주셔서 정말 기뻐요.', '편안하게 읽혔다니 쓴 보람이 있어요.']);
+  else if (c.complaint) add(['솔직한 이야기 고마워요.', '솔직하게 말씀해 주셔서 감사해요.', '그 부분은 저도 조금 아쉬웠어요.']);
   else if (c.tasty && dish) add([`${josa(dish, '은/는')} 실제로도 정말 맛있었어요!`, `${josa(dish, '은/는')} 또 먹고 싶을 만큼 맛있었어요 ㅎㅎ`, `${dish} 진짜 맛있게 먹었어요.`, `${josa(dish, '이/가')} 제일 기억에 남아요 ㅎㅎ`]);
   else if (c.tasty && c.portion) add(['양도 넉넉하고 맛도 좋아서 든든했어요!', '푸짐하고 맛있어서 배부르게 먹었어요 ㅎㅎ']);
   else if (c.portion) add(['양이 정말 넉넉해서 든든했어요.', '양이 많아서 배부르게 먹고 왔어요 ㅎㅎ']);
@@ -135,7 +146,7 @@ export function composeReply(commentText, { postTitle = '', postSnippet = '', re
 /** A comment with something of its own to answer (an opinion, a story) that none of the composed lines covers. */
 export function needsOwnAnswer(commentText = '', context = {}) {
   const c = readComment(commentText, context);
-  const covered = c.complaint || c.tasty || c.portion || c.visual || c.info || c.effort || c.cheer || c.wantsToGo || c.wantsToTry || c.struggle || c.visitAsk || c.visitedBack || c.neighborAdd
+  const covered = c.encourages || c.program || c.writing || c.complaint || c.tasty || c.portion || c.visual || c.info || c.effort || c.cheer || c.wantsToGo || c.wantsToTry || c.struggle || c.visitAsk || c.visitedBack || c.neighborAdd
     // A bare "대단하네요" is covered; a longer opinion around it is theirs to be answered.
     || (c.impressed && c.text.length < 40);
   // Letters beyond the greeting words: "서이추 중요하죵 하지만 교류하지 않으면 의미가 없더라고요" has a point of its own.

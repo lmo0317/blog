@@ -174,6 +174,15 @@ const REPLY_TYPE_GUIDE = {
   remark: '상대가 자기 생각이나 경험을 말했습니다. 상대가 쓴 구체적인 말 하나를 받아서 이어가세요.'
 };
 
+const PROMPT_LEAK = /(?:받아서|말을) 이어가세요|화답하세요|답하세요|쓰지 마세요|끼워 넣지|본문만 출력|구체적인 말 하나|상대가 쓴|상대(?:가|는) (?:인사|질문|요청)/;
+// Letters-only run of `size` shared by two texts.
+function sharesRun(a, b, size) {
+  const x = String(a).replace(/[^가-힣A-Za-z0-9]/g, '');
+  const y = String(b).replace(/[^가-힣A-Za-z0-9]/g, '');
+  for (let i = 0; i + size <= x.length; i += 1) if (y.includes(x.slice(i, i + size))) return true;
+  return false;
+}
+
 /** Hints for the reply prompt: the comment type and the habits the recent replies already overused. */
 export function replyGuidance(commentText, recentReplies = []) {
   const hints = [REPLY_TYPE_GUIDE[classifyComment(commentText)]];
@@ -191,6 +200,9 @@ export function checkReply(text, { commentText = '', postTitle = '', postSnippet
   if (/https?:\/\/|www\.|[#<>\[\]{}]/i.test(clean)) reasons.push(reason('artifact', 'URL·해시태그·괄호 없이 답글만 쓰세요.'));
   if ((clean.match(EMOJI) || []).length > 1) reasons.push(reason('emoji_count', '이모지는 0~1개만 쓰세요.'));
   if (META.test(clean)) reasons.push(reason('meta', '설명이나 해설 말고 상대에게 건네는 답글만 쓰세요.'));
+  // The writing instruction handed back as the reply: "구체적인 말 하나를 받아서 이어가세요." passed every other check
+  // (2026-10-21 audit, a remark comment on the owner's blog).
+  if (PROMPT_LEAK.test(clean) || Object.values(REPLY_TYPE_GUIDE).some((guide) => sharesRun(clean, guide, 10))) reasons.push(reason('prompt_leak', '작성 지시문을 옮기지 말고 상대에게 건네는 답글만 쓰세요.'));
   if (STOCK_REPLY.test(clean)) reasons.push(reason('stock', '"도움이 되셨다니", "궁금한 점 있으시면 언제든" 같은 상투적인 문장을 빼세요.'));
   if (READER_VOICE.test(clean)) reasons.push(reason('reader_voice', '당신은 이 글을 쓴 사람입니다. "정리해 주셔서", "좋은 글 감사" 같은 독자 말투를 쓰지 마세요.'));
   if (UNSOLICITED_ADVICE.test(clean)) reasons.push(reason('unsolicited_advice', '상대가 묻지 않은 충고나 훈계("~하지 않는 게 중요해요")를 하지 마세요.'));
