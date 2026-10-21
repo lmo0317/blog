@@ -49,7 +49,7 @@ export function validateBlogComment(comment, context = {}, recentComments = []) 
   if (/(?:유명|좋|맛있|괜찮|효과적).*?(?:다고|라고) 들었/.test(text)) reasons.push('unsupported_hearsay');
   // 2026-10-19 audit: "저희 아이도", "우리 아이가", "저도 예전에 먹어봤는데", "저도 청첩장 준비", "저도 혈당 걱정",
   // "저도 트립닷컴에서 좋은 딜을 찾았어요": a life the commenter does not have.
-  const INVENTED_LIFE = /(?:저희|우리) (?:아이|애|딸|아들|남편|아내|와이프|신랑|부모님|엄마|아빠|강아지|고양이|회사|학교)|저도 (?:예전에|어릴 때|한때|요즘|최근에|지금|비슷한|같은)|저도 .{0,20}(?:준비|걱정|고민|경험|찾았|샀|먹었|봤는데|갔었|다녔|키우)|직접 (?:보니|가 ?보니|먹어 ?보니|해 ?보니)|저도 (?:가끔|평소|회사|퇴근|출근|생생|아이|아기)|기억이 저도|(?:아이|아기|애들|가족)(?:와|랑|하고) (?:함께|같이)?|(?:아기|아이)랑 |(?:학부모|수험생|엄마|아빠|직장인|부모|취준생) 입장|막막했던|막연했던|진로 (?:계획|고민)|(?:보내고|다녀|놀다) 올게요/g;
+  const INVENTED_LIFE = /(?:저희|우리) (?:아이|애|딸|아들|남편|아내|와이프|신랑|부모님|엄마|아빠|강아지|고양이|회사|학교)|저도 (?:예전에|어릴 때|한때|요즘|최근에|지금|비슷한|같은)|저도 .{0,30}(?:준비|걱정|고민|경험|찾았|샀|먹었|봤는데|갔었|다녔|키우|다녀왔|갔을 때|쓰는데|쓰고 있|사용하는데|사용 중|바꿨|기억이 나|하다가)|직접 (?:보니|가 ?보니|먹어 ?보니|해 ?보니)|저도 (?:가끔|평소|회사|퇴근|출근|생생|아이|아기)|기억이 저도|(?:아이|아기|애들|가족)(?:와|랑|하고) (?:함께|같이)?|(?:아기|아이)랑 |(?:학부모|수험생|엄마|아빠|직장인|부모|취준생) 입장|막막했던|막연했던|진로 (?:계획|고민)|(?:보내고|다녀|놀다) 올게요/g;
   const postText = normalizeCommentText(`${context.title || ''} ${context.contentSnippet || ''}`);
   // A phrase the post itself uses ("아이와 함께" in a family outing post) is about the post, not a made-up life.
   if ([...text.matchAll(INVENTED_LIFE)].some((m) => !postText.includes(m[0].trim()))) reasons.push('unsupported_experience');
@@ -58,15 +58,27 @@ export function validateBlogComment(comment, context = {}, recentComments = []) 
   // A post about someone else: news wording, a role before a name ("배우 한고은이"), a company as subject, or report-style
   // "~했다." sentences. The commenter must then talk about them in the third person, never "~하셨다니" to the blogger.
   const newsLike = /기자|보도했|보도에 따르면|밝혔다|전했다|라고 말했다|에 따르면|소속사|관계자는|관계자에 따르면|매체|단독|연합뉴스|뉴스1|뉴시스|OSEN|스포츠조선|일간스포츠|방송에서|출연해|입대|별세|선고/.test(postText)
-    || /(?:배우|가수|개그우먼|개그맨|방송인|선수|감독|아이돌|모델|유튜버|대표|회장|대통령|장관|의원) [가-힣]{2,4}(?:이|가|은|는|의|씨)\s/.test(postText)
+    || /(?:배우|가수|개그우먼|개그맨|방송인|선수|감독|아이돌|모델|유튜버|대표|회장|대통령|장관|의원) [가-힣]{2,4}(?:이|가|은|는|의|씨|와|과|를|도)\s/.test(postText)
     || /(?:기업|회사|업체|법인)(?:은|는|이|가)\s/.test(postText)
     || (postText.match(/[가-힣](?:했|됐|었|았|였|받았|났)다[.\s]/g) || []).length >= 3;
-  if (newsLike && /(?:셨|으셨|하셨)(?:다니|다는|던|군요|네요|어요|잖아요|을|겠)|(?:주셔서|주시니|주신 |해 ?주셔)|근황을|돌아오신|돌아오실|보여주신|받으시면서|계신 점|오신 모습|드신 /.test(text)) reasons.push('news_as_person');
+  // Sports write-ups too ("정수빈이 이미래를 꺾고 첫 우승").
+  const newsOrSports = newsLike || (postText.match(/선수|감독|구단|리그|우승|결승|챔피언|시즌|경기/g) || []).length >= 3;
+  if (newsOrSports && /(?:셨|으셨|하셨)(?:다니|다는|던|군요|네요|어요|잖아요|을|겠)|(?:주셔서|주시니|주신 |해 ?주셔)|근황을|돌아오신|돌아오실|보여주신|받으시면서|계신 점|오신 모습|드신 /.test(text)) reasons.push('news_as_person');
+  // Spoken to the person in the news as if the blogger were them: "결혼 축하드려요! 두 분 행복하게 사세요",
+  // "첫 우승 축하드려요! 고생 많으셨어요", "동안이세요!", "돌보시느라 힘드시겠어요" (2026-10-21 judge cases).
+  else if (newsOrSports && /축하(?:드려요|드립니다|해요|합니다)|행복하게 사세요|고생 많으셨|힘내세요|(?:하|이|으)시느라|힘드시겠|동안이세요|(?:예쁘|멋지|대단하)세요|건강하세요/.test(text)) reasons.push('news_as_person');
+  // The post says it did not happen ("웨이팅 없이 하이디라오"), the comment says it did ("한 시간 넘게 웨이팅하셨다니").
+  const denied = [...normalizeCommentText(`${context.title || ''}`).matchAll(/([가-힣]{2,4}) ?없이/g)].map((m) => m[1]);
+  if (denied.some((word) => text.includes(word) && !/없이|없었|없는|없다|안 /.test(text))) reasons.push('misread');
   // A controversy or an accusation is no place for a smiley ("…해명한 점이 눈에 띄네요. 😊", 2026-10-20 audit).
   if (/논란|의혹|해명|비판|사과문|고발|갑질|폭로|피해자|사기|분쟁|소송/.test(`${context.title || ''} ${postText}`)
     && /[\u{1F300}-\u{1FAFF}☀-➿]|:\)|\^\^|ㅎㅎ|ㅋㅋ/u.test(text)) reasons.push('tone');
   const keywords = contentKeywords(context);
-  if (keywords.length && !keywords.slice(0, 30).some((word) => text.toLowerCase().includes(word.toLowerCase()))) reasons.push('irrelevant');
+  // Any word of the title counts, not only the longest words of the post: "정수빈 선수가 첫 우승을…" under
+  // "LPBA 정수빈, 이미래 꺾고 생애 첫 우승" was rejected because 30 longer body words crowded the name out (2026-10-21).
+  const titleWords = contentKeywords({ title: context.title });
+  const mentions = (word) => text.toLowerCase().includes(word.toLowerCase()) || (word.length >= 4 && text.includes(word.slice(-3)));
+  if (keywords.length && !keywords.slice(0, 30).some(mentions) && !titleWords.some(mentions)) reasons.push('irrelevant');
   if (recentComments.some((previous) => commentSimilarity(text, previous) >= COMMENT_DUPLICATE_THRESHOLD)) reasons.push('duplicate');
   return { ok: reasons.length === 0, text, reasons, keywords, action: 'comment' };
 }

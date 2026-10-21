@@ -118,6 +118,7 @@ export function checkComment(text, context = {}, recent = []) {
     irrelevant: `글에 실제로 나온 대상(${keywords.join(', ') || '글의 핵심 단어'})을 하나 넣으세요.`,
     duplicate: '최근 댓글과 너무 비슷합니다. 문장 구조를 완전히 바꾸세요.',
     tone: '논란·의혹을 다룬 글입니다. 이모지나 ㅎㅎ 없이 차분하게 쓰세요.',
+    misread: '글 내용과 반대로 썼습니다. 글에 실제로 쓰인 대로 말하세요.',
     news_as_person: '글쓴이는 소식을 전한 사람입니다. 기사 속 인물에게 말하듯 "~하셨다니", "근황을 나눠 주셔서"라고 쓰지 말고 소식에 대한 생각을 쓰세요.'
   };
   const reasons = base.reasons.map((code) => reason(code, fixes[code] || code));
@@ -384,15 +385,19 @@ export function feedbackMessage(previous, reasons) {
  * Write → check → rewrite with the reasons, up to MAX_ATTEMPTS. Returns the first answer that passes,
  * or '' with every attempt and its reasons (the caller skips instead of posting a bad comment).
  */
-export async function runHarness({ messages, complete, check, temperatures = [0.7, 0.85, 1.0], onReject = () => {} }) {
+// maxAttempts and deadline (ms since epoch): a post skipped now is not visited again, so a comment is worth a few
+// more tries, as long as a slow CPU does not spend minutes on one post.
+export async function runHarness({ messages, complete, check, temperatures = [0.7, 0.85, 1.0], maxAttempts = MAX_ATTEMPTS, deadline = 0, onReject = () => {} }) {
   const attempts = [];
   let turn = messages;
-  for (let index = 0; index < Math.min(MAX_ATTEMPTS, temperatures.length); index += 1) {
-    const raw = String(await complete(turn, { temperature: temperatures[index] }) || '').trim();
+  const total = Math.max(1, maxAttempts);
+  for (let index = 0; index < total; index += 1) {
+    if (index > 0 && deadline && Date.now() > deadline) break;
+    const raw = String(await complete(turn, { temperature: temperatures[index % temperatures.length] }) || '').trim();
     if (!raw) { attempts.push({ text: '', reasons: [reason('empty', '빈 응답')] }); continue; }
-    const result = check(raw);
+    const result = await check(raw);
     // The last try may break a style rule (an ending or word used a lot lately), never a content rule.
-    const lastTry = index === Math.min(MAX_ATTEMPTS, temperatures.length) - 1;
+    const lastTry = index === total - 1 || (deadline && Date.now() > deadline);
     if (!result.ok && lastTry && result.reasons.length && result.reasons.every((item) => SOFT_CODES.has(item.code))) {
       return { text: result.text, skipped: false, attempts, relaxed: result.reasons.map((item) => item.code) };
     }

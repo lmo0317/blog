@@ -6,6 +6,7 @@ import { detectGpuSpecs } from './hardware.js';
 import { buildBlogCommentMessages, buildNeighborMessagePrompt, normalizeCommentText, sensitivePostReason, validateNeighborMessage } from './comment-prompt.js';
 import { checkComment, checkReply, classifyComment, replyGuidance, runHarness, styleGuidance } from './comment-harness.js';
 import { composeReply, needsOwnAnswer } from './reply-compose.js';
+import { judgeComment } from './comment-judge.js';
 
 export { COMMENT_DUPLICATE_THRESHOLD, COMMENT_PROMPT_VERSION, buildBlogCommentMessages, commentSimilarity, contentKeywords, normalizeCommentText, validateBlogComment } from './comment-prompt.js';
 
@@ -538,10 +539,13 @@ export class EmbeddedLlamaServer extends EventEmitter {
     let lastError = '';
     const result = await runHarness({
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperatures: [0.7, 0.85, 1.0, 0.8, 0.95, 1.05, 0.75, 0.9, 1.0, 1.1],
+      maxAttempts: 10,
+      deadline: Date.now() + (this.acceleration !== 'GPU' ? 300000 : 120000),
       complete: (messages, { temperature }) => this.chatCompletion(messages, { temperature, maxTokens: 140, timeoutMs: this.acceleration !== 'GPU' ? 90000 : 15000 })
         .catch((err) => { lastError = err.message; return ''; }),
       check: (text) => checkReply(text, { commentText: source, postTitle, postSnippet }, recent),
-      onReject: (text, reasons, attempt) => this.addLog(`Reply rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
+      onReject: (text, reasons, attempt) => this.addLog(`Reply rejected (${attempt}/10): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
     });
     if (result.text) { this.noteHarnessOutcome('대댓글', result); this.rememberOutput('reply', result.text); return result.text; }
     // A remark the model could not answer well still gets a reply that answers what it can; a question needs a real answer.
@@ -587,13 +591,27 @@ export class EmbeddedLlamaServer extends EventEmitter {
     let failed = false;
     const result = await runHarness({
       messages,
+      // The model runs on the customer's own PC at no cost, so quality comes before speed (the owner, 2026-10-21):
+      // up to ten tries, as long as one post takes no more than 2 minutes (GPU) or 5 (CPU). A post passed over now
+      // is not visited again; 3 tries left 14 of 60 real posts with a like only.
+      temperatures: [0.7, 0.85, 1.0, 0.8, 0.95, 1.05, 0.75, 0.9, 1.0, 1.1],
+      maxAttempts: 10,
+      deadline: Date.now() + (cpuMode ? 300000 : 120000),
       complete: async (turn, { temperature }) => {
         if (failed) return '';
         try { return await this.chatCompletion(turn, { temperature, maxTokens, timeoutMs }); }
         catch (err) { failed = true; this.lastCommentFailure = `AI 댓글 생성 실패: ${err.message}`; this.addLog(`Comment generation failed: ${err.message}`, 'warn'); return ''; }
       },
-      check: (text) => checkComment(text, { title, contentSnippet: commentContext, imageSummary }, recent),
-      onReject: (text, reasons, attempt) => this.addLog(`Comment rejected (${attempt}/3): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
+      // The rules first; a comment they pass gets a second look from the model (lib/comment-judge.js). On the judge
+      // cases it stopped 3 of 12 bad comments the rules alone missed then, and no good one, so it only costs time.
+      check: async (text) => {
+        const checked = checkComment(text, { title, contentSnippet: commentContext, imageSummary }, recent);
+        if (!checked.ok || checked.action === 'skip' || failed) return checked;
+        const verdict = await judgeComment({ title, contentSnippet, comment: checked.text },
+          (judgeMessages) => this.chatCompletion(judgeMessages, { temperature: 0, maxTokens: 80, timeoutMs })).catch(() => ({ ok: true }));
+        return verdict.ok ? checked : { ...checked, ok: false, reasons: verdict.reasons };
+      },
+      onReject: (text, reasons, attempt) => this.addLog(`Comment rejected (${attempt}/10): ${reasons.map((item) => item.code).join(', ')} (${text})`, 'warn')
     });
     if (result.text) { this.noteHarnessOutcome('댓글', result); this.rememberOutput('comment', result.text); return result.text; }
     // Nothing safe to post: a like only. No set comment in its place: 2026-10-21, "쉬어 가는 마음으로 읽고 가요" and
@@ -601,7 +619,7 @@ export class EmbeddedLlamaServer extends EventEmitter {
     if (!failed) {
       const last = result.attempts.at(-1);
       this.lastCommentFailure = result.skipped ? 'AI가 맞춤 댓글을 쓰기 어려운 글이라고 판단해 공감만 했습니다.'
-        : `AI 댓글이 검사를 3번 통과하지 못해 공감만 했습니다 (${(last?.reasons || []).map((item) => item.code).join(', ') || '빈 응답'})`;
+        : `AI 댓글이 검사를 ${result.attempts.length}번 모두 통과하지 못해 공감만 했습니다 (${(last?.reasons || []).map((item) => item.code).join(', ') || '빈 응답'})`;
       this.addLog(this.lastCommentFailure, 'info');
     }
     return '';

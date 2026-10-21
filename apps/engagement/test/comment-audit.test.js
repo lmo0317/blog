@@ -214,3 +214,15 @@ test('feed comments: no commentary voice, only neighbors, no comment on accident
   }
   assert.equal(sensitivePostReason({ title: '인천 부평 진미막창 감자막창 후기' }), '');
 });
+// The judge cases (eval/fixtures/judge-cases.json): real neighbor posts, good comments and the failure kinds found
+// on 2026-10-21. The rule checks stop every bad one and none of the good ones.
+test('rule checks stop invented stories, the person in the news, ads told as use, other posts and contradictions', async () => {
+  const fs = await import('node:fs');
+  const posts = JSON.parse(fs.readFileSync(new URL('../eval/fixtures/feed-posts.json', import.meta.url), 'utf8'));
+  const cases = JSON.parse(fs.readFileSync(new URL('../eval/fixtures/judge-cases.json', import.meta.url), 'utf8'));
+  for (const c of cases) {
+    const post = posts.find((item) => item.title.includes(c.post));
+    const result = checkComment(c.comment, { title: post.title, contentSnippet: post.contentSnippet.slice(0, 500), imageSummary: post.imageSummary }, []);
+    assert.equal(result.ok, c.label === 'good', `${c.label} ${c.kind || ''}: ${c.comment} (${result.reasons.map((item) => item.code)})`);
+  }
+});

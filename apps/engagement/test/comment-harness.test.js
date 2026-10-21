@@ -95,12 +95,12 @@ test('runHarness feeds the reasons back and returns the first answer that passes
   assert.match(seen[1].at(-1).content, /거절됐습니다[\s\S]*아무 글에나 쓰는 말/);
 });
 
-test('generateBlogComment gives up after three rejected answers (a like only) and remembers what it wrote', async () => {
+test('generateBlogComment gives up after ten rejected answers (a like only) and remembers what it wrote', async () => {
   const server = new EmbeddedLlamaServer({ appRoot: process.cwd() });
   let calls = 0;
   server.chatCompletion = async () => { calls += 1; return '좋은 정보 잘 보고 갑니다! 정말 유익해요.'; };
   assert.equal(await server.generateBlogComment({ title: '캠핑 의자 수납 팁', contentSnippet: '캠핑 의자를 접어 수납하는 방법' }), '');
-  assert.equal(calls, 3);
+  assert.equal(calls, 10);
   assert.match(server.lastCommentFailure, /stock/);
 
   server.chatCompletion = async () => '의자 다리를 먼저 접고 커버에 넣는 순서가 핵심이었군요. 캠핑 의자 수납이 간단해 보여요.';
@@ -110,7 +110,7 @@ test('generateBlogComment gives up after three rejected answers (a like only) an
   calls = 0;
   server.chatCompletion = async () => { calls += 1; return text; };
   assert.equal(await server.generateBlogComment({ title: '캠핑 의자 수납 팁 2', contentSnippet: '캠핑 의자를 접어 수납하는 방법' }), '');
-  assert.equal(calls, 3);
+  assert.equal(calls, 10);
 });
 test('generateCommentReply retries with the reasons; greetings get a reply composed from what they said', async () => {
   const server = new EmbeddedLlamaServer({ appRoot: process.cwd() });
