@@ -43,7 +43,7 @@ export function readComment(commentText = '', { postTitle = '', postSnippet = ''
   // Words that look like praise or cheer but are not about my post: "서로에게 도움이 되는 이웃", "좋은 정보와 소통으로
   // 인연 이어가겠습니다", "응원도 남기겠습니다" (2026-10-21).
   const about = text.replace(/(?:서로에게 )?도움이 ?되는 이웃|좋은 정보와 소통|응원(?:도|을)? 남기/g, ' ');
-  return {
+  const c = {
     text,
     // Only for food: "육회포케는 실제로도 정말 맛있었어요". Elsewhere a picked word read badly ("철이라 부분", "갑니다 부분").
     dish: commentTopic(text, postTitle) || itemFromPost(text, `${postTitle} ${postSnippet}`),
@@ -73,9 +73,16 @@ export function readComment(commentText = '', { postTitle = '', postSnippet = ''
     info: /정보|유익|유용|도움|알찬|꿀팁|팁|배우|알아갑|알고 ?갑|몰랐|새롭|궁금했|방법|추천(?:해 ?주|감사)/.test(about) && has(/정보|추천(?:해 ?주|감사)|유익|유용|도움|알찬|꿀팁|팁|배우|알아갑|알고 ?갑|몰랐|새롭|궁금했|방법/),
     effort: has(/정성|꼼꼼|자세|상세|사세|디테일|섬세|정리(?:된|해 ?주|하신|가 잘)|잘 ?정리/),
     wantsToGo: has(/가 ?봐야|가 ?볼래|가 ?보고 ?싶|가봐야|가볼|가보고|방문해 ?보|들러 ?봐|찜|저장|메모|지도에|가야겠/) && /맛집|카페|식당|후기|여행|가게|매장|위치|주차|다녀|방문/.test(`${postTitle} ${postSnippet}`),
-    wantsToTry: has(/해야겠|해 ?봐야|해봐야|따라 ?해|써 ?봐야|써봐야|써먹어 ?봐|시도해|기억해|참고(?:해|할|하)|챙겨야|바꿔 ?봐야|해 ?볼게|해볼게|적용해/),
-    struggle: has(/쉽지 ?않|어렵|힘들(?!\s?때)|힘든|힘드|막막|번거롭|귀찮/) && !/고르기 힘들|힘들 때/.test(text),
+    wantsToTry: has(/해야겠|해 ?봐야|해봐야|따라 ?해|써 ?봐야|써봐야|써먹어 ?봐|시도해|기억해|참고(?:해|할|하)|챙겨야|챙겨 ?먹어야|먹어야겠|마셔야겠|바꿔 ?봐야|해 ?볼게|해볼게|적용해/),
+    struggle: has(/쉽지 ?않|어렵|잘 안 ?[될되]|힘들(?!\s?때)|힘든|힘드|막막|번거롭|귀찮/) && !/고르기 힘들|힘들 때/.test(text),
     shared: has(/저도|저 역시|나도|공감/),
+    // A tip of their own ("시판카레에 강황 가루 넣어서 먹으면 좋더라구요", "샴푸 한번 사용해보면 좋을 것 같아요"). E2B answered
+    // these with an experience I never had ("저도 그 방법으로 효과 봤어요", 2026-10-22 eval).
+    tip: has(/(?:으면|하면|해 ?보면|넣어서|넣으면|쓰면|드시면|먹으면|뿌려|섞어)[^.!?]{0,12}(?:좋더|좋아요|좋을 것|좋겠|괜찮|효과)|좋은 방법|방법도 있/),
+    // A part of my post they point at ("~한다는 대목이 흥미롭네요", "~부분이 눈에 들어오네요").
+    point: has(/대목|부분이|부분을|와닿|눈에 들어|기억에 남|인상적|흥미롭|관점|발상|구체적이/),
+    // Their own story or opinion ("서로 교류하지 않으면 의미가 없더라고요", "카레를 엄청 좋아해서 강황도 많이 먹는 편").
+    story: has(/더라고|더라구|던데|었는데|았는데|했는데|하는 편|좋아해서|경험(?!처럼)|저는|제 블로그|저도/),
     monday: has(/월요일|한 ?주(?:를)? 시작|한주 시작|새로운 한 ?주|이번 ?주도|한 ?주 ?(?:되|보내)/),
     weekendEnd: has(/주말 마지막|일요일 (?:저녁|밤)/),
     // "주말이 가까워오는데요" on a Wednesday is not their weekend.
@@ -88,6 +95,15 @@ export function readComment(commentText = '', { postTitle = '', postSnippet = ''
     rain: has(/비가 (?:와|오|내리|많이)|비 소식|비 오는 (?:월요일|화요일|수요일|목요일|금요일|주말|아침|저녁|하루|날이네)|비와서|돌풍|장마/),
     niceDay: has(/하늘|날씨(?:가)? 좋|좋은 날씨|가을 날씨|맑|화창|선선|햇살/)
   };
+  // A comment with a point of its own (an opinion, a story, a tip) beyond greeting words: "서이추 중요하죵 하지만 교류하지
+  // 않으면 의미가 없더라고요". E2B wrote these freely until 2026-10-22, when 18 of its 42 replies on real comments were
+  // wrong (made-up experiences, a reader's voice, another topic); they now get a reply that answers the kind of remark.
+  const plain = text.replace(/포스팅|(?:글 )?잘 ?(?:보고|읽고) ?(?:갑니다|가요|가용)|둘러보고 ?가[가-힣]*|감사(?:합니다|해요)|좋은 하루[^.!~]*|행복한[^.!~]*|[^가-힣\s]/g, '').replace(/\s+/g, ' ').trim();
+  const greeting = classifyComment(text) === 'greeting' || c.holiday || c.weekend || c.weekendEnd || c.monday || c.morning || c.evening || c.cold;
+  // A visit or 이웃 신청 greeting is answered as one ("이웃 신청도 고마워요"), not as a remark.
+  c.remark = !greeting && plain.length >= 20 && !(c.visitedBack || c.visitAsk || c.neighborAdd || c.willVisit || c.wantsMore);
+  if (!c.remark) c.tip = c.point = c.story = false;
+  return c;
 }
 
 function pick(pool, recent, random) {
@@ -120,12 +136,18 @@ function buildReply(commentText, { postTitle = '', postSnippet = '', recentRepli
   else if (c.portion) add(['양이 정말 넉넉해서 든든했어요.', '양이 많아서 배부르게 먹고 왔어요 ㅎㅎ'], 'portion');
   else if (c.tasty) add(['보이는 것만큼 맛있었어요 ㅎㅎ', '실제로도 정말 맛있었어요!', '맛있게 봐 주셔서 고마워요!'], 'tasty');
   else if (c.struggle && !c.info) add(['맞아요, 쉽지 않죠.', '저도 그 마음 알아요.', '그쵸, 생각보다 손이 많이 가요.'], 'struggle');
+  // "강황 잘 챙겨 먹어야겠어요" is a plan to eat, not a project to start ("하나씩 해 보시면 달라지는 게 보일 거예요").
+  else if (c.wantsToTry && /먹어야겠|챙겨 ?먹|마셔야겠/.test(c.text)) add(['꾸준히 챙겨 드시면 좋겠어요.', '맛있게 꾸준히 챙겨 드세요!', '부담 없이 꾸준히 드셔 보세요.'], 'eatPlan');
   else if (c.wantsToTry && !c.wantsToGo) add(['하나씩 해 보시면 분명 달라지는 게 보일 거예요.', '조금씩 해 보시면 금방 익숙해지실 거예요.', '천천히 하나씩 해 보세요, 응원할게요!'], 'wantsToTry');
   else if (c.visual) add(['예쁘게 봐 주셔서 고마워요!', '사진 좋게 봐 주셔서 기분 좋아요 ㅎㅎ'], 'visual');
   else if (c.effort) add(['정성 알아봐 주셔서 고마워요.', '꼼꼼히 읽어 주셔서 감사해요.', '열심히 정리한 보람이 있네요 ㅎㅎ'], 'effort');
   else if (c.info) add(['필요하실 때 꺼내 보시면 좋겠어요.', '쓸모 있게 읽어 주셔서 고마워요.', '도움이 되면 좋겠어요.', '잘 활용하시면 좋겠어요.', '유익하게 봐 주셔서 기뻐요.', '다음 글도 열심히 준비할게요.', '필요할 때 다시 찾아 주세요 :)'], 'info');
   else if (c.cheer) add(['응원 덕분에 힘이 나요!', '응원 고마워요, 힘내서 또 올릴게요!', '응원해 주셔서 든든해요.'], 'cheer');
   else if (c.impressed) add(['좋게 봐 주셔서 고마워요!', '관심 가져 주셔서 감사해요.', '신기하게 봐 주셔서 고마워요 ㅎㅎ'], 'impressed');
+  else if (c.tip) add(['좋은 팁 나눠 주셔서 고마워요.', '그 방법도 좋네요, 나눠 주셔서 고마워요.', '좋은 방법 나눠 주셔서 고마워요.'], 'tip');
+  else if (c.point) add(['그 부분을 눈여겨봐 주셔서 반가워요.', '꼼꼼히 읽고 생각 나눠 주셔서 고마워요.', '그 대목에 공감해 주셔서 기뻐요.'], 'point');
+  else if (c.story) add(['이야기 나눠 주셔서 고마워요.', '경험 들려주셔서 고마워요.', '생각 나눠 주셔서 고마워요.'], 'story');
+  else if (c.remark) add(['생각 나눠 주셔서 고마워요.', '읽고 이야기 남겨 주셔서 고마워요.', '그렇게 봐 주셔서 고마워요.'], 'remark');
   else if (!(c.visitedBack || c.visitAsk || c.neighborAdd)) add(['들러 주셔서 고마워요.', '댓글 반가워요!', '찾아와 주셔서 감사해요.', '잘 봐 주셔서 고마워요.', '읽어 주셔서 고마워요 :)', '댓글 남겨 주셔서 고마워요.'], 'thanks');
 
   // 2. What they plan to do, or a visit.
@@ -165,17 +187,7 @@ export function replyPlan(commentText, context = {}) {
   return buildReply(commentText, context).keys;
 }
 
-/** A comment with something of its own to answer (an opinion, a story) that none of the composed lines covers. */
-export function needsOwnAnswer(commentText = '', context = {}) {
-  const c = readComment(commentText, context);
-  // "배포 요청드립니다", "프로그램 공유받고 싶습니다", "공감하는 곳이 없네요": they asked for something, and "필요하실 때
-  // 꺼내 보시면 좋겠어요" ignored it (2026-10-21).
-  if (classifyComment(c.text) === 'request') return true;
-  const covered = c.willVisit || c.wantsMore || c.encourages || c.program || c.writing || c.complaint || c.tasty || c.portion || c.visual || c.info || c.effort || c.cheer || c.wantsToGo || c.wantsToTry || c.struggle || c.visitAsk || c.visitedBack || c.neighborAdd
-    // A bare "대단하네요" is covered; a longer opinion around it is theirs to be answered.
-    || (c.impressed && c.text.length < 40);
-  // Letters beyond the greeting words: "서이추 중요하죵 하지만 교류하지 않으면 의미가 없더라고요" has a point of its own.
-  const plain = c.text.replace(/포스팅|(?:글 )?잘 ?(?:보고|읽고) ?(?:갑니다|가요|가용)|둘러보고 ?가[가-힣]*|감사(?:합니다|해요)|좋은 하루[^.!~]*|행복한[^.!~]*|[^가-힣\s]/g, '').replace(/\s+/g, ' ').trim();
-  const greeting = classifyComment(c.text) === 'greeting' || c.holiday || c.weekend || c.weekendEnd || c.monday || c.morning || c.evening || c.cold;
-  return !covered && !greeting && plain.length >= 20;
+/** A comment only I can answer: a request ("배포 요청드립니다", "프로그램 공유받고 싶습니다"). Everything else gets a composed reply. */
+export function needsOwnAnswer(commentText = '') {
+  return classifyComment(normalizeCommentText(commentText)) === 'request';
 }

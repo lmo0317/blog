@@ -9,7 +9,8 @@ import { composeReply, needsOwnAnswer, replyPlan } from '../lib/reply-compose.js
 import { checkReply, classifyComment } from '../lib/comment-harness.js';
 
 const cases = JSON.parse(fs.readFileSync(new URL('./fixtures/blog-comments.json', import.meta.url), 'utf8'));
-const seeded = (seed) => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+// Spread small seeds over the range first: seed * 16807 alone starts every run near 0 and always picks a pool's first line.
+const seeded = (seed) => { let state = (seed * 2654435761) % 2147483647; return () => { state = (state * 16807) % 2147483647; return state / 2147483647; }; };
 
 test('every real comment on my blog gets the reply it should', () => {
   const wrong = [];
@@ -32,7 +33,8 @@ test('composed replies to real comments pass the reply checks', () => {
   const failed = [];
   for (const { post, comment, want } of cases) {
     if (want === 'own' || classifyComment(comment) === 'question') continue;
-    for (const seed of [1, 7, 42]) {
+    // Enough seeds that every line of a pool comes up (a 3-seed run missed "알려 주셔서", a reader's phrase, 2026-10-22).
+    for (let seed = 1; seed <= 40; seed++) {
       const text = composeReply(comment, { postTitle: post, random: seeded(seed) });
       const result = checkReply(text, { commentText: comment, postTitle: post }, []);
       const reasons = (result.reasons || []).map((item) => item.code).filter((code) => code !== 'unresponsive');

@@ -496,7 +496,8 @@ export class EmbeddedLlamaServer extends EventEmitter {
     }
     // Greetings and remarks get a reply built from what they said (lib/reply-compose.js): on 167 real comments E2B's
     // own replies passed the checks 63 times and were still often wrong, and the old 15 set lines ignored the comment.
-    // The model only answers questions my post covers and comments with an opinion or story of their own.
+    // 2026-10-22: opinions and stories too, after E2B got 18 of 42 wrong ("저도 그 방법으로 효과 봤어요", "어떻게 적용하는지
+    // 궁금하네요"). The model only answers questions my post covers.
     const composed = () => {
       const text = composeReply(source, { postTitle, postSnippet, recentReplies: recent });
       this.lastReplyKind = 'composed';

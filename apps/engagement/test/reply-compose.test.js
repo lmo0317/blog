@@ -2,7 +2,7 @@
 // "오늘도 좋은 정보 잘 배우고 갑니다", "좋은 말씀 남겨 주셔서 고마워요" 16 times). Replies now answer what was said.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { composeReply, josa, needsOwnAnswer, readComment } from '../lib/reply-compose.js';
+import { composeReply, josa, needsOwnAnswer, readComment, replyPlan } from '../lib/reply-compose.js';
 
 const guide = { postTitle: '블로그 이웃 늘리기, 먼저 이웃 신청이 오는 블로그 만드는 법 (프로필·글 묶음·발행 주기)', postSnippet: '소개글에는 무엇을 누구를 위해 쓰는지 담습니다.' };
 const poke = { postTitle: "[검단 포케 맛집] 검단 다양하고 맛있는 포케집 '슬로우캘리 검단신도시점'", postSnippet: '육회포케와 메밀면 포케를 먹었어요. 주차 1시간 지원.' };
@@ -40,10 +40,16 @@ test('replies vary: a line just used is not used again', () => {
   }
 });
 
-test('an opinion of their own goes to the model first; greetings and praise do not', () => {
-  assert.equal(needsOwnAnswer('서이추 중요하죵하지만 이웃추가 후 서로 교류하지 않으면 의미가 없더라고요~행복 하루요~', guide), true);
-  assert.equal(needsOwnAnswer('잘 보고 갑니다! 좋은 하루 보내세요 :)', guide), false);
-  assert.equal(needsOwnAnswer('육회 메밀면 포케 넘 맛있어보여요', poke), false);
+// 2026-10-22: E2B's own replies to opinions were wrong 18 times in 42 (made-up experiences, a reader's voice). Only a
+// request is left to the owner; an opinion, a story or a tip gets a reply that answers its kind.
+test('only a request is left to the owner; an opinion, a story or a tip is answered for its kind', () => {
+  assert.equal(needsOwnAnswer('카멜클라우드 pc용 배포 요청드립니다.'), true);
+  assert.equal(needsOwnAnswer('서이추 중요하죵하지만 이웃추가 후 서로 교류하지 않으면 의미가 없더라고요~행복 하루요~'), false);
+  assert.deepEqual(replyPlan('서이추 중요하죵하지만 이웃추가 후 서로 교류하지 않으면 의미가 없더라고요~행복 하루요~', { ...guide, random: () => 0 }), ['story', 'wish']);
+  assert.deepEqual(replyPlan('오 뚫어뻥 없을 때 변기 막히면 난감한데ㅎㅎ 샴푸 한번 사용해보면 좋을 것 같아요!', { postTitle: '꽉 막힌 변기 뚫는 법', random: () => 0 }), ['tip', 'wish']);
+  assert.deepEqual(replyPlan('반복해서 받는 질문을 다음 글의 소재로 이어 간다는 부분이 눈에 들어오네요.', { ...guide, random: () => 0 }), ['point', 'wish']);
+  // Greetings with "저도" are not stories.
+  assert.deepEqual(replyPlan('저도 잘 보고 가요~ 좋은 하루 보내세요', { ...guide, random: () => 0 }), ['thanks', 'wish']);
   assert.equal(josa('포케', '은/는'), '포케는');
   assert.equal(josa('육회', '이/가'), '육회가');
   assert.equal(josa('메밀면', '은/는'), '메밀면은');
