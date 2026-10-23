@@ -35,6 +35,7 @@ export class LicenseClientManager {
       lastVerifiedAt: null,
       offlineGraceUntil: null,
       consentVersion: null,
+      authProvider: null, // 'google' | 'email': how this PC logged in, shown in the header
       message: '이용권 등록이 필요합니다.'
     };
 
@@ -185,6 +186,7 @@ export class LicenseClientManager {
 
       this.state.token = data.token;
       this.state.email = data.user.email;
+      this.state.authProvider = 'email';
       this.state.name = data.user.name;
       this.state.consentVersion = data.user.consentVersion || null;
       this.state.planType = data.license?.planType || 'monthly';
@@ -220,6 +222,7 @@ export class LicenseClientManager {
 
       this.state.token = data.token;
       this.state.email = data.user.email;
+      this.state.authProvider = 'email';
       this.state.name = data.user.name;
       this.state.consentVersion = data.user.consentVersion || null;
       this.state.planType = data.license?.planType || 'free_trial';
@@ -260,6 +263,7 @@ export class LicenseClientManager {
 
       this.state.token = data.token;
       this.state.email = data.user.email;
+      this.state.authProvider = 'google';
       this.state.name = data.user.name;
       this.state.consentVersion = data.user.consentVersion || null;
       this.state.planType = data.license?.planType || 'free_trial';
@@ -392,6 +396,7 @@ export class LicenseClientManager {
       lastVerifiedAt: null,
       offlineGraceUntil: null,
       consentVersion: null,
+      authProvider: null, // 'google' | 'email': how this PC logged in, shown in the header
       message: '로그인 또는 이용권 등록이 필요합니다.'
     };
     if (fs.existsSync(this.cachePath)) {

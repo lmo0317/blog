@@ -4747,6 +4747,17 @@ input[type="radio"] {
   line-height: 1.45;
 }
 
+/* Header license badge: which account this PC is logged in with (Google / email) and the days left */
+.license-badge-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; font-size: 13px; line-height: 1; }
+.license-badge-icon svg { width: 14px; height: 14px; }
+.license-badge-icon:empty { display: none; }
+.license-badge-account { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; opacity: .9; }
+.license-badge-account.hidden { display: none; }
+.license-badge-account:not(.hidden)::after { content: '·'; margin-left: 6px; opacity: .6; }
+.license-account-line { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12.5px; font-weight: 600; color: #475569; }
+.license-account-line.hidden { display: none; }
+.license-account-line svg { width: 14px; height: 14px; flex-shrink: 0; }
+
 /* "Google로 3일 무료 체험 시작": the first thing a new customer sees in the license window */
 .license-google { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
 .license-google.hidden { display: none; }

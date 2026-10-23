@@ -30,6 +30,8 @@
           <span id="appUpdateText">새 버전 받는 중</span>
         </button>
         <div class="header-license-badge" id="topLicenseBadge" title="클릭하여 정품 라이선스 및 구독 관리 확인" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 9999px; font-size: 12px; font-weight: 700; background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; transition: all 0.2s ease;">
+          <span class="license-badge-icon" id="topLicenseBadgeIcon" aria-hidden="true"></span>
+          <span class="license-badge-account hidden" id="topLicenseBadgeAccount"></span>
           <span id="topLicenseBadgeText">구독 확인 중...</span>
         </div>
         <button type="button" class="header-guide-btn" id="openGuideBtn" title="처음 준비부터 메뉴별 사용법까지">📖 사용 방법</button>
@@ -2873,6 +2875,7 @@
             <div>
               <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">현재 이용 상태</div>
               <div id="licenseStatusDetailText" style="font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 2px;">확인 중...</div>
+              <div class="license-account-line hidden" id="licenseAccountLine"></div>
             </div>
             <div id="licenseDaysBadge" style="padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 700; background: #e2e8f0; color: #475569;">
               D-0
