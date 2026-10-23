@@ -76,7 +76,7 @@ export const STATE_COOKIE = 'nm_gstate';
 export function googleDonePage({ ok, email = '', message = '' }) {
   const body = ok
     ? `<div class="big">✅</div><h1>로그인되었습니다</h1><p class="lead"><b>${esc(email)}</b><br>이 창을 닫고 이웃메이트 앱으로 돌아가세요.<br>앱이 몇 초 안에 자동으로 시작됩니다.</p>`
-    : `<div class="big">⚠️</div><h1>로그인하지 못했습니다</h1><p class="lead">${esc(message)}<br>이웃메이트 앱에서 [Google로 3일 무료 체험 시작]을 다시 눌러 주세요.</p>`;
+    : `<div class="big">⚠️</div><h1>로그인하지 못했습니다</h1><p class="lead">${esc(message)}<br>이웃메이트 앱에서 [Google로 시작하기]를 다시 눌러 주세요.</p>`;
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>이웃메이트 - ${ok ? '로그인 완료' : '로그인 실패'}</title>
