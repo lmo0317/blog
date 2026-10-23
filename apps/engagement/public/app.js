@@ -4437,11 +4437,16 @@ function updateLicenseBadgeUI(state) {
     hwidEl.textContent = state.hwidMasked;
   }
 
-  // Without an account the window shows only the Google button; email login and keys open on request.
+  // One way in: the Google button signs up (with the trial) or logs in. Without an account the window shows
+  // only that, plus a folded email login for customers who signed up by email before; keys come after login.
   const fresh = state.status === 'unregistered';
   $('#licenseGoogleBlock')?.classList.toggle('hidden', !fresh);
   if (!fresh) $('#licenseEmailArea')?.classList.remove('collapsed');
   else if (!licenseEmailOpened) $('#licenseEmailArea')?.classList.add('collapsed');
+  $('#licenseTabs')?.classList.add('hidden');
+  $('#licenseRegisterForm')?.classList.add('hidden');
+  $('#licenseLoginForm')?.classList.toggle('hidden', !(fresh || state.status === 'unauthorized_device'));
+  $('#licenseKeySection')?.classList.toggle('hidden', fresh);
   $('#licenseLogoutBtn')?.classList.toggle('hidden', fresh);
 
   if (state.status === 'valid') {
@@ -4573,7 +4578,16 @@ function stopGoogleWait() {
   if (btn) btn.disabled = false;
 }
 
+// A refused sign-in (e.g. the account moved PCs within 30 days) stays on screen under the button.
+function showGoogleError(message = '') {
+  const el = $('#licenseGoogleError');
+  if (!el) return;
+  el.textContent = message ? `⚠️ ${message}` : '';
+  el.classList.toggle('hidden', !message);
+}
+
 async function startGoogleSignIn() {
+  showGoogleError('');
   if (!googleStart) await prepareGoogleStart();
   if (!googleStart?.url) {
     toast('❌ 라이선스 서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요.', true);
@@ -4608,7 +4622,7 @@ async function startGoogleSignIn() {
       closeLicenseModal();
     } catch (err) {
       stopGoogleWait();
-      toast(`❌ 구글 로그인 실패: ${err.message}`, true);
+      showGoogleError(err.message);
       prepareGoogleStart();
     }
   };
@@ -4633,7 +4647,7 @@ function initLicenseManagement() {
     const area = $('#licenseEmailArea');
     licenseEmailOpened = area.classList.toggle('collapsed') === false;
     $('#licenseEmailToggle').setAttribute('aria-expanded', String(licenseEmailOpened));
-    $('#licenseEmailToggle span').textContent = licenseEmailOpened ? '이메일 로그인 · 이용권 키 등록 ▴' : '이메일 로그인 · 이용권 키 등록 ▾';
+    $('#licenseEmailToggle span').textContent = licenseEmailOpened ? '이메일로 가입했던 분은 여기서 로그인 ▴' : '이메일로 가입했던 분은 여기서 로그인 ▾';
   });
   $('#closeLicenseModal')?.addEventListener('click', closeLicenseModal);
   $('#closeLicenseModalBottom')?.addEventListener('click', closeLicenseModal);
@@ -4653,7 +4667,7 @@ function initLicenseManagement() {
       $('#consentModalError').textContent = err.message;
       btn.disabled = false;
     } finally {
-      btn.textContent = '동의하고 계속 쓰기';
+      btn.textContent = '동의하고 시작하기';
     }
   });
 

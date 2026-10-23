@@ -99,7 +99,7 @@ export class LicenseService {
     return null;
   }
 
-  register({ email, password, name = '', licenseKey = null, hwid = null, consent = null, ip = '' }) {
+  register({ email, password, name = '', licenseKey = null, hwid = null, consent = null, ip = '', trialPerAccount = false }) {
     if (!email || !email.includes('@')) {
       return { ok: false, error: 'INVALID_EMAIL', message: '올바른 이메일 주소를 입력해주세요.' };
     }
@@ -120,7 +120,8 @@ export class LicenseService {
     }
 
     // Without a paid key this signup is a free trial: one per PC, so a new email cannot buy more days.
-    if (!voucher) {
+    // Google sign-up gives one trial per Google account instead (see googleSignIn).
+    if (!voucher && !trialPerAccount) {
       const trialBlock = this.checkTrialAllowed({ hwid });
       if (trialBlock) return trialBlock;
     }
@@ -193,20 +194,47 @@ export class LicenseService {
     return this.loginUser(user, { hwid, ip });
   }
 
-  // "Google로 시작하기": Google already proved the email, so an existing account logs in and a new one
-  // starts the free trial. The new account gets a random password nobody knows; Google is its way in.
+  // "Google로 시작하기", one step: Google already proved the email, so a new address gets an account and its
+  // 3-day trial (one per Google account, 2026-10-23 owner's call), and a known one logs in. Logging in on
+  // another PC moves the account there (still one PC at a time, at most once per 30 days). The agreement
+  // is not taken here: the app asks for the ticked 이용약관·개인정보 checkbox once, right after login.
   googleSignIn({ email, name = '', hwid = null, ip = '' }) {
     if (!email || !email.includes('@')) {
       return { ok: false, error: 'INVALID_EMAIL', message: '구글 계정의 이메일을 확인하지 못했습니다.' };
     }
-    const user = this.db.getUserByEmail(email);
-    if (user) {
-      const result = this.loginUser(user, { hwid, ip, action: 'GOOGLE_LOGIN' });
-      return result.ok ? { ...result, isNew: false } : result;
+    let user = this.db.getUserByEmail(email);
+    if (!user) {
+      const result = this.register({
+        email, name, hwid, ip,
+        password: crypto.randomBytes(24).toString('hex'),
+        trialPerAccount: true
+      });
+      return result.ok ? { ...result, isNew: true } : result;
     }
-    // Consent is not taken here: the app asks for the ticked 이용약관·개인정보 checkbox right after login.
-    const result = this.register({ email, name, hwid, ip, password: crypto.randomBytes(24).toString('hex') });
-    return result.ok ? { ...result, isNew: true } : result;
+    if (hwid && user.hwid && user.hwid !== hwid) {
+      const moved = this.moveDevice(user, hwid, ip);
+      if (!moved.ok) return moved;
+      user = this.db.getUserById(user.id);
+    }
+    const result = this.loginUser(user, { hwid, ip, action: 'GOOGLE_LOGIN' });
+    return result.ok ? { ...result, isNew: false } : result;
+  }
+
+  moveDevice(user, newHwid, ip = '') {
+    if (user.hwid_changed_at) {
+      const elapsedDays = (Date.now() - new Date(user.hwid_changed_at).getTime()) / DAY_MS;
+      if (elapsedDays < this.deviceResetCooldownDays) {
+        const remainingDays = Math.ceil(this.deviceResetCooldownDays - elapsedDays);
+        return {
+          ok: false,
+          error: 'DEVICE_RESET_COOLDOWN',
+          message: `이 계정은 다른 PC에서 쓰고 있습니다. 사용하는 PC는 30일에 한 번 바꿀 수 있어요. (${remainingDays}일 후 가능)`
+        };
+      }
+    }
+    this.db.changeUserHwid(user.id, newHwid);
+    this.db.logAudit({ userId: user.id, action: 'GOOGLE_MOVE_DEVICE', details: `Old HWID=${user.hwid}, New HWID=${newHwid}`, ip });
+    return { ok: true };
   }
 
   loginUser(user, { hwid = null, ip = '', action = 'LOGIN_SUCCESS' } = {}) {

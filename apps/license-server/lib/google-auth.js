@@ -103,11 +103,11 @@ export function googleStartPage({ clientId, loginUri, termsUrl, privacyUrl }) {
 <style>${PAGE_CSS}</style></head>
 <body><main class="card">
   <h1>🤝 이웃메이트 3일 무료 체험</h1>
-  <p class="lead">구글 계정으로 바로 시작합니다.<br>카드 등록이나 비밀번호는 필요 없어요.</p>
+  <p class="lead">구글 계정을 고르면 바로 시작됩니다.<br>처음이면 3일 무료 체험이, 가입했다면 로그인이 됩니다.</p>
   <div id="g_id_onload" data-client_id="${esc(clientId)}" data-ux_mode="redirect" data-login_uri="${esc(loginUri)}" data-auto_prompt="false"></div>
   <div id="btn" class="g_id_signin" data-type="standard" data-theme="outline" data-size="large" data-text="continue_with" data-shape="pill" data-locale="ko" data-width="300"></div>
   <p class="err" id="err"></p>
-  <p class="terms">구글에서는 이메일 주소와 이름만 받습니다.<br>로그인 뒤 앱에서 <a href="${esc(termsUrl)}" target="_blank" rel="noopener">이용약관</a>과 <a href="${esc(privacyUrl)}" target="_blank" rel="noopener">개인정보 처리방침</a> 동의를 한 번 받습니다.</p>
+  <p class="terms">구글에서는 이메일 주소와 이름만 받습니다.<br>처음 한 번, 앱에서 <a href="${esc(termsUrl)}" target="_blank" rel="noopener">이용약관</a>과 <a href="${esc(privacyUrl)}" target="_blank" rel="noopener">개인정보 처리방침</a> 동의를 체크합니다.</p>
 </main>
 <script>
   window.addEventListener('load', () => setTimeout(() => {

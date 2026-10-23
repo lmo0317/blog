@@ -63,14 +63,14 @@ test('Google sign-in: a new Google account starts the 3-day trial without a pass
     assert.equal(signed.json.isNew, true);
     assert.equal(signed.json.license.planType, 'free_trial');
     assert.equal(signed.json.license.daysLeft, 3);
-    assert.equal(signed.json.user.consentVersion, null, 'the app asks for the ticked checkbox after login');
+    assert.equal(signed.json.user.consentVersion, null, 'the app asks for the ticked checkbox once after login');
     assert.ok(signed.json.token);
 
     assert.equal((await post('/api/auth/google/poll', { state, hwid: 'pc-1' })).status, 202, 'a state is used once');
   });
 });
 
-test('Google sign-in: an existing email account logs in, and the 1-PC lock still holds', async () => {
+test('Google sign-in: an existing account logs in, and moves to a new PC at most once per 30 days', async () => {
   await withServer(async ({ post, created, googleBack }) => {
     created.service.register({ email: 'old@example.com', password: 'secret12', hwid: 'pc-old' });
 
@@ -82,20 +82,32 @@ test('Google sign-in: an existing email account logs in, and the 1-PC lock still
 
     const s2 = GoogleAuth.newState();
     await googleBack(s2, 'good-token-for-old-customer');
-    const other = await post('/api/auth/google/poll', { state: s2, hwid: 'pc-other' });
-    assert.equal(other.status, 403);
-    assert.equal(other.json.error, 'UNAUTHORIZED_DEVICE');
+    const moved = await post('/api/auth/google/poll', { state: s2, hwid: 'pc-new' });
+    assert.equal(moved.json.ok, true, 'the account follows the customer to the new PC');
+    assert.equal(moved.json.user.hwid, 'pc-new');
+    assert.equal(created.database.getUserByEmail('old@example.com').hwid, 'pc-new', 'the old PC is no longer the one');
+
+    const s3 = GoogleAuth.newState();
+    await googleBack(s3, 'good-token-for-old-customer');
+    const back = await post('/api/auth/google/poll', { state: s3, hwid: 'pc-old' });
+    assert.equal(back.status, 400);
+    assert.equal(back.json.error, 'DEVICE_RESET_COOLDOWN');
   });
 });
 
-test('Google sign-in: a second trial on the same PC is refused', async () => {
+test('Google sign-in: every new Google account gets its own 3-day trial, even on a PC that had one', async () => {
   await withServer(async ({ post, created, googleBack }) => {
     created.service.register({ email: 'first@example.com', password: 'secret12', hwid: 'pc-1' });
     const state = GoogleAuth.newState();
     await googleBack(state, 'good-token-for-new-customer');
     const again = await post('/api/auth/google/poll', { state, hwid: 'pc-1' });
-    assert.equal(again.json.ok, false);
-    assert.equal(again.json.error, 'TRIAL_ALREADY_USED');
+    assert.equal(again.json.ok, true);
+    assert.equal(again.json.isNew, true);
+    assert.equal(again.json.license.planType, 'free_trial');
+    assert.equal(again.json.license.daysLeft, 3);
+    // the email form keeps the one-trial-per-PC rule
+    const email = created.service.register({ email: 'second@example.com', password: 'secret12', hwid: 'pc-1' });
+    assert.equal(email.error, 'TRIAL_ALREADY_USED');
   });
 });
 
