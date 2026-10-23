@@ -128,3 +128,63 @@ test('Google sign-in rejects tokens for another app, unverified or expired email
     assert.equal((await fetch(`${base}/api/auth/google/start?state=<script>`)).status, 400);
   });
 });
+
+test('내 정보 page: Google shows the account and its days left; a web token reads it for an hour, and nothing else', async () => {
+  await withServer(async ({ base, post, created }) => {
+    const none = await post('/api/account/google', { credential: 'good-token-for-old-customer' });
+    assert.equal(none.status, 404);
+    assert.equal(none.json.error, 'NO_ACCOUNT');
+
+    created.service.register({ email: 'old@example.com', password: 'secret12', hwid: 'pc-old', consent: '2026-10-20' });
+    const seen = await post('/api/account/google', { credential: 'good-token-for-old-customer' });
+    assert.equal(seen.status, 200);
+    const a = seen.json.account;
+    assert.equal(a.email, 'old@example.com');
+    assert.equal(a.license.planType, 'free_trial');
+    assert.equal(a.license.daysLeft, 3);
+    assert.equal(a.license.keyTail.length, 4);
+    assert.equal(a.device.registered, true);
+    assert.equal(a.device.canMoveNow, true);
+    assert.ok(a.consentAt);
+    assert.equal(JSON.stringify(a).includes('pc-old'), false, 'the PC id is not shown');
+    assert.equal(JSON.stringify(a).includes('password'), false);
+
+    const me = await fetch(`${base}/api/account/me`, { headers: { Authorization: `Bearer ${seen.json.token}` } });
+    assert.equal(me.status, 200);
+    assert.equal((await me.json()).account.email, 'old@example.com');
+
+    // an app login token is not a web-account token
+    const appToken = created.service.login({ email: 'old@example.com', password: 'secret12', hwid: 'pc-old' }).token;
+    assert.equal((await fetch(`${base}/api/account/me`, { headers: { Authorization: `Bearer ${appToken}` } })).status, 401);
+    assert.equal((await fetch(`${base}/api/account/me`)).status, 401);
+    assert.equal((await post('/api/account/google', { credential: 'token-for-another-app-xxxx' })).status, 400);
+  });
+});
+
+test('내 정보 page, redirect mode: the callback hands a web token (or "no account") back to the page, and checks the CSRF cookie', async () => {
+  await withServer(async ({ base, created }) => {
+    const back = async (credential, { csrf = 'c9', formCsrf = csrf } = {}) => {
+      const res = await fetch(`${base}/api/account/google/callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: `g_csrf_token=${csrf}` },
+        body: new URLSearchParams({ credential, g_csrf_token: formCsrf }).toString()
+      });
+      const html = await res.text();
+      const start = html.indexOf("setItem('nm_account_handoff',") + "setItem('nm_account_handoff',".length;
+      return { html, handoff: start > 30 ? JSON.parse(JSON.parse(html.slice(start, html.indexOf(')}catch', start)))) : null };
+    };
+    const none = await back('good-token-for-new-customer');
+    assert.equal(none.handoff.error, 'NO_ACCOUNT');
+    assert.equal(none.handoff.email, 'new.customer@gmail.com');
+    assert.ok(none.html.includes("location.replace('/neighbormate-app/account.html')"));
+
+    created.service.register({ email: 'old@example.com', password: 'secret12', hwid: 'pc-old' });
+    const ok = await back('good-token-for-old-customer');
+    const me = await fetch(`${base}/api/account/me`, { headers: { Authorization: `Bearer ${ok.handoff.token}` } });
+    assert.equal((await me.json()).account.email, 'old@example.com');
+
+    assert.equal((await back('good-token-for-old-customer', { formCsrf: 'other' })).handoff.error, 'CSRF');
+    assert.equal((await back('made-up-token-xxxxxxxxxxx')).handoff.error, 'GOOGLE_VERIFY_FAILED');
+    assert.equal(/<\/script>.*<\/script>/s.test(ok.html), false, 'one script tag, nothing injected');
+  });
+});

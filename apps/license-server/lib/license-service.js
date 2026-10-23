@@ -220,6 +220,55 @@ export class LicenseService {
     return result.ok ? { ...result, isNew: false } : result;
   }
 
+  // "내 정보" page on the promo site: Google proves the email, then a 1-hour web token reads the account.
+  accountLogin({ email, ip = '' }) {
+    const user = email ? this.db.getUserByEmail(email) : null;
+    if (!user) {
+      return { ok: false, error: 'NO_ACCOUNT', message: '이 구글 계정으로 가입한 기록이 없습니다. 프로그램을 설치하고 [Google로 시작하기]를 누르면 3일 무료 체험이 시작됩니다.' };
+    }
+    this.db.logAudit({ userId: user.id, action: 'WEB_ACCOUNT_VIEW', details: 'Google', ip });
+    const token = createJwt({ userId: user.id, email: user.email, purpose: 'web-account' }, this.jwtSecret, 60 * 60);
+    return { ok: true, token, account: this.accountSummary(user.id) };
+  }
+
+  accountFromToken(token) {
+    const jwt = verifyJwt(token, this.jwtSecret);
+    if (!jwt.valid || jwt.payload?.purpose !== 'web-account') {
+      return { ok: false, error: 'LOGIN_REQUIRED', message: '다시 로그인해 주세요.' };
+    }
+    const account = this.accountSummary(jwt.payload.userId);
+    return account ? { ok: true, account } : { ok: false, error: 'LOGIN_REQUIRED', message: '다시 로그인해 주세요.' };
+  }
+
+  accountSummary(userId) {
+    const user = this.db.getUserById(userId);
+    if (!user) return null;
+    const license = this.db.getLicenseByUserId(user.id);
+    const daysLeft = license ? this.calcDaysLeft(license.expires_at) : 0;
+    const movedAt = user.hwid_changed_at ? new Date(user.hwid_changed_at).getTime() : 0;
+    const nextMoveAt = movedAt ? new Date(movedAt + this.deviceResetCooldownDays * DAY_MS).toISOString() : null;
+    return {
+      email: user.email,
+      name: user.name || '',
+      createdAt: user.created_at,
+      consentAt: user.consent_at || null,
+      license: license ? {
+        planType: license.plan_type,
+        expiresAt: license.expires_at,
+        daysLeft,
+        isExpired: daysLeft <= 0,
+        keyTail: String(license.license_key || '').slice(-4),
+        lastUsedAt: license.last_heartbeat_at || null
+      } : null,
+      device: {
+        registered: !!user.hwid,
+        since: user.hwid_updated_at || null,
+        canMoveNow: !nextMoveAt || Date.parse(nextMoveAt) <= Date.now(),
+        nextMoveAt: nextMoveAt && Date.parse(nextMoveAt) > Date.now() ? nextMoveAt : null
+      }
+    };
+  }
+
   moveDevice(user, newHwid, ip = '') {
     if (user.hwid_changed_at) {
       const elapsedDays = (Date.now() - new Date(user.hwid_changed_at).getTime()) / DAY_MS;

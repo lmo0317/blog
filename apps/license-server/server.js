@@ -97,6 +97,38 @@ export function createLicenseServer(db = null, options = {}) {
     res.status(result.ok ? 200 : 400).type('html').send(googleDonePage(result));
   });
 
+  // "내 정보" page (/neighbormate-app/account.html): Google ID token in, the account and a 1-hour web token out.
+  app.post('/api/account/google', async (req, res) => {
+    const who = await googleAuth.verifyIdToken(req.body?.credential);
+    if (!who) return res.status(400).json({ ok: false, error: 'GOOGLE_VERIFY_FAILED', message: '구글 계정을 확인하지 못했습니다. 다시 시도해 주세요.' });
+    const result = service.accountLogin({ email: who.email, ip: getClientIp(req) });
+    res.status(result.ok ? 200 : 404).json(result.ok ? result : { ...result, email: who.email });
+  });
+
+  // Same, in Google's redirect mode (same tab, no popup to be blocked on a phone): the page reads the result
+  // from sessionStorage on the way back.
+  app.post('/api/account/google/callback', express.urlencoded({ extended: false, limit: '16kb' }), async (req, res) => {
+    const csrf = readCookie(req, 'g_csrf_token');
+    let result;
+    if (!csrf || csrf !== req.body?.g_csrf_token) {
+      result = { ok: false, error: 'CSRF', message: '보안 확인에 실패했습니다. 다시 로그인해 주세요.' };
+    } else {
+      const who = await googleAuth.verifyIdToken(req.body?.credential);
+      result = who
+        ? { ...service.accountLogin({ email: who.email, ip: getClientIp(req) }), email: who.email }
+        : { ok: false, error: 'GOOGLE_VERIFY_FAILED', message: '구글 계정을 확인하지 못했습니다. 다시 시도해 주세요.' };
+    }
+    // Written into a <script>, so "<" is escaped and a value cannot close the tag.
+    const handoff = JSON.stringify(JSON.stringify(result.ok ? { token: result.token } : { error: result.error, message: result.message, email: result.email || '' }))
+      .replace(/</g, '\\u003c');
+    res.type('html').send(`<!doctype html><meta charset="utf-8"><title>이웃메이트</title><script>try{sessionStorage.setItem('nm_account_handoff',${handoff})}catch(e){}location.replace('/neighbormate-app/account.html')</script>`);
+  });
+
+  app.get('/api/account/me', (req, res) => {
+    const result = service.accountFromToken(getBearerToken(req));
+    res.status(result.ok ? 200 : 401).json(result);
+  });
+
   app.post('/api/auth/google/poll', (req, res) => {
     const { state, hwid } = req.body || {};
     if (!googleAuth.isState(state)) return res.status(400).json({ ok: false, error: 'INVALID_STATE', message: '앱에서 다시 시작해 주세요.' });
