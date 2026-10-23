@@ -190,7 +190,26 @@ export class LicenseService {
     if (!passwordValid) {
       return { ok: false, error: 'INVALID_PASSWORD', message: '비밀번호가 일치하지 않습니다.' };
     }
+    return this.loginUser(user, { hwid, ip });
+  }
 
+  // "Google로 시작하기": Google already proved the email, so an existing account logs in and a new one
+  // starts the free trial. The new account gets a random password nobody knows; Google is its way in.
+  googleSignIn({ email, name = '', hwid = null, ip = '' }) {
+    if (!email || !email.includes('@')) {
+      return { ok: false, error: 'INVALID_EMAIL', message: '구글 계정의 이메일을 확인하지 못했습니다.' };
+    }
+    const user = this.db.getUserByEmail(email);
+    if (user) {
+      const result = this.loginUser(user, { hwid, ip, action: 'GOOGLE_LOGIN' });
+      return result.ok ? { ...result, isNew: false } : result;
+    }
+    // Consent is not taken here: the app asks for the ticked 이용약관·개인정보 checkbox right after login.
+    const result = this.register({ email, name, hwid, ip, password: crypto.randomBytes(24).toString('hex') });
+    return result.ok ? { ...result, isNew: true } : result;
+  }
+
+  loginUser(user, { hwid = null, ip = '', action = 'LOGIN_SUCCESS' } = {}) {
     // 1-User 1-PC HWID binding check
     if (hwid) {
       if (!user.hwid) {
@@ -221,7 +240,7 @@ export class LicenseService {
 
     this.db.logAudit({
       userId: user.id,
-      action: 'LOGIN_SUCCESS',
+      action,
       details: `Days left: ${daysLeft}`,
       ip
     });

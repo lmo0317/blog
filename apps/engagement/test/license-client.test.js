@@ -153,3 +153,38 @@ test('consent: signup needs it, an older account is asked once, and nothing is r
   assert.equal(client.needsConsent(), false);
   client.logout();
 });
+
+test('Google로 시작하기: the app waits while the browser is open, then takes the trial with this PC', async () => {
+  const sent = [];
+  let picked = false;
+  const fetchFn = async (url, init) => {
+    sent.push({ url, body: JSON.parse(init.body) });
+    if (!picked) return { ok: false, status: 202, json: async () => ({ ok: false, pending: true }) };
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true, isNew: true, token: 'jwt',
+        user: { email: 'new@gmail.com', name: '새 고객', consentVersion: '2026-10-20' },
+        license: { planType: 'free_trial', expiresAt: new Date(Date.now() + 3 * 86400000).toISOString(), daysLeft: 3, isExpired: false }
+      })
+    };
+  };
+  const client = new LicenseClientManager({ cachePath: path.join(os.tmpdir(), `lc-g-${Date.now()}.json`), hwid: 'pc-1', fetchFn, serverUrl: 'http://lic' });
+  const { state, url } = client.googleStart();
+  assert.match(state, /^[a-f0-9]{32}$/);
+  assert.equal(url, `http://lic/api/auth/google/start?state=${state}`);
+
+  assert.deepEqual(await client.googlePoll(state), { ok: false, pending: true });
+  assert.equal(client.state.status, 'unregistered');
+
+  picked = true;
+  const done = await client.googlePoll(state);
+  client.stopHeartbeat?.();
+  assert.equal(done.ok, true);
+  assert.equal(done.isNew, true);
+  assert.equal(client.state.status, 'valid');
+  assert.equal(client.state.daysLeft, 3);
+  assert.equal(client.state.email, 'new@gmail.com');
+  assert.deepEqual(sent.at(-1), { url: 'http://lic/api/auth/google/poll', body: { state, hwid: 'pc-1' } });
+});

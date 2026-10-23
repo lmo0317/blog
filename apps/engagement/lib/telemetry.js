@@ -11,7 +11,7 @@ import path from 'node:path';
 const MAX_QUEUE = 3000;
 const MAX_BATCH = 400;
 // Polled by the screen every few seconds; they say nothing about what the user did.
-const QUIET_PATHS = [/\/events$/, /\/status$/, /^\/api\/health$/, /^\/api\/app-update$/, /^\/api\/models\/runtime$/, /^\/api\/naver\/qr\/status$/, /^\/api\/telemetry/];
+const QUIET_PATHS = [/\/events$/, /\/status$/, /^\/api\/health$/, /^\/api\/app-update$/, /^\/api\/models\/runtime$/, /^\/api\/naver\/qr\/status$/, /^\/api\/license\/google\/poll$/,/^\/api\/telemetry/];
 const SECRET_KEY = /pass|token|cookie|secret|apikey|api_key|licensekey|auth|email|text|comment|content|body|html|reply|prompt|draft|title/i;
 
 // Numbers, booleans and short words from a request or response, never free text.

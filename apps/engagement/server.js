@@ -1288,6 +1288,22 @@ app.post('/api/license/register', async (req, res, next) => {
   }
 });
 
+// "Google로 시작하기": the screen opens the returned url in the browser and polls with its state.
+app.post('/api/license/google/start', (_req, res) => {
+  res.json({ ok: true, ...licenseClient.googleStart() });
+});
+
+app.post('/api/license/google/poll', async (req, res, next) => {
+  try {
+    const result = await licenseClient.googlePoll(String(req.body?.state || ''));
+    if (result.pending) return res.json(result);
+    if (result.ok) telemetry.track('google_signin', { isNew: result.isNew });
+    sendLicenseResult(res, result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.post('/api/license/consent', async (req, res, next) => {
   try {
     const result = await licenseClient.agree(req.body?.version);

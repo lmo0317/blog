@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dataPath } from './app-paths.js';
@@ -232,6 +233,48 @@ export class LicenseClientManager {
       this.saveCache();
       this.startHeartbeat();
       return { ok: true, message: data.message, state: this.state };
+    } catch (err) {
+      return { ok: false, error: 'NETWORK_ERROR', message: '라이선스 서버 연결 실패: ' + err.message };
+    }
+  }
+
+  // "Google로 시작하기": the screen opens `url` in the browser, then polls with `state` until the
+  // customer picks a Google account there (license server lib/google-auth.js).
+  googleStart() {
+    const state = crypto.randomBytes(16).toString('hex');
+    return { state, url: `${this.serverUrl}/api/auth/google/start?state=${state}` };
+  }
+
+  async googlePoll(state) {
+    try {
+      const res = await this.fetchFn(`${this.serverUrl}/api/auth/google/poll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, hwid: this.hwid })
+      });
+      const data = await res.json();
+      if (res.status === 202 && data.pending) return { ok: false, pending: true };
+      if (!res.ok || !data.ok) {
+        return { ok: false, error: data.error, message: data.message || '구글 로그인에 실패했습니다.' };
+      }
+
+      this.state.token = data.token;
+      this.state.email = data.user.email;
+      this.state.name = data.user.name;
+      this.state.consentVersion = data.user.consentVersion || null;
+      this.state.planType = data.license?.planType || 'free_trial';
+      this.state.expiresAt = data.license?.expiresAt || null;
+      this.state.daysLeft = data.license?.daysLeft || 0;
+      this.state.status = data.license && !data.license.isExpired ? 'valid' : 'expired';
+      this.state.lastVerifiedAt = new Date().toISOString();
+      this.state.offlineGraceUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      this.state.message = this.state.status === 'valid'
+        ? `정품 구독 이용 중 (D-${this.state.daysLeft}일 남음)`
+        : '구독 기간이 만료되었습니다. 연장 결제가 필요합니다.';
+
+      this.saveCache();
+      this.startHeartbeat();
+      return { ok: true, isNew: !!data.isNew, message: data.message, state: this.state };
     } catch (err) {
       return { ok: false, error: 'NETWORK_ERROR', message: '라이선스 서버 연결 실패: ' + err.message };
     }

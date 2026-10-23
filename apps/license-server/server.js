@@ -9,6 +9,7 @@ import { ClientReportService } from './lib/client-report-service.js';
 import { InsightsService } from './lib/insights-service.js';
 import { InquiryService } from './lib/inquiry-service.js';
 import { Mailer } from './lib/mailer.js';
+import { GoogleAuth, googleStartPage, googleDonePage, STATE_COOKIE } from './lib/google-auth.js';
 
 export function createLicenseServer(db = null, options = {}) {
   const app = express();
@@ -18,6 +19,7 @@ export function createLicenseServer(db = null, options = {}) {
   const visits = new VisitService(database, options.visits);
   const reports = new ClientReportService(database, service, options.reports);
   const inquiries = new InquiryService(database, { mailer: options.mailer || new Mailer(), notifyTo: process.env.INQUIRY_NOTIFY_TO, ...(options.inquiries || {}) });
+  const googleAuth = options.googleAuth || new GoogleAuth();
   const insights = new InsightsService(database, { service, reports, visits, ...(options.insights || {}) });
 
   app.use(express.json({ limit: '2mb' }));
@@ -62,6 +64,46 @@ export function createLicenseServer(db = null, options = {}) {
     const ip = getClientIp(req);
     const result = service.login({ email, password, hwid, ip });
     res.status(result.ok ? 200 : (result.error === 'UNAUTHORIZED_DEVICE' ? 403 : 401)).json(result);
+  });
+
+  // Auth: "Google로 시작하기" (see lib/google-auth.js). The app opens /start in the browser and polls /poll.
+  const readCookie = (req, name) => {
+    const hit = String(req.headers.cookie || '').split(';').map((c) => c.trim()).find((c) => c.startsWith(`${name}=`));
+    return hit ? decodeURIComponent(hit.slice(name.length + 1)) : '';
+  };
+  const googleBase = 'https://minohlee.mooo.com/license/api/auth/google';
+
+  app.get('/api/auth/google/start', (req, res) => {
+    const state = String(req.query.state || '');
+    if (!googleAuth.isState(state)) return res.status(400).type('text/plain; charset=utf-8').send('앱에서 [Google로 시작하기]를 다시 눌러 주세요.');
+    // Google posts back from its own site, so the cookie must be SameSite=None.
+    res.setHeader('Set-Cookie', `${STATE_COOKIE}=${state}; Path=/; Max-Age=900; Secure; HttpOnly; SameSite=None`);
+    res.type('html').send(googleStartPage({
+      clientId: googleAuth.clientId,
+      loginUri: `${googleBase}/callback`,
+      termsUrl: 'https://minohlee.mooo.com/neighbormate-app/terms.html',
+      privacyUrl: 'https://minohlee.mooo.com/neighbormate-app/privacy.html'
+    }));
+  });
+
+  // Google's redirect: a form post with the ID token and a CSRF token that must match its cookie.
+  app.post('/api/auth/google/callback', express.urlencoded({ extended: false, limit: '16kb' }), async (req, res) => {
+    const csrf = readCookie(req, 'g_csrf_token');
+    if (!csrf || csrf !== req.body?.g_csrf_token) {
+      return res.status(400).type('html').send(googleDonePage({ ok: false, message: '보안 확인에 실패했습니다.' }));
+    }
+    const result = await googleAuth.complete({ state: readCookie(req, STATE_COOKIE), credential: req.body?.credential });
+    res.setHeader('Set-Cookie', `${STATE_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=None`);
+    res.status(result.ok ? 200 : 400).type('html').send(googleDonePage(result));
+  });
+
+  app.post('/api/auth/google/poll', (req, res) => {
+    const { state, hwid } = req.body || {};
+    if (!googleAuth.isState(state)) return res.status(400).json({ ok: false, error: 'INVALID_STATE', message: '앱에서 다시 시작해 주세요.' });
+    const who = googleAuth.take(state);
+    if (!who) return res.status(202).json({ ok: false, pending: true });
+    const result = service.googleSignIn({ email: who.email, name: who.name, hwid, ip: getClientIp(req) });
+    res.status(result.ok ? 200 : (result.error === 'UNAUTHORIZED_DEVICE' ? 403 : 400)).json(result);
   });
 
   // Account: agree to the current 이용약관·개인정보 처리방침
@@ -244,7 +286,7 @@ ${q.body}
   app.post('/api/admin/inquiries/:id/reply', requireAdmin, (req, res) => send(res, inquiries.adminReply(req.params.id, req.body?.body)));
   app.post('/api/admin/inquiries/:id/status', requireAdmin, (req, res) => send(res, inquiries.adminSetStatus(req.params.id, req.body?.status)));
 
-  return { app, database, service, qna, visits, reports, insights, inquiries };
+  return { app, database, service, qna, visits, reports, insights, inquiries, googleAuth };
 }
 
 // Start server when run directly

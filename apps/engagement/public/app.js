@@ -4437,6 +4437,13 @@ function updateLicenseBadgeUI(state) {
     hwidEl.textContent = state.hwidMasked;
   }
 
+  // Without an account the window shows only the Google button; email login and keys open on request.
+  const fresh = state.status === 'unregistered';
+  $('#licenseGoogleBlock')?.classList.toggle('hidden', !fresh);
+  if (!fresh) $('#licenseEmailArea')?.classList.remove('collapsed');
+  else if (!licenseEmailOpened) $('#licenseEmailArea')?.classList.add('collapsed');
+  $('#licenseLogoutBtn')?.classList.toggle('hidden', fresh);
+
   if (state.status === 'valid') {
     if (badge) {
       badge.style.background = '#ecfdf5';
@@ -4502,7 +4509,7 @@ function updateLicenseBadgeUI(state) {
     }
     if (icon) icon.textContent = '🔑';
     if (text) text.textContent = '이용권 등록 필요';
-    if (detail) detail.textContent = '등록된 이용권이 없습니다. 로그인하거나 3일 무료체험을 시작하세요.';
+    if (detail) detail.textContent = '아직 이용권이 없습니다.';
     if (daysBadge) {
       daysBadge.textContent = '미등록';
       daysBadge.style.background = '#e2e8f0';
@@ -4518,6 +4525,12 @@ async function refreshLicenseStatus() {
       licenseState = data;
       updateLicenseBadgeUI(data);
       if (data.needsConsent) openConsentModal();
+      // A new install opens straight on "Google로 3일 무료 체험 시작" (2026-10-23: 4 of 5 downloaders never signed up).
+      if (data.status === 'unregistered' && !licenseAutoOpened) {
+        licenseAutoOpened = true;
+        openLicenseModal();
+      }
+      if (data.status === 'unregistered') prepareGoogleStart();
     }
   } catch (err) {
     console.warn('Failed to fetch license status:', err);
@@ -4534,17 +4547,94 @@ function openConsentModal() {
   modal.classList.remove('hidden');
 }
 
+let licenseAutoOpened = false;
+let licenseEmailOpened = false;
+
+// The browser link is fetched ahead so the click opens it right away (a window opened after an await is
+// treated as a popup by a plain browser in the Lite build).
+let googleStart = null;
+let googleStartLoading = null;
+let googlePollTimer = null;
+
+function prepareGoogleStart() {
+  if (googleStart || googleStartLoading) return googleStartLoading;
+  googleStartLoading = api('api/license/google/start', { method: 'POST', body: '{}' })
+    .then((data) => { googleStart = data; })
+    .catch(() => {})
+    .finally(() => { googleStartLoading = null; });
+  return googleStartLoading;
+}
+
+function stopGoogleWait() {
+  clearTimeout(googlePollTimer);
+  googlePollTimer = null;
+  $('#licenseGoogleWait')?.classList.add('hidden');
+  const btn = $('#licenseGoogleBtn');
+  if (btn) btn.disabled = false;
+}
+
+async function startGoogleSignIn() {
+  if (!googleStart) await prepareGoogleStart();
+  if (!googleStart?.url) {
+    toast('❌ 라이선스 서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요.', true);
+    return;
+  }
+  const { url, state } = googleStart;
+  googleStart = null;
+  window.open(url, '_blank');
+  $('#licenseGoogleBtn').disabled = true;
+  $('#licenseGoogleWait')?.classList.remove('hidden');
+
+  const startedAt = Date.now();
+  const poll = async () => {
+    if (!googlePollTimer) return;
+    try {
+      const res = await api('api/license/google/poll', { method: 'POST', body: JSON.stringify({ state }) });
+      if (res.pending) {
+        if (Date.now() - startedAt > 10 * 60 * 1000) {
+          stopGoogleWait();
+          toast('구글 로그인 시간이 지났어요. 버튼을 다시 눌러 주세요.', true);
+          prepareGoogleStart();
+          return;
+        }
+        googlePollTimer = setTimeout(poll, 2000);
+        return;
+      }
+      stopGoogleWait();
+      toast(res.isNew
+        ? `🎉 ${res.state?.daysLeft ?? 3}일 무료 체험이 시작되었습니다!`
+        : `✅ 로그인 완료! (${res.state?.message || '정품 인증 완료'})`);
+      await refreshLicenseStatus();
+      closeLicenseModal();
+    } catch (err) {
+      stopGoogleWait();
+      toast(`❌ 구글 로그인 실패: ${err.message}`, true);
+      prepareGoogleStart();
+    }
+  };
+  googlePollTimer = setTimeout(poll, 2000);
+}
+
 function openLicenseModal() {
   $('#licenseModal')?.classList.remove('hidden');
   refreshLicenseStatus();
 }
 
 function closeLicenseModal() {
+  stopGoogleWait();
   $('#licenseModal')?.classList.add('hidden');
 }
 
 function initLicenseManagement() {
   $('#topLicenseBadge')?.addEventListener('click', openLicenseModal);
+  $('#licenseGoogleBtn')?.addEventListener('click', startGoogleSignIn);
+  $('#licenseGoogleCancel')?.addEventListener('click', () => { stopGoogleWait(); prepareGoogleStart(); });
+  $('#licenseEmailToggle')?.addEventListener('click', () => {
+    const area = $('#licenseEmailArea');
+    licenseEmailOpened = area.classList.toggle('collapsed') === false;
+    $('#licenseEmailToggle').setAttribute('aria-expanded', String(licenseEmailOpened));
+    $('#licenseEmailToggle span').textContent = licenseEmailOpened ? '이메일 로그인 · 이용권 키 등록 ▴' : '이메일 로그인 · 이용권 키 등록 ▾';
+  });
   $('#closeLicenseModal')?.addEventListener('click', closeLicenseModal);
   $('#closeLicenseModalBottom')?.addEventListener('click', closeLicenseModal);
 
