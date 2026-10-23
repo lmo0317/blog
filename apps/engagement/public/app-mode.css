@@ -4794,14 +4794,6 @@ input[type="radio"] {
   background: #ffffff; color: #2563eb; font-size: 12px; font-weight: 700; cursor: pointer;
 }
 .license-google-cancel:hover { background: #dbeafe; }
-.license-or {
-  display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 6px; padding: 6px 0;
-  background: none; border: none; color: #64748b; font-size: 12px; font-weight: 600; cursor: pointer;
-  transition: color .2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.license-or:hover { color: #334155; }
-#licenseEmailArea.collapsed { display: none; }
-.license-or::before, .license-or::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
 
 .target-finder-card .finder-hero-banner {
   align-items: center;

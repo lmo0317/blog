@@ -4466,15 +4466,13 @@ function updateLicenseBadgeUI(state) {
     hwidEl.textContent = state.hwidMasked;
   }
 
-  // One way in: the Google button signs up (with the trial) or logs in. Without an account the window shows
-  // only that, plus a folded email login for customers who signed up by email before; keys come after login.
+  // One way in: the Google button (sign-up with the trial, or login). Email login and sign-up are gone from
+  // the screen (owner, 2026-10-23: "유저도 없는데"); keys come after login.
   const fresh = state.status === 'unregistered';
   $('#licenseGoogleBlock')?.classList.toggle('hidden', !fresh);
-  if (!fresh) $('#licenseEmailArea')?.classList.remove('collapsed');
-  else if (!licenseEmailOpened) $('#licenseEmailArea')?.classList.add('collapsed');
   $('#licenseTabs')?.classList.add('hidden');
   $('#licenseRegisterForm')?.classList.add('hidden');
-  $('#licenseLoginForm')?.classList.toggle('hidden', !(fresh || state.status === 'unauthorized_device'));
+  $('#licenseLoginForm')?.classList.add('hidden');
   $('#licenseKeySection')?.classList.toggle('hidden', fresh);
   $('#licenseLogoutBtn')?.classList.toggle('hidden', fresh);
 
@@ -4583,7 +4581,6 @@ function openConsentModal() {
 }
 
 let licenseAutoOpened = false;
-let licenseEmailOpened = false;
 
 // The browser link is fetched ahead so the click opens it right away (a window opened after an await is
 // treated as a popup by a plain browser in the Lite build).
@@ -4673,12 +4670,6 @@ function initLicenseManagement() {
   $('#topLicenseBadge')?.addEventListener('click', openLicenseModal);
   $('#licenseGoogleBtn')?.addEventListener('click', startGoogleSignIn);
   $('#licenseGoogleCancel')?.addEventListener('click', () => { stopGoogleWait(); prepareGoogleStart(); });
-  $('#licenseEmailToggle')?.addEventListener('click', () => {
-    const area = $('#licenseEmailArea');
-    licenseEmailOpened = area.classList.toggle('collapsed') === false;
-    $('#licenseEmailToggle').setAttribute('aria-expanded', String(licenseEmailOpened));
-    $('#licenseEmailToggle span').textContent = licenseEmailOpened ? '이메일로 가입했던 분은 여기서 로그인 ▴' : '이메일로 가입했던 분은 여기서 로그인 ▾';
-  });
   $('#closeLicenseModal')?.addEventListener('click', closeLicenseModal);
   $('#closeLicenseModalBottom')?.addEventListener('click', closeLicenseModal);
 
