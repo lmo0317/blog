@@ -186,5 +186,15 @@ test('내 정보 page, redirect mode: the callback hands a web token (or "no acc
     assert.equal((await back('good-token-for-old-customer', { formCsrf: 'other' })).handoff.error, 'CSRF');
     assert.equal((await back('made-up-token-xxxxxxxxxxx')).handoff.error, 'GOOGLE_VERIFY_FAILED');
     assert.equal(/<\/script>.*<\/script>/s.test(ok.html), false, 'one script tag, nothing injected');
+
+    // The page can also come back through the program's return address, marked by its cookie.
+    const viaApp = await fetch(`${base}/api/auth/google/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: 'g_csrf_token=c7; nm_account_trip=1' },
+      body: new URLSearchParams({ credential: 'good-token-for-old-customer', g_csrf_token: 'c7' }).toString()
+    });
+    const viaHtml = await viaApp.text();
+    assert.ok(viaHtml.includes('nm_account_handoff') && viaHtml.includes('/neighbormate-app/account.html'));
+    assert.match(viaApp.headers.get('set-cookie'), /nm_account_trip=;/);
   });
 });

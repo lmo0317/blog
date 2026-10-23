@@ -72,12 +72,16 @@ export function createLicenseServer(db = null, options = {}) {
     return hit ? decodeURIComponent(hit.slice(name.length + 1)) : '';
   };
   const googleBase = 'https://minohlee.mooo.com/license/api/auth/google';
+  const ACCOUNT_TRIP_COOKIE = 'nm_account_trip';
 
   app.get('/api/auth/google/start', (req, res) => {
     const state = String(req.query.state || '');
     if (!googleAuth.isState(state)) return res.status(400).type('text/plain; charset=utf-8').send('앱에서 [Google로 시작하기]를 다시 눌러 주세요.');
     // Google posts back from its own site, so the cookie must be SameSite=None.
-    res.setHeader('Set-Cookie', `${STATE_COOKIE}=${state}; Path=/; Max-Age=900; Secure; HttpOnly; SameSite=None`);
+    res.setHeader('Set-Cookie', [
+      `${STATE_COOKIE}=${state}; Path=/; Max-Age=900; Secure; HttpOnly; SameSite=None`,
+      `${ACCOUNT_TRIP_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=None`
+    ]);
     res.type('html').send(googleStartPage({
       clientId: googleAuth.clientId,
       loginUri: `${googleBase}/callback`,
@@ -88,6 +92,11 @@ export function createLicenseServer(db = null, options = {}) {
 
   // Google's redirect: a form post with the ID token and a CSRF token that must match its cookie.
   app.post('/api/auth/google/callback', express.urlencoded({ extended: false, limit: '16kb' }), async (req, res) => {
+    // The 내 정보 page uses this same, long-registered return address and marks the trip with a cookie.
+    if (readCookie(req, ACCOUNT_TRIP_COOKIE) === '1') {
+      res.setHeader('Set-Cookie', `${ACCOUNT_TRIP_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=None`);
+      return accountCallback(req, res);
+    }
     const csrf = readCookie(req, 'g_csrf_token');
     if (!csrf || csrf !== req.body?.g_csrf_token) {
       return res.status(400).type('html').send(googleDonePage({ ok: false, message: '보안 확인에 실패했습니다.' }));
@@ -107,7 +116,7 @@ export function createLicenseServer(db = null, options = {}) {
 
   // Same, in Google's redirect mode (same tab, no popup to be blocked on a phone): the page reads the result
   // from sessionStorage on the way back.
-  app.post('/api/account/google/callback', express.urlencoded({ extended: false, limit: '16kb' }), async (req, res) => {
+  async function accountCallback(req, res) {
     const csrf = readCookie(req, 'g_csrf_token');
     let result;
     if (!csrf || csrf !== req.body?.g_csrf_token) {
@@ -122,7 +131,9 @@ export function createLicenseServer(db = null, options = {}) {
     const handoff = JSON.stringify(JSON.stringify(result.ok ? { token: result.token } : { error: result.error, message: result.message, email: result.email || '' }))
       .replace(/</g, '\\u003c');
     res.type('html').send(`<!doctype html><meta charset="utf-8"><title>이웃메이트</title><script>try{sessionStorage.setItem('nm_account_handoff',${handoff})}catch(e){}location.replace('/neighbormate-app/account.html')</script>`);
-  });
+  }
+
+  app.post('/api/account/google/callback', express.urlencoded({ extended: false, limit: '16kb' }), accountCallback);
 
   app.get('/api/account/me', (req, res) => {
     const result = service.accountFromToken(getBearerToken(req));
