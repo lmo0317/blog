@@ -190,7 +190,7 @@ export function createLicenseServer(db = null, options = {}) {
     res.status(result.ok ? 200 : (result.error === 'LOGIN_REQUIRED' ? 401 : 400)).json(result);
   });
 
-  // License: Reset device (monthly cooldown)
+  // License: Reset device
   app.post('/api/license/reset-device', (req, res) => {
     const { email, password, newHwid } = req.body || {};
     const ip = getClientIp(req);

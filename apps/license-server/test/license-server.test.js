@@ -93,7 +93,7 @@ test('LicenseService handles registration, login, and trial license', () => {
   assert.strictEqual(badLogin.error, 'INVALID_PASSWORD');
 });
 
-test('1인 1PC HWID lock blocks unauthorized devices and allows cooldown reset', () => {
+test('1인 1PC HWID lock blocks unauthorized devices and allows a device reset', () => {
   const db = new LicenseDatabase(':memory:');
   const service = new LicenseService(db, { deviceResetCooldownDays: 30 });
 
@@ -141,14 +141,14 @@ test('1인 1PC HWID lock blocks unauthorized devices and allows cooldown reset',
   });
   assert.strictEqual(secondaryLogin.ok, true);
 
-  // Immediate second reset is blocked by 30-day cooldown
+  // No waiting between moves; the account is still on one PC at a time
   const instantReset = service.resetDevice({
     email: 'user2@example.com',
     password: 'password123',
     newHwid: 'pc-third-hwid'
   });
-  assert.strictEqual(instantReset.ok, false);
-  assert.strictEqual(instantReset.error, 'DEVICE_RESET_COOLDOWN');
+  assert.strictEqual(instantReset.ok, true);
+  assert.strictEqual(db.getUserByEmail('user2@example.com').hwid, 'pc-third-hwid');
 });
 
 test('Made-up license keys are rejected and issued keys redeem only once', () => {

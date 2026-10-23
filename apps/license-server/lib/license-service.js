@@ -32,7 +32,6 @@ export class LicenseService {
       || process.env.LICENSE_SERVER_SECRET
       || db.getOrCreateSetting('jwt_secret', () => crypto.randomBytes(48).toString('hex'));
     this.defaultTrialDays = options.defaultTrialDays ?? 3;
-    this.deviceResetCooldownDays = options.deviceResetCooldownDays ?? 30;
     this.tossSecretKey = options.tossSecretKey ?? process.env.TOSS_SECRET_KEY ?? '';
     this.tossFetchPayment = options.tossFetchPayment
       || ((orderId) => fetchTossPayment(orderId, this.tossSecretKey));
@@ -245,8 +244,6 @@ export class LicenseService {
     if (!user) return null;
     const license = this.db.getLicenseByUserId(user.id);
     const daysLeft = license ? this.calcDaysLeft(license.expires_at) : 0;
-    const movedAt = user.hwid_changed_at ? new Date(user.hwid_changed_at).getTime() : 0;
-    const nextMoveAt = movedAt ? new Date(movedAt + this.deviceResetCooldownDays * DAY_MS).toISOString() : null;
     return {
       email: user.email,
       name: user.name || '',
@@ -262,25 +259,12 @@ export class LicenseService {
       } : null,
       device: {
         registered: !!user.hwid,
-        since: user.hwid_updated_at || null,
-        canMoveNow: !nextMoveAt || Date.parse(nextMoveAt) <= Date.now(),
-        nextMoveAt: nextMoveAt && Date.parse(nextMoveAt) > Date.now() ? nextMoveAt : null
+        since: user.hwid_updated_at || null
       }
     };
   }
 
   moveDevice(user, newHwid, ip = '') {
-    if (user.hwid_changed_at) {
-      const elapsedDays = (Date.now() - new Date(user.hwid_changed_at).getTime()) / DAY_MS;
-      if (elapsedDays < this.deviceResetCooldownDays) {
-        const remainingDays = Math.ceil(this.deviceResetCooldownDays - elapsedDays);
-        return {
-          ok: false,
-          error: 'DEVICE_RESET_COOLDOWN',
-          message: `이 계정은 다른 PC에서 쓰고 있습니다. 사용하는 PC는 30일에 한 번 바꿀 수 있어요. (${remainingDays}일 후 가능)`
-        };
-      }
-    }
     this.db.changeUserHwid(user.id, newHwid);
     this.db.logAudit({ userId: user.id, action: 'GOOGLE_MOVE_DEVICE', details: `Old HWID=${user.hwid}, New HWID=${newHwid}`, ip });
     return { ok: true };
@@ -482,20 +466,6 @@ export class LicenseService {
     const passwordValid = verifyPassword(password, user.password_hash, user.password_salt);
     if (!passwordValid) {
       return { ok: false, error: 'INVALID_PASSWORD', message: '비밀번호가 일치하지 않습니다.' };
-    }
-
-    // Cooldown check (30 days between changes)
-    if (user.hwid_changed_at) {
-      const lastUpdate = new Date(user.hwid_changed_at).getTime();
-      const elapsedDays = (Date.now() - lastUpdate) / (1000 * 60 * 60 * 24);
-      if (elapsedDays < this.deviceResetCooldownDays) {
-        const remainingDays = Math.ceil(this.deviceResetCooldownDays - elapsedDays);
-        return {
-          ok: false,
-          error: 'DEVICE_RESET_COOLDOWN',
-          message: `기기 변경은 30일에 1회만 가능합니다. (${remainingDays}일 후 변경 가능)`
-        };
-      }
     }
 
     this.db.changeUserHwid(user.id, newHwid);

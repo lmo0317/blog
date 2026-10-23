@@ -70,7 +70,7 @@ test('Google sign-in: a new Google account starts the 3-day trial without a pass
   });
 });
 
-test('Google sign-in: an existing account logs in, and moves to a new PC at most once per 30 days', async () => {
+test('Google sign-in: an existing account logs in, and moves to whichever PC signs in, one PC at a time', async () => {
   await withServer(async ({ post, created, googleBack }) => {
     created.service.register({ email: 'old@example.com', password: 'secret12', hwid: 'pc-old' });
 
@@ -90,8 +90,8 @@ test('Google sign-in: an existing account logs in, and moves to a new PC at most
     const s3 = GoogleAuth.newState();
     await googleBack(s3, 'good-token-for-old-customer');
     const back = await post('/api/auth/google/poll', { state: s3, hwid: 'pc-old' });
-    assert.equal(back.status, 400);
-    assert.equal(back.json.error, 'DEVICE_RESET_COOLDOWN');
+    assert.equal(back.json.ok, true, 'moving back right away is allowed');
+    assert.equal(created.database.getUserByEmail('old@example.com').hwid, 'pc-old', 'still one PC at a time');
   });
 });
 
@@ -144,7 +144,6 @@ test('내 정보 page: Google shows the account and its days left; a web token r
     assert.equal(a.license.daysLeft, 3);
     assert.equal(a.license.keyTail.length, 4);
     assert.equal(a.device.registered, true);
-    assert.equal(a.device.canMoveNow, true);
     assert.ok(a.consentAt);
     assert.equal(JSON.stringify(a).includes('pc-old'), false, 'the PC id is not shown');
     assert.equal(JSON.stringify(a).includes('password'), false);

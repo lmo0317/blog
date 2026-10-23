@@ -205,7 +205,7 @@
     const dev = a.device;
     rows($('pcRows'), [
       ['연결 상태', dev.registered ? 'PC 1대 연결됨' : '아직 연결된 PC 없음', dev.registered && dev.since ? `${day(dev.since)}부터` : '프로그램에서 로그인하면 그 PC에 연결돼요'],
-      ['다른 PC로 옮기기', dev.canMoveNow ? '지금 가능' : `${day(dev.nextMoveAt)}부터 가능`, '새 PC의 프로그램에서 [Google로 시작하기]를 누르면 옮겨져요 (30일에 한 번)'],
+      ['다른 PC로 옮기기', '언제든 가능', '새 PC의 프로그램에서 [Google로 시작하기]를 누르면 그 PC로 옮겨져요'],
       ['프로그램 마지막 사용', lic ? ago(lic.lastUsedAt) : '-']
     ]);
     rows($('meTitle').nextElementSibling, [
